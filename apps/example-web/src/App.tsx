@@ -148,6 +148,7 @@ function App() {
         onChangeState={handleChangeState}
         onLinkDetected={handleOnLinkDetected}
         htmlStyle={WEB_DEFAULT_HTML_STYLE}
+        // linkRegex={/(hello|world)/g}
       />
 
       <Toolbar

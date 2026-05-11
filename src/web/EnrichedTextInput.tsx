@@ -30,6 +30,7 @@ import { useOnChangeHtml } from './useOnChangeHtml';
 import { useOnChangeText } from './useOnChangeText';
 import { useOnChangeState } from './useOnChangeState';
 import { useOnLinkDetected } from './useOnLinkDetected';
+import type { LinkEmitterState } from './emitLinkDetected';
 import {
   prepareHtmlForTiptap,
   normalizeHtmlFromTiptap,
@@ -59,6 +60,7 @@ import { createStripBoldInStyledHeadingsPlugin } from './pmPlugins/stripBoldInSt
 import { StrictMarksPlugin } from './pmPlugins/strictMarksPlugin';
 import { MergeAdjacentSameKindBlocksPlugin } from './pmPlugins/mergeAdjacentSameKindBlocksPlugin';
 import { StripMarksInCodeBlockPlugin } from './pmPlugins/stripMarksInCodeBlockPlugin';
+import { createAutolinkPlugin } from './pmPlugins/autolinkPlugin';
 import { StripMarksOnImagePlugin } from './pmPlugins/stripMarksOnImagePlugin';
 function runFocused(
   editor: Editor,
@@ -84,6 +86,7 @@ export const EnrichedTextInput = ({
   onChangeHtml,
   onChangeState,
   onLinkDetected,
+  linkRegex,
   htmlStyle,
 }: EnrichedTextInputProps) => {
   const tiptapContent =
@@ -101,6 +104,21 @@ export const EnrichedTextInput = ({
 
   const stripBoldInStyledHeadingsPlugin = useMemo(
     () => createStripBoldInStyledHeadingsPlugin(() => htmlStyleRef.current),
+    []
+  );
+
+  const linkEmitterRef = useRef<LinkEmitterState>({
+    linkRegex,
+    onLinkDetected,
+    lastEmitted: null,
+  });
+  useEffect(() => {
+    linkEmitterRef.current.linkRegex = linkRegex;
+    linkEmitterRef.current.onLinkDetected = onLinkDetected;
+  }, [linkRegex, onLinkDetected]);
+
+  const autolinkPlugin = useMemo(
+    () => createAutolinkPlugin(linkEmitterRef),
     []
   );
 
@@ -130,6 +148,7 @@ export const EnrichedTextInput = ({
         stripBoldInStyledHeadingsPlugin,
         MergeAdjacentSameKindBlocksPlugin,
         StrictMarksPlugin,
+        autolinkPlugin,
         Placeholder.configure({
           placeholder,
           showOnlyWhenEditable: true,
@@ -176,7 +195,7 @@ export const EnrichedTextInput = ({
   useOnChangeHtml(editor, onChangeHtml);
   useOnChangeText(editor, onChangeText);
   useOnChangeState(editor, resolvedHtmlStyle, onChangeState);
-  useOnLinkDetected(editor, onLinkDetected);
+  useOnLinkDetected(editor, linkEmitterRef);
 
   useImperativeHandle(
     ref,
