@@ -691,8 +691,13 @@ Sets text alignment for the paragraph(s) at the current selection. When inside a
 
 - `alignment` - the desired text alignment. Use `'auto'` to reset to the system natural alignment.
 
+In the HTML format the alignment is represented with a `style` attribute on the block tag, e.g. `<p style="text-align: center">`. List items don't carry the attribute.
+
 > [!NOTE]
-> This method is iOS only for now.
+> This method is not supported on web yet.
+
+> [!NOTE]
+> On Android, `'justify'` is not supported and resets to the natural alignment, while `'left'`/`'right'` are relative to the text direction (they map to start/end).
 
 ### `.startMention()`
 

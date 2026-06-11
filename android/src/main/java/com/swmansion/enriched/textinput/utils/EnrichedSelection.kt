@@ -4,11 +4,13 @@ import android.text.Editable
 import android.text.Spannable
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.uimanager.UIManagerHelper
+import com.swmansion.enriched.common.EnrichedAlignmentMapping
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.events.OnChangeSelectionEvent
 import com.swmansion.enriched.textinput.events.OnLinkDetectedEvent
 import com.swmansion.enriched.textinput.events.OnMentionDetectedEvent
+import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputLinkSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputMentionSpan
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
@@ -109,7 +111,21 @@ class EnrichedSelection(
       state.setStart(style, getParametrizedStyleStart(config.clazz))
     }
 
+    state.setAlignment(getCurrentAlignment())
+
     view.textStyles?.onValidateStyles()
+  }
+
+  private fun getCurrentAlignment(): String {
+    val spannable = view.text as? Spannable ?: return "auto"
+    val (selectionStart, _) = getInlineSelection()
+    val (paragraphStart, paragraphEnd) = spannable.getParagraphBounds(selectionStart)
+    val span =
+      spannable
+        .getSpans(paragraphStart, paragraphEnd, EnrichedInputAlignmentSpan::class.java)
+        .firstOrNull() ?: return "auto"
+
+    return EnrichedAlignmentMapping.alignmentToCss(span.alignment) ?: "auto"
   }
 
   fun getInlineSelection(): Pair<Int, Int> {

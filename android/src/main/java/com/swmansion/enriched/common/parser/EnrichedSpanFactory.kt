@@ -1,5 +1,7 @@
 package com.swmansion.enriched.common.parser
 
+import android.text.Layout
+import com.swmansion.enriched.common.spans.EnrichedAlignmentSpan
 import com.swmansion.enriched.common.spans.EnrichedBlockQuoteSpan
 import com.swmansion.enriched.common.spans.EnrichedBoldSpan
 import com.swmansion.enriched.common.spans.EnrichedCheckboxListSpan
@@ -100,4 +102,9 @@ interface EnrichedSpanFactory<T> {
     lineHeight: Float,
     style: T,
   ): EnrichedInlineLineHeightSpan
+
+  fun createAlignmentSpan(
+    alignment: Layout.Alignment,
+    style: T,
+  ): EnrichedAlignmentSpan
 }

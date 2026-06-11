@@ -6,9 +6,10 @@ import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
-import android.text.style.AlignmentSpan;
 import android.text.style.ParagraphStyle;
+import com.swmansion.enriched.common.EnrichedAlignmentMapping;
 import com.swmansion.enriched.common.EnrichedConstants;
+import com.swmansion.enriched.common.spans.EnrichedAlignmentSpan;
 import com.swmansion.enriched.common.spans.EnrichedBoldSpan;
 import com.swmansion.enriched.common.spans.EnrichedCheckboxListSpan;
 import com.swmansion.enriched.common.spans.EnrichedCodeBlockSpan;
@@ -41,6 +42,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.ccil.cowan.tagsoup.HTMLSchema;
 import org.ccil.cowan.tagsoup.Parser;
 import org.xml.sax.Attributes;
@@ -242,6 +245,19 @@ public class EnrichedParser {
           if (checkboxSpans.length > 0) {
             boolean isChecked = checkboxSpans[0].isChecked();
             if (isChecked) out.append(" checked");
+          }
+        }
+
+        // Mirrors iOS: list items don't carry the text-align style attribute
+        if (!isList) {
+          EnrichedAlignmentSpan[] alignmentSpans =
+              text.getSpans(i, next, EnrichedAlignmentSpan.class);
+          if (alignmentSpans.length > 0) {
+            String alignmentCss =
+                EnrichedAlignmentMapping.alignmentToCss(alignmentSpans[0].getAlignment());
+            if (alignmentCss != null) {
+              out.append(" style=\"text-align: ").append(alignmentCss).append("\"");
+            }
           }
         }
 
@@ -470,6 +486,9 @@ public class EnrichedParser {
 }
 
 class HtmlToSpannedConverter<T> implements ContentHandler {
+  private static final Pattern TEXT_ALIGN_PATTERN =
+      Pattern.compile("text-align\\s*:\\s*(left|center|right|justify)", Pattern.CASE_INSENSITIVE);
+
   private final EnrichedSpanFactory<T> mSpanFactory;
   private final T mStyle;
   private final String mSource;
@@ -552,6 +571,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     } else if (tag.equalsIgnoreCase("p")) {
       isEmptyTag = true;
       startBlockElement(mSpannableStringBuilder);
+      startAlignment(mSpannableStringBuilder, attributes);
     } else if (tag.equalsIgnoreCase("ul")) {
       isInOrderedList = false;
       String dataType = attributes.getValue("", "data-type");
@@ -583,17 +603,17 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     } else if (tag.equalsIgnoreCase("strike")) {
       start(mSpannableStringBuilder, new Strikethrough());
     } else if (tag.equalsIgnoreCase("h1")) {
-      startHeading(mSpannableStringBuilder, 1);
+      startHeading(mSpannableStringBuilder, 1, attributes);
     } else if (tag.equalsIgnoreCase("h2")) {
-      startHeading(mSpannableStringBuilder, 2);
+      startHeading(mSpannableStringBuilder, 2, attributes);
     } else if (tag.equalsIgnoreCase("h3")) {
-      startHeading(mSpannableStringBuilder, 3);
+      startHeading(mSpannableStringBuilder, 3, attributes);
     } else if (tag.equalsIgnoreCase("h4")) {
-      startHeading(mSpannableStringBuilder, 4);
+      startHeading(mSpannableStringBuilder, 4, attributes);
     } else if (tag.equalsIgnoreCase("h5")) {
-      startHeading(mSpannableStringBuilder, 5);
+      startHeading(mSpannableStringBuilder, 5, attributes);
     } else if (tag.equalsIgnoreCase("h6")) {
-      startHeading(mSpannableStringBuilder, 6);
+      startHeading(mSpannableStringBuilder, 6, attributes);
     } else if (tag.equalsIgnoreCase("img")) {
       // Image content means the current tag is not empty (e.g. <li><img .../></li>).
       isEmptyTag = false;
@@ -611,9 +631,9 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     if (tag.equalsIgnoreCase("br")) {
       handleBr(mSpannableStringBuilder);
     } else if (tag.equalsIgnoreCase("p")) {
-      endBlockElement(mSpannableStringBuilder);
+      endBlockElement(mSpannableStringBuilder, mStyle, mSpanFactory);
     } else if (tag.equalsIgnoreCase("ul")) {
-      endBlockElement(mSpannableStringBuilder);
+      endBlockElement(mSpannableStringBuilder, mStyle, mSpanFactory);
     } else if (tag.equalsIgnoreCase("li")) {
       endLi(mSpannableStringBuilder, mStyle, mSpanFactory);
     } else if (tag.equalsIgnoreCase("b")) {
@@ -673,7 +693,8 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     start(text, new Newline(1));
   }
 
-  private static void endBlockElement(Editable text) {
+  private static <T> void endBlockElement(
+      Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
     Newline n = getLast(text, Newline.class);
     if (n != null) {
       appendNewlines(text, n.mNumNewlines);
@@ -681,8 +702,42 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     }
     Alignment a = getLast(text, Alignment.class);
     if (a != null) {
-      setSpanFromMark(text, a, new AlignmentSpan.Standard(a.mAlignment));
+      int where = text.getSpanStart(a);
+      text.removeSpan(a);
+      int len = text.length();
+
+      // Keep the span within the paragraph - exclude the trailing newline
+      if (len > 0 && text.charAt(len - 1) == '\n') {
+        len--;
+      }
+
+      if (where >= 0 && where < len) {
+        text.setSpan(
+            spanFactory.createAlignmentSpan(a.mAlignment, style),
+            where,
+            len,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+      }
     }
+  }
+
+  private void startAlignment(Editable text, Attributes attributes) {
+    String styleAttribute = attributes.getValue("", "style");
+    if (styleAttribute == null) {
+      return;
+    }
+
+    Matcher matcher = TEXT_ALIGN_PATTERN.matcher(styleAttribute);
+    if (!matcher.find()) {
+      return;
+    }
+
+    Layout.Alignment alignment = EnrichedAlignmentMapping.cssToAlignment(matcher.group(1));
+    if (alignment == null) {
+      return;
+    }
+
+    start(text, new Alignment(alignment));
   }
 
   private static void handleBr(Editable text) {
@@ -704,7 +759,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
   }
 
   private static <T> void endLi(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    endBlockElement(text);
+    endBlockElement(text, style, spanFactory);
 
     List l = getLast(text, List.class);
     if (l != null) {
@@ -717,7 +772,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
       }
     }
 
-    endBlockElement(text);
+    endBlockElement(text, style, spanFactory);
   }
 
   private void startBlockquote(Editable text) {
@@ -727,7 +782,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
 
   private static <T> void endBlockquote(
       Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    endBlockElement(text);
+    endBlockElement(text, style, spanFactory);
     Blockquote last = getLast(text, Blockquote.class);
     setParagraphSpanFromMark(text, last, spanFactory.createBlockQuoteSpan(style));
   }
@@ -738,13 +793,14 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
   }
 
   private static <T> void endCodeBlock(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    endBlockElement(text);
+    endBlockElement(text, style, spanFactory);
     CodeBlock last = getLast(text, CodeBlock.class);
     setParagraphSpanFromMark(text, last, spanFactory.createCodeBlockSpan(style));
   }
 
-  private void startHeading(Editable text, int level) {
+  private void startHeading(Editable text, int level, Attributes attributes) {
     startBlockElement(text);
+    startAlignment(text, attributes);
 
     switch (level) {
       case 1:
@@ -772,7 +828,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
 
   private static <T> void endHeading(
       Editable text, T style, EnrichedSpanFactory<T> spanFactory, int level) {
-    endBlockElement(text);
+    endBlockElement(text, style, spanFactory);
 
     switch (level) {
       case 1:

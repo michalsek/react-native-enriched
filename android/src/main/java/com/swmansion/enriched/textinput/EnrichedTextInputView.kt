@@ -57,6 +57,7 @@ import com.swmansion.enriched.textinput.spans.EnrichedInputImageSpan
 import com.swmansion.enriched.textinput.spans.EnrichedLineHeightSpan
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
 import com.swmansion.enriched.textinput.spans.interfaces.EnrichedInputSpan
+import com.swmansion.enriched.textinput.styles.AlignmentStyles
 import com.swmansion.enriched.textinput.styles.HtmlStyle
 import com.swmansion.enriched.textinput.styles.InlineStyles
 import com.swmansion.enriched.textinput.styles.ListStyles
@@ -87,6 +88,7 @@ class EnrichedTextInputView :
   val listStyles: ListStyles? = ListStyles(this)
   val parametrizedStyles: ParametrizedStyles? = ParametrizedStyles(this)
   val textStyles: TextStyles? = TextStyles(this)
+  val alignmentStyles: AlignmentStyles? = AlignmentStyles(this)
   var isDuringTransaction: Boolean = false
   var isRemovingMany: Boolean = false
   var scrollEnabled: Boolean = true
@@ -1017,6 +1019,11 @@ class EnrichedTextInputView :
       textStyles?.setStyleValue(name, value)
     }
 
+    layoutManager.invalidateLayout()
+  }
+
+  fun setTextAlignment(alignment: String) {
+    alignmentStyles?.setAlignment(alignment)
     layoutManager.invalidateLayout()
   }
 

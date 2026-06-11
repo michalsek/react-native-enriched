@@ -1,6 +1,8 @@
 package com.swmansion.enriched.text
 
+import android.text.Layout
 import com.swmansion.enriched.common.parser.EnrichedSpanFactory
+import com.swmansion.enriched.common.spans.EnrichedAlignmentSpan
 import com.swmansion.enriched.common.spans.EnrichedFontFamilySpan
 import com.swmansion.enriched.common.spans.EnrichedFontSizeSpan
 import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan
@@ -101,4 +103,9 @@ class EnrichedTextSpanFactory : EnrichedSpanFactory<EnrichedTextStyle> {
     lineHeight: Float,
     style: EnrichedTextStyle,
   ) = EnrichedInlineLineHeightSpan(lineHeight, style.allowFontScaling)
+
+  override fun createAlignmentSpan(
+    alignment: Layout.Alignment,
+    style: EnrichedTextStyle,
+  ) = EnrichedAlignmentSpan(alignment, style)
 }

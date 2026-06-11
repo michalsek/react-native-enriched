@@ -60,6 +60,14 @@ class EnrichedSpanState(
     private set
   var lineHeightStart: Int? = null
     private set
+  var alignment: String = "auto"
+    private set
+
+  fun setAlignment(value: String) {
+    if (alignment == value) return
+    this.alignment = value
+    emitStateChangeEvent()
+  }
 
   fun setBoldStart(start: Int?) {
     this.boldStart = start
@@ -290,6 +298,8 @@ class EnrichedSpanState(
     payload.putMap("fontSize", getStyleState(activeStyles, EnrichedSpans.FONT_SIZE))
     payload.putMap("letterSpacing", getStyleState(activeStyles, EnrichedSpans.LETTER_SPACING))
     payload.putMap("lineHeight", getStyleState(activeStyles, EnrichedSpans.LINE_HEIGHT))
+
+    payload.putString("alignment", alignment)
 
     val textStyles = view.textStyles
     payload.putString(
