@@ -81,17 +81,34 @@
       @([CodeBlockStyle getType]), @([CheckboxListStyle getType])
     ],
     @([CodeBlockStyle getType]) : @[
-      @([H1Style getType]), @([H2Style getType]), @([H3Style getType]),
-      @([H4Style getType]), @([H5Style getType]), @([H6Style getType]),
-      @([BoldStyle getType]), @([UnderlineStyle getType]),
-      @([ItalicStyle getType]), @([StrikethroughStyle getType]),
-      @([UnorderedListStyle getType]), @([OrderedListStyle getType]),
-      @([BlockQuoteStyle getType]), @([InlineCodeStyle getType]),
-      @([MentionStyle getType]), @([LinkStyle getType]),
-      @([CheckboxListStyle getType])
+      @([H1Style getType]),
+      @([H2Style getType]),
+      @([H3Style getType]),
+      @([H4Style getType]),
+      @([H5Style getType]),
+      @([H6Style getType]),
+      @([BoldStyle getType]),
+      @([UnderlineStyle getType]),
+      @([ItalicStyle getType]),
+      @([StrikethroughStyle getType]),
+      @([UnorderedListStyle getType]),
+      @([OrderedListStyle getType]),
+      @([BlockQuoteStyle getType]),
+      @([InlineCodeStyle getType]),
+      @([MentionStyle getType]),
+      @([LinkStyle getType]),
+      @([CheckboxListStyle getType]),
+      @([FontFamilyStyle getType]),
+      @([FontSizeStyle getType]),
+      @([LetterSpacingStyle getType]),
+      @([LineHeightStyle getType])
     ],
     @([ImageStyle getType]) :
-        @[ @([LinkStyle getType]), @([MentionStyle getType]) ]
+        @[ @([LinkStyle getType]), @([MentionStyle getType]) ],
+    @([FontFamilyStyle getType]) : @[],
+    @([FontSizeStyle getType]) : @[],
+    @([LetterSpacingStyle getType]) : @[],
+    @([LineHeightStyle getType]) : @[]
   };
 }
 
@@ -123,23 +140,41 @@
     @([AlignmentStyle getType]) : @[],
     @([BlockQuoteStyle getType]) : @[],
     @([CodeBlockStyle getType]) : @[],
-    @([ImageStyle getType]) : @[ @([InlineCodeStyle getType]) ]
+    @([ImageStyle getType]) : @[ @([InlineCodeStyle getType]) ],
+    @([FontFamilyStyle getType]) : @[ @([CodeBlockStyle getType]) ],
+    @([FontSizeStyle getType]) : @[ @([CodeBlockStyle getType]) ],
+    @([LetterSpacingStyle getType]) : @[ @([CodeBlockStyle getType]) ],
+    @([LineHeightStyle getType]) : @[ @([CodeBlockStyle getType]) ]
   };
 }
 
 + (NSDictionary *)stylesDictForHost:(id<EnrichedViewHost>)host
                             isInput:(BOOL)isInput {
   NSArray<Class> *baseClasses = @[
-    [BoldStyle class],        [ItalicStyle class],
-    [UnderlineStyle class],   [StrikethroughStyle class],
-    [InlineCodeStyle class],  [LinkStyle class],
-    [MentionStyle class],     [H1Style class],
-    [H2Style class],          [H3Style class],
-    [H4Style class],          [H5Style class],
-    [H6Style class],          [UnorderedListStyle class],
-    [OrderedListStyle class], [CheckboxListStyle class],
-    [AlignmentStyle class],   [BlockQuoteStyle class],
-    [CodeBlockStyle class],   [ImageStyle class]
+    [BoldStyle class],
+    [ItalicStyle class],
+    [UnderlineStyle class],
+    [StrikethroughStyle class],
+    [InlineCodeStyle class],
+    [LinkStyle class],
+    [MentionStyle class],
+    [H1Style class],
+    [H2Style class],
+    [H3Style class],
+    [H4Style class],
+    [H5Style class],
+    [H6Style class],
+    [UnorderedListStyle class],
+    [OrderedListStyle class],
+    [CheckboxListStyle class],
+    [AlignmentStyle class],
+    [BlockQuoteStyle class],
+    [CodeBlockStyle class],
+    [ImageStyle class],
+    [FontFamilyStyle class],
+    [FontSizeStyle class],
+    [LetterSpacingStyle class],
+    [LineHeightStyle class]
   ];
 
   NSArray<Class> *viewerClasses = @[
@@ -162,7 +197,11 @@
     [EnrichedTextAlignmentStyle class],
     [EnrichedTextBlockQuoteStyle class],
     [EnrichedTextCodeBlockStyle class],
-    [EnrichedTextImageStyle class]
+    [EnrichedTextImageStyle class],
+    [EnrichedTextFontFamilyStyle class],
+    [EnrichedTextFontSizeStyle class],
+    [EnrichedTextLetterSpacingStyle class],
+    [EnrichedTextLineHeightStyle class]
   ];
 
   NSMutableDictionary *dict = [NSMutableDictionary new];

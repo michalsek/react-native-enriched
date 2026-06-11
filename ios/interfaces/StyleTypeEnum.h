@@ -18,6 +18,12 @@ typedef NS_ENUM(NSInteger, StyleType) {
   Link,
   Mention,
   Image,
+  // Inline text styles - they share a single <span> tag in the HTML output,
+  // so they have to stay contiguous in this enum
+  FontFamily,
+  FontSize,
+  LetterSpacing,
+  LineHeight,
   InlineCode,
   Bold,
   Italic,

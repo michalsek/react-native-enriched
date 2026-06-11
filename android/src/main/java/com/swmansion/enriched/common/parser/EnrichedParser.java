@@ -12,6 +12,8 @@ import com.swmansion.enriched.common.EnrichedConstants;
 import com.swmansion.enriched.common.spans.EnrichedBoldSpan;
 import com.swmansion.enriched.common.spans.EnrichedCheckboxListSpan;
 import com.swmansion.enriched.common.spans.EnrichedCodeBlockSpan;
+import com.swmansion.enriched.common.spans.EnrichedFontFamilySpan;
+import com.swmansion.enriched.common.spans.EnrichedFontSizeSpan;
 import com.swmansion.enriched.common.spans.EnrichedH1Span;
 import com.swmansion.enriched.common.spans.EnrichedH2Span;
 import com.swmansion.enriched.common.spans.EnrichedH3Span;
@@ -20,7 +22,9 @@ import com.swmansion.enriched.common.spans.EnrichedH5Span;
 import com.swmansion.enriched.common.spans.EnrichedH6Span;
 import com.swmansion.enriched.common.spans.EnrichedImageSpan;
 import com.swmansion.enriched.common.spans.EnrichedInlineCodeSpan;
+import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan;
 import com.swmansion.enriched.common.spans.EnrichedItalicSpan;
+import com.swmansion.enriched.common.spans.EnrichedLetterSpacingSpan;
 import com.swmansion.enriched.common.spans.EnrichedLinkSpan;
 import com.swmansion.enriched.common.spans.EnrichedMentionSpan;
 import com.swmansion.enriched.common.spans.EnrichedOrderedListSpan;
@@ -33,7 +37,9 @@ import com.swmansion.enriched.common.spans.interfaces.EnrichedParagraphSpan;
 import com.swmansion.enriched.common.spans.interfaces.EnrichedZeroWidthSpaceSpan;
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import org.ccil.cowan.tagsoup.HTMLSchema;
 import org.ccil.cowan.tagsoup.Parser;
@@ -259,12 +265,87 @@ public class EnrichedParser {
     }
   }
 
+  /** Checks whether the span is one of the inline text style (value) spans. */
+  private static boolean isTextStyleSpan(EnrichedInlineSpan span) {
+    return span instanceof EnrichedFontFamilySpan
+        || span instanceof EnrichedFontSizeSpan
+        || span instanceof EnrichedLetterSpacingSpan
+        || span instanceof EnrichedInlineLineHeightSpan;
+  }
+
+  /** Formats a float omitting the trailing ".0" so the HTML output stays clean. */
+  private static String formatCssNumber(float value) {
+    if (value == (long) value) {
+      return String.valueOf((long) value);
+    }
+    return String.valueOf(value);
+  }
+
+  /**
+   * Combines all inline text style spans present in the run into a single CSS declaration string,
+   * e.g. "font-family: Arial; font-size: 16px".
+   */
+  private static String getTextStyleCss(EnrichedInlineSpan[] spans) {
+    String fontFamily = null;
+    Float fontSize = null;
+    Float letterSpacing = null;
+    Float lineHeight = null;
+
+    for (EnrichedInlineSpan span : spans) {
+      if (span instanceof EnrichedFontFamilySpan) {
+        fontFamily = ((EnrichedFontFamilySpan) span).getFontFamily();
+      } else if (span instanceof EnrichedFontSizeSpan) {
+        fontSize = ((EnrichedFontSizeSpan) span).getFontSize();
+      } else if (span instanceof EnrichedLetterSpacingSpan) {
+        letterSpacing = ((EnrichedLetterSpacingSpan) span).getLetterSpacing();
+      } else if (span instanceof EnrichedInlineLineHeightSpan) {
+        lineHeight = ((EnrichedInlineLineHeightSpan) span).getLineHeight();
+      }
+    }
+
+    StringBuilder css = new StringBuilder();
+    if (fontFamily != null) {
+      css.append("font-family: ").append(fontFamily);
+    }
+    if (fontSize != null) {
+      if (css.length() > 0) css.append("; ");
+      css.append("font-size: ").append(formatCssNumber(fontSize)).append("px");
+    }
+    if (letterSpacing != null) {
+      if (css.length() > 0) css.append("; ");
+      css.append("letter-spacing: ").append(formatCssNumber(letterSpacing)).append("px");
+    }
+    if (lineHeight != null) {
+      if (css.length() > 0) css.append("; ");
+      css.append("line-height: ").append(formatCssNumber(lineHeight)).append("px");
+    }
+
+    return css.toString();
+  }
+
   private static void withinParagraph(StringBuilder out, Spanned text, int start, int end) {
     int next;
     for (int i = start; i < end; i = next) {
       next = text.nextSpanTransition(i, end, EnrichedInlineSpan.class);
       EnrichedInlineSpan[] style = text.getSpans(i, next, EnrichedInlineSpan.class);
+
+      // All inline text style spans of a run are emitted as a single <span> tag
+      // with a combined style attribute. The tag is opened (and closed) at the
+      // position of the first such span to keep the tags properly nested.
+      int firstTextStyleIndex = -1;
       for (int j = 0; j < style.length; j++) {
+        if (isTextStyleSpan(style[j])) {
+          firstTextStyleIndex = j;
+          break;
+        }
+      }
+
+      for (int j = 0; j < style.length; j++) {
+        if (j == firstTextStyleIndex) {
+          out.append("<span style=\"");
+          out.append(getTextStyleCss(style));
+          out.append("\">");
+        }
         if (style[j] instanceof EnrichedBoldSpan) {
           out.append("<b>");
         }
@@ -324,6 +405,9 @@ public class EnrichedParser {
       }
       withinStyle(out, text, i, next);
       for (int j = style.length - 1; j >= 0; j--) {
+        if (j == firstTextStyleIndex) {
+          out.append("</span>");
+        }
         if (style[j] instanceof EnrichedLinkSpan) {
           out.append("</a>");
         }
@@ -518,6 +602,8 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
       start(mSpannableStringBuilder, new Code());
     } else if (tag.equalsIgnoreCase("mention")) {
       startMention(mSpannableStringBuilder, attributes);
+    } else if (tag.equalsIgnoreCase("span")) {
+      startSpan(mSpannableStringBuilder, attributes);
     }
   }
 
@@ -563,6 +649,8 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
       end(mSpannableStringBuilder, Code.class, mSpanFactory.createInlineCodeSpan(mStyle));
     } else if (tag.equalsIgnoreCase("mention")) {
       endMention(mSpannableStringBuilder, mStyle, mSpanFactory);
+    } else if (tag.equalsIgnoreCase("span")) {
+      endSpan(mSpannableStringBuilder, mStyle, mSpanFactory);
     }
   }
 
@@ -804,6 +892,104 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     }
   }
 
+  /** Strips quotes from a CSS font-family value and keeps the first entry of a font stack. */
+  private static String parseCssFontFamily(String value) {
+    String firstFamily = value.split(",")[0].trim();
+    firstFamily = firstFamily.replace("\"", "").replace("'", "").trim();
+    return firstFamily.isEmpty() ? null : firstFamily;
+  }
+
+  /** Parses a CSS dimension value (e.g. "16px", "1.5") into a float, ignoring the unit. */
+  private static Float parseCssDimension(String value) {
+    String numeric = value.trim();
+    int end = 0;
+    while (end < numeric.length()
+        && (Character.isDigit(numeric.charAt(end))
+            || numeric.charAt(end) == '.'
+            || numeric.charAt(end) == '-')) {
+      end++;
+    }
+    if (end == 0) {
+      return null;
+    }
+    try {
+      return Float.parseFloat(numeric.substring(0, end));
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  private static void startSpan(Editable text, Attributes attributes) {
+    String cssStyle = attributes.getValue("", "style");
+    String fontFamily = null;
+    Float fontSize = null;
+    Float letterSpacing = null;
+    Float lineHeight = null;
+
+    if (cssStyle != null) {
+      for (String declaration : cssStyle.split(";")) {
+        int colonIndex = declaration.indexOf(':');
+        if (colonIndex < 0) {
+          continue;
+        }
+        String property = declaration.substring(0, colonIndex).trim().toLowerCase(Locale.US);
+        String value = declaration.substring(colonIndex + 1).trim();
+        if (value.isEmpty()) {
+          continue;
+        }
+
+        switch (property) {
+          case "font-family":
+            fontFamily = parseCssFontFamily(value);
+            break;
+          case "font-size":
+            fontSize = parseCssDimension(value);
+            break;
+          case "letter-spacing":
+            letterSpacing = parseCssDimension(value);
+            break;
+          case "line-height":
+            lineHeight = parseCssDimension(value);
+            break;
+          default:
+            break;
+        }
+      }
+    }
+
+    // A mark is pushed for every <span> tag (even without supported styles),
+    // so that each closing </span> pops the matching mark.
+    start(text, new TextStyle(fontFamily, fontSize, letterSpacing, lineHeight));
+  }
+
+  private static <T> void endSpan(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
+    TextStyle textStyle = getLast(text, TextStyle.class);
+    if (textStyle == null) {
+      return;
+    }
+
+    ArrayList<Object> spans = new ArrayList<>();
+    if (textStyle.mFontFamily != null) {
+      spans.add(spanFactory.createFontFamilySpan(textStyle.mFontFamily, style));
+    }
+    if (textStyle.mFontSize != null) {
+      spans.add(spanFactory.createFontSizeSpan(textStyle.mFontSize, style));
+    }
+    if (textStyle.mLetterSpacing != null) {
+      spans.add(spanFactory.createLetterSpacingSpan(textStyle.mLetterSpacing, style));
+    }
+    if (textStyle.mLineHeight != null) {
+      spans.add(spanFactory.createInlineLineHeightSpan(textStyle.mLineHeight, style));
+    }
+
+    if (spans.isEmpty()) {
+      text.removeSpan(textStyle);
+      return;
+    }
+
+    setSpanFromMark(text, textStyle, spans.toArray());
+  }
+
   private static void startMention(Editable mention, Attributes attributes) {
     String text = attributes.getValue("", "text");
     String indicator = attributes.getValue("", "indicator");
@@ -946,6 +1132,20 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
 
     public Href(String href) {
       mHref = href;
+    }
+  }
+
+  private static class TextStyle {
+    public String mFontFamily;
+    public Float mFontSize;
+    public Float mLetterSpacing;
+    public Float mLineHeight;
+
+    public TextStyle(String fontFamily, Float fontSize, Float letterSpacing, Float lineHeight) {
+      mFontFamily = fontFamily;
+      mFontSize = fontSize;
+      mLetterSpacing = letterSpacing;
+      mLineHeight = lineHeight;
     }
   }
 

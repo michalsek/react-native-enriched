@@ -69,4 +69,24 @@
   }
 }
 
+- (UIFont *)setFamily:(NSString *)family {
+  // Try a full font name first (e.g. "Helvetica-Bold")...
+  UIFont *baseFont = [UIFont fontWithName:family size:self.pointSize];
+  if (baseFont == nullptr) {
+    // ...then fall back to a font family name (e.g. "Helvetica")
+    UIFontDescriptor *descriptor =
+        [UIFontDescriptor fontDescriptorWithFontAttributes:@{
+          UIFontDescriptorFamilyAttribute : family
+        }];
+    baseFont = [UIFont fontWithDescriptor:descriptor size:self.pointSize];
+  }
+  if (baseFont == nullptr) {
+    RCTLogWarn(@"[EnrichedTextInput]: Couldn't resolve font family: %@.",
+               family);
+    return self;
+  }
+  // preserve the bold/italic traits of the original font
+  return [baseFont withFontTraits:self];
+}
+
 @end

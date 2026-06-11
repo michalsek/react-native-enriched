@@ -89,6 +89,10 @@ class EnrichedSelection(
       for ((style, config) in EnrichedSpans.inlineSpans) {
         state.setStart(style, getInlineStyleStart(config.clazz))
       }
+
+      for ((style, config) in EnrichedSpans.textStyleSpans) {
+        state.setStart(style, getInlineStyleStart(config.clazz))
+      }
     } else {
       view.isRemovingMany = false
     }
@@ -104,6 +108,8 @@ class EnrichedSelection(
     for ((style, config) in EnrichedSpans.parametrizedStyles) {
       state.setStart(style, getParametrizedStyleStart(config.clazz))
     }
+
+    view.textStyles?.onValidateStyles()
   }
 
   fun getInlineSelection(): Pair<Int, Int> {

@@ -52,6 +52,14 @@ class EnrichedSpanState(
     private set
   var mentionStart: Int? = null
     private set
+  var fontFamilyStart: Int? = null
+    private set
+  var fontSizeStart: Int? = null
+    private set
+  var letterSpacingStart: Int? = null
+    private set
+  var lineHeightStart: Int? = null
+    private set
 
   fun setBoldStart(start: Int?) {
     this.boldStart = start
@@ -148,6 +156,26 @@ class EnrichedSpanState(
     emitStateChangeEvent()
   }
 
+  fun setFontFamilyStart(start: Int?) {
+    this.fontFamilyStart = start
+    emitStateChangeEvent()
+  }
+
+  fun setFontSizeStart(start: Int?) {
+    this.fontSizeStart = start
+    emitStateChangeEvent()
+  }
+
+  fun setLetterSpacingStart(start: Int?) {
+    this.letterSpacingStart = start
+    emitStateChangeEvent()
+  }
+
+  fun setLineHeightStart(start: Int?) {
+    this.lineHeightStart = start
+    emitStateChangeEvent()
+  }
+
   fun getStart(name: String): Int? {
     val start =
       when (name) {
@@ -170,6 +198,10 @@ class EnrichedSpanState(
         EnrichedSpans.LINK -> linkStart
         EnrichedSpans.IMAGE -> imageStart
         EnrichedSpans.MENTION -> mentionStart
+        EnrichedSpans.FONT_FAMILY -> fontFamilyStart
+        EnrichedSpans.FONT_SIZE -> fontSizeStart
+        EnrichedSpans.LETTER_SPACING -> letterSpacingStart
+        EnrichedSpans.LINE_HEIGHT -> lineHeightStart
         else -> null
       }
 
@@ -200,6 +232,10 @@ class EnrichedSpanState(
       EnrichedSpans.LINK -> setLinkStart(start)
       EnrichedSpans.IMAGE -> setImageStart(start)
       EnrichedSpans.MENTION -> setMentionStart(start)
+      EnrichedSpans.FONT_FAMILY -> setFontFamilyStart(start)
+      EnrichedSpans.FONT_SIZE -> setFontSizeStart(start)
+      EnrichedSpans.LETTER_SPACING -> setLetterSpacingStart(start)
+      EnrichedSpans.LINE_HEIGHT -> setLineHeightStart(start)
     }
   }
 
@@ -225,6 +261,10 @@ class EnrichedSpanState(
         if (linkStart != null) EnrichedSpans.LINK else null,
         if (imageStart != null) EnrichedSpans.IMAGE else null,
         if (mentionStart != null) EnrichedSpans.MENTION else null,
+        if (fontFamilyStart != null) EnrichedSpans.FONT_FAMILY else null,
+        if (fontSizeStart != null) EnrichedSpans.FONT_SIZE else null,
+        if (letterSpacingStart != null) EnrichedSpans.LETTER_SPACING else null,
+        if (lineHeightStart != null) EnrichedSpans.LINE_HEIGHT else null,
       )
     val payload = Arguments.createMap()
     payload.putMap("bold", getStyleState(activeStyles, EnrichedSpans.BOLD))
@@ -246,6 +286,28 @@ class EnrichedSpanState(
     payload.putMap("image", getStyleState(activeStyles, EnrichedSpans.IMAGE))
     payload.putMap("mention", getStyleState(activeStyles, EnrichedSpans.MENTION))
     payload.putMap("checkboxList", getStyleState(activeStyles, EnrichedSpans.CHECKBOX_LIST))
+    payload.putMap("fontFamily", getStyleState(activeStyles, EnrichedSpans.FONT_FAMILY))
+    payload.putMap("fontSize", getStyleState(activeStyles, EnrichedSpans.FONT_SIZE))
+    payload.putMap("letterSpacing", getStyleState(activeStyles, EnrichedSpans.LETTER_SPACING))
+    payload.putMap("lineHeight", getStyleState(activeStyles, EnrichedSpans.LINE_HEIGHT))
+
+    val textStyles = view.textStyles
+    payload.putString(
+      "fontFamilyValue",
+      textStyles?.getActiveValue(EnrichedSpans.FONT_FAMILY) as? String ?: "",
+    )
+    payload.putDouble(
+      "fontSizeValue",
+      (textStyles?.getActiveValue(EnrichedSpans.FONT_SIZE) as? Float)?.toDouble() ?: 0.0,
+    )
+    payload.putDouble(
+      "letterSpacingValue",
+      (textStyles?.getActiveValue(EnrichedSpans.LETTER_SPACING) as? Float)?.toDouble() ?: 0.0,
+    )
+    payload.putDouble(
+      "lineHeightValue",
+      (textStyles?.getActiveValue(EnrichedSpans.LINE_HEIGHT) as? Float)?.toDouble() ?: 0.0,
+    )
 
     return payload
   }

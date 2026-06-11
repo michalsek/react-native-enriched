@@ -59,3 +59,15 @@
 
 @implementation EnrichedTextImageStyle
 @end
+
+@implementation EnrichedTextFontFamilyStyle
+@end
+
+@implementation EnrichedTextFontSizeStyle
+@end
+
+@implementation EnrichedTextLetterSpacingStyle
+@end
+
+@implementation EnrichedTextLineHeightStyle
+@end

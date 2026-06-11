@@ -1,19 +1,24 @@
-package com.swmansion.enriched.textinput.spans
+package com.swmansion.enriched.common.spans
 
 import android.graphics.Paint
-import android.text.Spannable
 import android.text.TextPaint
 import android.text.style.LineHeightSpan
 import android.text.style.MetricAffectingSpan
 import com.swmansion.enriched.common.pixelFromSpOrDp
-import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan
-import com.swmansion.enriched.common.spans.interfaces.EnrichedHeadingSpan
+import com.swmansion.enriched.common.spans.interfaces.EnrichedInlineSpan
 
-class EnrichedLineHeightSpan(
+/**
+ * Line height applied to a portion of text. It affects the lines that the
+ * spanned text spans. Unlike the input-wide line height span, it is not
+ * removed when the input-wide line height changes and it takes precedence
+ * over it on the lines it covers.
+ */
+open class EnrichedInlineLineHeightSpan(
   val lineHeight: Float,
-  val allowFontScaling: Boolean,
+  private val allowFontScaling: Boolean,
 ) : MetricAffectingSpan(),
-  LineHeightSpan {
+  LineHeightSpan,
+  EnrichedInlineSpan {
   override fun updateDrawState(p0: TextPaint?) {
     // Do nothing but inform TextView that line height should be recalculated
   }
@@ -30,15 +35,6 @@ class EnrichedLineHeightSpan(
     v: Int,
     fm: Paint.FontMetricsInt,
   ) {
-    val spannable = text as? Spannable ?: return
-    // Do not modify line height for headings
-    // In the future we may consider adding custom lineHeight support for each paragraph style
-    if (spannable.getSpans(start, end, EnrichedHeadingSpan::class.java).isNotEmpty()) return
-
-    // An inline (per-selection) line height takes precedence over the
-    // input-wide one on the lines it covers
-    if (spannable.getSpans(start, end, EnrichedInlineLineHeightSpan::class.java).isNotEmpty()) return
-
     val lineHeightPx = pixelFromSpOrDp(lineHeight, allowFontScaling)
     val currentHeight = (fm.descent - fm.ascent).toFloat()
     if (lineHeightPx <= currentHeight) return

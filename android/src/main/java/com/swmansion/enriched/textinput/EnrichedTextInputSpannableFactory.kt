@@ -7,6 +7,8 @@ import com.swmansion.enriched.textinput.spans.EnrichedInputBlockQuoteSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputBoldSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputCheckboxListSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputCodeBlockSpan
+import com.swmansion.enriched.textinput.spans.EnrichedInputFontFamilySpan
+import com.swmansion.enriched.textinput.spans.EnrichedInputFontSizeSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputH1Span
 import com.swmansion.enriched.textinput.spans.EnrichedInputH2Span
 import com.swmansion.enriched.textinput.spans.EnrichedInputH3Span
@@ -16,6 +18,8 @@ import com.swmansion.enriched.textinput.spans.EnrichedInputH6Span
 import com.swmansion.enriched.textinput.spans.EnrichedInputImageSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputInlineCodeSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputItalicSpan
+import com.swmansion.enriched.textinput.spans.EnrichedInputLetterSpacingSpan
+import com.swmansion.enriched.textinput.spans.EnrichedInputLineHeightSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputLinkSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputMentionSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputOrderedListSpan
@@ -80,4 +84,24 @@ class EnrichedTextInputSpannableFactory : EnrichedSpanFactory<HtmlStyle> {
   override fun createBlockQuoteSpan(style: HtmlStyle) = EnrichedInputBlockQuoteSpan(style)
 
   override fun createCodeBlockSpan(style: HtmlStyle) = EnrichedInputCodeBlockSpan(style)
+
+  override fun createFontFamilySpan(
+    fontFamily: String,
+    style: HtmlStyle,
+  ) = EnrichedInputFontFamilySpan(fontFamily, style)
+
+  override fun createFontSizeSpan(
+    fontSize: Float,
+    style: HtmlStyle,
+  ) = EnrichedInputFontSizeSpan(fontSize, style)
+
+  override fun createLetterSpacingSpan(
+    letterSpacing: Float,
+    style: HtmlStyle,
+  ) = EnrichedInputLetterSpacingSpan(letterSpacing, style)
+
+  override fun createInlineLineHeightSpan(
+    lineHeight: Float,
+    style: HtmlStyle,
+  ) = EnrichedInputLineHeightSpan(lineHeight, style)
 }

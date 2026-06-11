@@ -112,3 +112,31 @@
          withDirtyRange:(BOOL)withDirtyRange;
 - (ImageData *)getImageDataAt:(NSUInteger)location;
 @end
+
+// Base class for the inline text styles (font family, font size, letter
+// spacing, line height). The style value (always kept as a string) is stored
+// as the custom attribute's value.
+@interface TextStyleBase : StyleBase
+// Applies the value to the range (or to the typing attributes when the range
+// is empty). Passing nullptr removes the style.
+- (void)setValue:(NSString *)value range:(NSRange)range;
+// Returns the style value at the given text location or nullptr.
+- (NSString *)getValueAt:(NSUInteger)location;
+// Returns the style value at the current selection (taking the typing
+// attributes into account) or nullptr.
+- (NSString *)getActiveValue;
+// Converts the value to a number respecting the allowFontScaling setting.
+- (CGFloat)scaledValue:(NSString *)value;
+@end
+
+@interface FontFamilyStyle : TextStyleBase
+@end
+
+@interface FontSizeStyle : TextStyleBase
+@end
+
+@interface LetterSpacingStyle : TextStyleBase
+@end
+
+@interface LineHeightStyle : TextStyleBase
+@end

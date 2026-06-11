@@ -62,6 +62,19 @@ function buildState(
     };
   }
 
+  const textStyleAttributes = editor.getAttributes('textStyle');
+
+  function textStyleFormat(
+    attribute: 'fontFamily' | 'fontSize' | 'letterSpacing' | 'lineHeight'
+  ) {
+    return {
+      isActive:
+        editor.isActive('textStyle') && textStyleAttributes[attribute] != null,
+      isConflicting: false,
+      isBlocking: editor.isActive('codeBlock'),
+    };
+  }
+
   return {
     bold: inlineFormat('bold', false),
     italic: inlineFormat('italic', false),
@@ -97,22 +110,32 @@ function buildState(
       isConflicting: editor.isActive('link'),
       isBlocking: isFormatBlocked('image', editor, htmlStyle),
     },
+    fontFamily: textStyleFormat('fontFamily'),
+    fontSize: textStyleFormat('fontSize'),
+    letterSpacing: textStyleFormat('letterSpacing'),
+    lineHeight: textStyleFormat('lineHeight'),
     alignment: 'left',
+    fontFamilyValue: textStyleAttributes.fontFamily ?? '',
+    fontSizeValue: textStyleAttributes.fontSize ?? 0,
+    letterSpacingValue: textStyleAttributes.letterSpacing ?? 0,
+    lineHeightValue: textStyleAttributes.lineHeight ?? 0,
   };
 }
 
 function hashState(state: OnChangeStateEvent): string {
   return Object.values(state)
     .map((formatState) =>
-      String(
-        getFormatHash(
-          formatState.isActive,
-          formatState.isConflicting,
-          formatState.isBlocking
-        )
-      )
+      typeof formatState === 'object' && formatState !== null
+        ? String(
+            getFormatHash(
+              formatState.isActive,
+              formatState.isConflicting,
+              formatState.isBlocking
+            )
+          )
+        : String(formatState)
     )
-    .join('');
+    .join('|');
 }
 
 function getFormatHash(

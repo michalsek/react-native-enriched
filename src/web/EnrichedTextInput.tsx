@@ -60,6 +60,10 @@ import { EnrichedUnorderedList } from './formats/EnrichedUnorderedList';
 import { EnrichedOrderedList } from './formats/EnrichedOrderedList';
 import { EnrichedCheckboxItem } from './formats/EnrichedCheckboxItem';
 import { EnrichedCheckboxList } from './formats/EnrichedCheckboxList';
+import {
+  EnrichedTextStyle,
+  setTextStyleAttribute,
+} from './formats/EnrichedTextStyle';
 import { StripBoldInStyledHeadingsPlugin } from './pmPlugins/StripBoldInStyledHeadingsPlugin';
 import { StrictMarksPlugin } from './pmPlugins/StrictMarksPlugin';
 import { MergeAdjacentSameKindBlocksPlugin } from './pmPlugins/MergeAdjacentSameKindBlocksPlugin';
@@ -201,6 +205,7 @@ export const EnrichedTextInput = ({
       EnrichedUnorderedList,
       EnrichedOrderedList,
       EnrichedCheckboxList,
+      EnrichedTextStyle,
       StripMarksInCodeBlockPlugin,
       StripMarksOnImagePlugin,
       StripBoldInStyledHeadingsPlugin.configure({
@@ -338,6 +343,14 @@ export const EnrichedTextInput = ({
       ) => setMention(editor, indicator, text, attributes),
       setImage: (src: string, width: number, height: number) =>
         runFocused(editor, (c) => c.setImage({ src, width, height })),
+      setFontFamily: (fontFamily: string | null) =>
+        setTextStyleAttribute(editor, 'fontFamily', fontFamily || null),
+      setFontSize: (fontSize: number | null) =>
+        setTextStyleAttribute(editor, 'fontSize', fontSize || null),
+      setLetterSpacing: (letterSpacing: number | null) =>
+        setTextStyleAttribute(editor, 'letterSpacing', letterSpacing || null),
+      setLineHeight: (lineHeight: number | null) =>
+        setTextStyleAttribute(editor, 'lineHeight', lineHeight || null),
       measure: () => {},
       measureInWindow: () => {},
       measureLayout: () => {},

@@ -300,7 +300,31 @@ interface OnChangeStateEvent {
     isConflicting: boolean;
     isBlocking: boolean;
   };
+  fontFamily: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
+  fontSize: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
+  letterSpacing: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
+  lineHeight: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
   alignment: string;
+  fontFamilyValue: string;
+  fontSizeValue: number;
+  letterSpacingValue: number;
+  lineHeightValue: number;
 }
 ```
 
@@ -308,6 +332,7 @@ interface OnChangeStateEvent {
 - `isBlocking` indicates if the style is blocked by other currently active, meaning it can't be toggled.
 - `isConflicting` indicates if the style is in conflict with other currently active styles, meaning toggling it will remove conflicting style.
 - `alignment` indicates the current text alignment of the paragraph at the cursor position. Possible values: `'left'`, `'center'`, `'right'`, `'justify'`, `'auto'`.
+- `fontFamilyValue`, `fontSizeValue`, `letterSpacingValue` and `lineHeightValue` carry the inline text style values at the current selection (set with [`setFontFamily`](#setfontfamily), [`setFontSize`](#setfontsize), [`setLetterSpacing`](#setletterspacing) and [`setLineHeight`](#setlineheight)). An empty string / `0` means no custom value is applied.
 
 | Type                                                        | Platform |
 |-------------------------------------------------------------|----------|
@@ -592,6 +617,48 @@ Sets the currently edited mention with a given indicator, displayed text and cus
 - `indicator: string` - the indicator of the set mention.
 - `text: string` - the text that should be displayed for the mention. Anything the user typed gets replaced by that text. The mention indicator isn't added to that text.
 - `attributes?: Record<string, string>` - additional, custom attributes for the mention that can be passed as a TypeScript record. They are properly preserved through parsing from and to the HTML format.
+
+### `.setFontFamily()`
+
+```ts
+setFontFamily: (fontFamily: string | null) => void;
+```
+
+Applies the given font family to the current selection. With no selection (just a cursor in place), the font family will be applied to the text typed next.
+
+- `fontFamily: string | null` - the font family to apply (a font available on the platform, e.g. a system font or a font bundled with the app). Passing `null` (or an empty string) restores the default font family.
+
+In the HTML format the style is represented with a `<span>` tag, e.g. `<span style="font-family: Courier New">styled text</span>`. A single `<span>` tag can carry all of the inline text styles: `font-family`, `font-size`, `letter-spacing` and `line-height`.
+
+### `.setFontSize()`
+
+```ts
+setFontSize: (fontSize: number | null) => void;
+```
+
+Applies the given font size to the current selection. With no selection (just a cursor in place), the font size will be applied to the text typed next.
+
+- `fontSize: number | null` - the font size to apply. Passing `null` (or `0`) restores the default font size.
+
+### `.setLetterSpacing()`
+
+```ts
+setLetterSpacing: (letterSpacing: number | null) => void;
+```
+
+Applies the given letter spacing to the current selection. With no selection (just a cursor in place), the letter spacing will be applied to the text typed next.
+
+- `letterSpacing: number | null` - the letter spacing to apply. Passing `null` (or `0`) restores the default letter spacing.
+
+### `.setLineHeight()`
+
+```ts
+setLineHeight: (lineHeight: number | null) => void;
+```
+
+Applies the given line height to the selected text. It affects the lines that the selected text spans. With no selection (just a cursor in place), the line height will be applied to the text typed next.
+
+- `lineHeight: number | null` - the line height to apply. Passing `null` (or `0`) restores the default line height. Values smaller than the natural height of a line have no visual effect.
 
 ### `.setValue()`
 

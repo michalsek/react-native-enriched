@@ -463,6 +463,34 @@ class EnrichedTextInputViewManager :
     TODO("Not yet implemented")
   }
 
+  override fun setSelectionFontFamily(
+    view: EnrichedTextInputView?,
+    fontFamily: String?,
+  ) {
+    view?.setSelectionFontFamily(fontFamily)
+  }
+
+  override fun setSelectionFontSize(
+    view: EnrichedTextInputView?,
+    fontSize: Float,
+  ) {
+    view?.setSelectionFontSize(fontSize)
+  }
+
+  override fun setSelectionLetterSpacing(
+    view: EnrichedTextInputView?,
+    letterSpacing: Float,
+  ) {
+    view?.setSelectionLetterSpacing(letterSpacing)
+  }
+
+  override fun setSelectionLineHeight(
+    view: EnrichedTextInputView?,
+    lineHeight: Float,
+  ) {
+    view?.setSelectionLineHeight(lineHeight)
+  }
+
   override fun measure(
     context: Context,
     localData: ReadableMap?,

@@ -122,6 +122,15 @@
           }
         }
       }
+    } else if ([HtmlParser isTextStyleType:styleType]) {
+      NSString *textStyleValue = (NSString *)stylePair.styleValue;
+      if (textStyleValue == nullptr) {
+        continue;
+      }
+      [(TextStyleBase *)style add:styleRange
+                        withValue:textStyleValue
+                       withTyping:NO
+                   withDirtyRange:NO];
     } else {
       [style add:styleRange withTyping:NO withDirtyRange:NO];
     }

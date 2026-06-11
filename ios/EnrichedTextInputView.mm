@@ -60,6 +60,7 @@ using namespace facebook::react;
   NSString *_submitBehavior;
   NSDictionary<NSAttributedStringKey, id> *_capturedAttributesBeforeChange;
   NSString *_recentlyEmittedAlignment;
+  NSArray<NSString *> *_recentlyEmittedTextStyleValues;
 }
 
 @synthesize blockEmitting = blockEmitting;
@@ -131,6 +132,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   _recentlyActiveLinkRange = NSMakeRange(0, 0);
   _recentlyActiveMentionRange = NSMakeRange(0, 0);
   _recentlyEmittedAlignment = @"left";
+  _recentlyEmittedTextStyleValues = @[ @"", @"", @"", @"" ];
   _recentInputString = @"";
   _recentlyEmittedHtml = @"<html>\n<p></p>\n</html>";
   _emitHtml = NO;
@@ -872,6 +874,8 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 }
 
 - (void)refreshLineHeight {
+  LineHeightStyle *lineHeightStyle =
+      (LineHeightStyle *)stylesDict[@([LineHeightStyle getType])];
   [textView.textStorage
       enumerateAttribute:NSParagraphStyleAttributeName
                  inRange:NSMakeRange(0, textView.textStorage.string.length)
@@ -882,6 +886,10 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                     [(NSParagraphStyle *)value mutableCopy];
                 if (pStyle == nil)
                   return;
+                // ranges with an inline line height keep their custom value
+                if ([lineHeightStyle getValueAt:range.location] != nullptr) {
+                  return;
+                }
                 pStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
                 [textView.textStorage addAttribute:NSParagraphStyleAttributeName
                                              value:pStyle
@@ -1092,6 +1100,28 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     updateNeeded = YES;
   }
 
+  // detect inline text style value changes
+  NSString *currentFontFamily =
+      [(TextStyleBase *)stylesDict[@([FontFamilyStyle getType])] getActiveValue]
+          ?: @"";
+  NSString *currentFontSize =
+      [(TextStyleBase *)stylesDict[@([FontSizeStyle getType])] getActiveValue]
+          ?: @"";
+  NSString *currentLetterSpacing =
+      [(TextStyleBase *)stylesDict[@([LetterSpacingStyle getType])]
+          getActiveValue]
+          ?: @"";
+  NSString *currentLineHeight =
+      [(TextStyleBase *)stylesDict[@([LineHeightStyle getType])] getActiveValue]
+          ?: @"";
+  NSArray<NSString *> *currentTextStyleValues = @[
+    currentFontFamily, currentFontSize, currentLetterSpacing, currentLineHeight
+  ];
+  if (![currentTextStyleValues
+          isEqualToArray:_recentlyEmittedTextStyleValues]) {
+    updateNeeded = YES;
+  }
+
   if (updateNeeded) {
     auto emitter = [self getEventEmitter];
     if (emitter != nullptr) {
@@ -1099,6 +1129,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       _activeStyles = newActiveStyles;
       _blockedStyles = newBlockedStyles;
       _recentlyEmittedAlignment = currentAlignment;
+      _recentlyEmittedTextStyleValues = currentTextStyleValues;
 
       emitter->onChangeState(
           {.bold = GET_STYLE_STATE([BoldStyle getType]),
@@ -1120,7 +1151,15 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
            .codeBlock = GET_STYLE_STATE([CodeBlockStyle getType]),
            .image = GET_STYLE_STATE([ImageStyle getType]),
            .checkboxList = GET_STYLE_STATE([CheckboxListStyle getType]),
-           .alignment = [currentAlignment UTF8String]});
+           .fontFamily = GET_STYLE_STATE([FontFamilyStyle getType]),
+           .fontSize = GET_STYLE_STATE([FontSizeStyle getType]),
+           .letterSpacing = GET_STYLE_STATE([LetterSpacingStyle getType]),
+           .lineHeight = GET_STYLE_STATE([LineHeightStyle getType]),
+           .alignment = [currentAlignment UTF8String],
+           .fontFamilyValue = [currentFontFamily toCppString],
+           .fontSizeValue = [currentFontSize floatValue],
+           .letterSpacingValue = [currentLetterSpacing floatValue],
+           .lineHeightValue = [currentLineHeight floatValue]});
     }
   }
 
@@ -1268,7 +1307,46 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     if (!_placeholderLabel.isHidden) {
       [self refreshPlaceholderLabelStyles];
     }
+  } else if ([commandName isEqualToString:@"setSelectionFontFamily"]) {
+    NSString *fontFamily = (NSString *)args[0];
+    [self setTextStyle:[FontFamilyStyle getType]
+                 value:fontFamily.length > 0 ? fontFamily : nullptr];
+  } else if ([commandName isEqualToString:@"setSelectionFontSize"]) {
+    float fontSize = [(NSNumber *)args[0] floatValue];
+    [self
+        setTextStyle:[FontSizeStyle getType]
+               value:fontSize != 0 ? [NSString stringWithFormat:@"%g", fontSize]
+                                   : nullptr];
+  } else if ([commandName isEqualToString:@"setSelectionLetterSpacing"]) {
+    float letterSpacing = [(NSNumber *)args[0] floatValue];
+    [self setTextStyle:[LetterSpacingStyle getType]
+                 value:letterSpacing != 0
+                           ? [NSString stringWithFormat:@"%g", letterSpacing]
+                           : nullptr];
+  } else if ([commandName isEqualToString:@"setSelectionLineHeight"]) {
+    float lineHeight = [(NSNumber *)args[0] floatValue];
+    [self setTextStyle:[LineHeightStyle getType]
+                 value:lineHeight != 0
+                           ? [NSString stringWithFormat:@"%g", lineHeight]
+                           : nullptr];
   }
+}
+
+- (void)setTextStyle:(StyleType)type value:(NSString *)value {
+  TextStyleBase *style = (TextStyleBase *)stylesDict[@(type)];
+  if (style == nullptr) {
+    return;
+  }
+
+  NSRange range = textView.selectedRange;
+  if (value != nullptr && ![StyleUtils handleStyleBlocksAndConflicts:type
+                                                               range:range
+                                                             forHost:self]) {
+    return;
+  }
+
+  [style setValue:value range:range];
+  [self anyTextMayHaveBeenModified];
 }
 
 - (std::shared_ptr<EnrichedTextInputViewEventEmitter>)getEventEmitter {

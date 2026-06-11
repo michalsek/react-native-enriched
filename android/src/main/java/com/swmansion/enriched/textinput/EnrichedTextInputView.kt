@@ -62,6 +62,7 @@ import com.swmansion.enriched.textinput.styles.InlineStyles
 import com.swmansion.enriched.textinput.styles.ListStyles
 import com.swmansion.enriched.textinput.styles.ParagraphStyles
 import com.swmansion.enriched.textinput.styles.ParametrizedStyles
+import com.swmansion.enriched.textinput.styles.TextStyles
 import com.swmansion.enriched.textinput.utils.EnrichedEditableFactory
 import com.swmansion.enriched.textinput.utils.EnrichedSelection
 import com.swmansion.enriched.textinput.utils.EnrichedSpanState
@@ -85,6 +86,7 @@ class EnrichedTextInputView :
   val paragraphStyles: ParagraphStyles? = ParagraphStyles(this)
   val listStyles: ListStyles? = ListStyles(this)
   val parametrizedStyles: ParametrizedStyles? = ParametrizedStyles(this)
+  val textStyles: TextStyles? = TextStyles(this)
   var isDuringTransaction: Boolean = false
   var isRemovingMany: Boolean = false
   var scrollEnabled: Boolean = true
@@ -832,6 +834,10 @@ class EnrichedTextInputView :
         EnrichedSpans.LINK -> parametrizedStyles?.removeStyle(EnrichedSpans.LINK, start, end)
         EnrichedSpans.IMAGE -> parametrizedStyles?.removeStyle(EnrichedSpans.IMAGE, start, end)
         EnrichedSpans.MENTION -> parametrizedStyles?.removeStyle(EnrichedSpans.MENTION, start, end)
+        EnrichedSpans.FONT_FAMILY -> textStyles?.removeStyle(EnrichedSpans.FONT_FAMILY, start, end)
+        EnrichedSpans.FONT_SIZE -> textStyles?.removeStyle(EnrichedSpans.FONT_SIZE, start, end)
+        EnrichedSpans.LETTER_SPACING -> textStyles?.removeStyle(EnrichedSpans.LETTER_SPACING, start, end)
+        EnrichedSpans.LINE_HEIGHT -> textStyles?.removeStyle(EnrichedSpans.LINE_HEIGHT, start, end)
         else -> false
       }
 
@@ -860,6 +866,10 @@ class EnrichedTextInputView :
         EnrichedSpans.LINK -> parametrizedStyles?.getStyleRange()
         EnrichedSpans.IMAGE -> parametrizedStyles?.getStyleRange()
         EnrichedSpans.MENTION -> parametrizedStyles?.getStyleRange()
+        EnrichedSpans.FONT_FAMILY -> textStyles?.getStyleRange()
+        EnrichedSpans.FONT_SIZE -> textStyles?.getStyleRange()
+        EnrichedSpans.LETTER_SPACING -> textStyles?.getStyleRange()
+        EnrichedSpans.LINE_HEIGHT -> textStyles?.getStyleRange()
         else -> Pair(0, 0)
       }
 
@@ -976,6 +986,38 @@ class EnrichedTextInputView :
     if (!isValid) return
 
     parametrizedStyles?.setMentionSpan(text, indicator, attributes)
+  }
+
+  fun setSelectionFontFamily(fontFamily: String?) {
+    setTextStyleValue(EnrichedSpans.FONT_FAMILY, fontFamily?.takeIf { it.isNotEmpty() })
+  }
+
+  fun setSelectionFontSize(fontSize: Float) {
+    setTextStyleValue(EnrichedSpans.FONT_SIZE, fontSize.takeIf { it != 0f })
+  }
+
+  fun setSelectionLetterSpacing(letterSpacing: Float) {
+    setTextStyleValue(EnrichedSpans.LETTER_SPACING, letterSpacing.takeIf { it != 0f })
+  }
+
+  fun setSelectionLineHeight(lineHeight: Float) {
+    setTextStyleValue(EnrichedSpans.LINE_HEIGHT, lineHeight.takeIf { it != 0f })
+  }
+
+  private fun setTextStyleValue(
+    name: String,
+    value: Any?,
+  ) {
+    if (value != null) {
+      val isValid = verifyStyle(name)
+      if (!isValid) return
+    }
+
+    runAsATransaction {
+      textStyles?.setStyleValue(name, value)
+    }
+
+    layoutManager.invalidateLayout()
   }
 
   fun requestHTML(requestId: Int) {

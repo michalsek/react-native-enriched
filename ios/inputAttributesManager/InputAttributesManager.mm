@@ -97,14 +97,16 @@
 
     // Sort style types so paragraph styles come first. Their broad visual
     // attributes (e.g. foreground color, font) are laid down before inline
-    // styles override them on their specific sub-ranges.
+    // styles override them on their specific sub-ranges. Styles of the same
+    // kind apply in the StyleType order so the styling stays deterministic
+    // (e.g. inline code's monospaced font wins over a custom font family).
     NSArray *sortedStyleTypes = [presentStyles.allKeys
         sortedArrayUsingComparator:^NSComparisonResult(NSNumber *a,
                                                        NSNumber *b) {
           BOOL aPara = [_input->stylesDict[a] isParagraph];
           BOOL bPara = [_input->stylesDict[b] isParagraph];
           if (aPara == bPara)
-            return NSOrderedSame;
+            return [a compare:b];
           return aPara ? NSOrderedAscending : NSOrderedDescending;
         }];
 

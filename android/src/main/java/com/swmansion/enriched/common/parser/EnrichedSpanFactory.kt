@@ -4,6 +4,8 @@ import com.swmansion.enriched.common.spans.EnrichedBlockQuoteSpan
 import com.swmansion.enriched.common.spans.EnrichedBoldSpan
 import com.swmansion.enriched.common.spans.EnrichedCheckboxListSpan
 import com.swmansion.enriched.common.spans.EnrichedCodeBlockSpan
+import com.swmansion.enriched.common.spans.EnrichedFontFamilySpan
+import com.swmansion.enriched.common.spans.EnrichedFontSizeSpan
 import com.swmansion.enriched.common.spans.EnrichedH1Span
 import com.swmansion.enriched.common.spans.EnrichedH2Span
 import com.swmansion.enriched.common.spans.EnrichedH3Span
@@ -12,7 +14,9 @@ import com.swmansion.enriched.common.spans.EnrichedH5Span
 import com.swmansion.enriched.common.spans.EnrichedH6Span
 import com.swmansion.enriched.common.spans.EnrichedImageSpan
 import com.swmansion.enriched.common.spans.EnrichedInlineCodeSpan
+import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan
 import com.swmansion.enriched.common.spans.EnrichedItalicSpan
+import com.swmansion.enriched.common.spans.EnrichedLetterSpacingSpan
 import com.swmansion.enriched.common.spans.EnrichedLinkSpan
 import com.swmansion.enriched.common.spans.EnrichedMentionSpan
 import com.swmansion.enriched.common.spans.EnrichedOrderedListSpan
@@ -76,4 +80,24 @@ interface EnrichedSpanFactory<T> {
   fun createBlockQuoteSpan(style: T): EnrichedBlockQuoteSpan
 
   fun createCodeBlockSpan(style: T): EnrichedCodeBlockSpan
+
+  fun createFontFamilySpan(
+    fontFamily: String,
+    style: T,
+  ): EnrichedFontFamilySpan
+
+  fun createFontSizeSpan(
+    fontSize: Float,
+    style: T,
+  ): EnrichedFontSizeSpan
+
+  fun createLetterSpacingSpan(
+    letterSpacing: Float,
+    style: T,
+  ): EnrichedLetterSpacingSpan
+
+  fun createInlineLineHeightSpan(
+    lineHeight: Float,
+    style: T,
+  ): EnrichedInlineLineHeightSpan
 }

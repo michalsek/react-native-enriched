@@ -49,6 +49,7 @@ class EnrichedTextWatcher(
     view.paragraphStyles?.afterTextChanged(s, endCursorPosition, previousTextLength)
     view.listStyles?.afterTextChanged(s, endCursorPosition, previousTextLength)
     view.parametrizedStyles?.afterTextChanged(s, startCursorPosition, endCursorPosition)
+    view.textStyles?.afterTextChanged(s, startCursorPosition, endCursorPosition)
   }
 
   private fun emitChangeText(editable: Editable) {

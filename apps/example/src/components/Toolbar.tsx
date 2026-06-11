@@ -97,7 +97,29 @@ const STYLE_ITEMS = [
     name: 'align-right',
     icon: 'align-right',
   },
+  {
+    name: 'font-family',
+    icon: 'font',
+  },
+  {
+    name: 'font-size',
+    icon: 'text-height',
+  },
+  {
+    name: 'letter-spacing',
+    icon: 'arrows-h',
+  },
+  {
+    name: 'line-height',
+    text: 'LH',
+  },
 ] as const;
+
+// Values applied by the inline text style toolbar buttons
+const FONT_FAMILY_VALUE = 'Courier New';
+const FONT_SIZE_VALUE = 24;
+const LETTER_SPACING_VALUE = 3;
+const LINE_HEIGHT_VALUE = 40;
 
 type Item = (typeof STYLE_ITEMS)[number];
 type StylesState = OnChangeStateEvent;
@@ -189,6 +211,26 @@ export const Toolbar: FC<ToolbarProps> = ({
       case 'align-right':
         editorRef.current?.setTextAlignment('right');
         break;
+      case 'font-family':
+        editorRef.current?.setFontFamily(
+          stylesState.fontFamily.isActive ? null : FONT_FAMILY_VALUE
+        );
+        break;
+      case 'font-size':
+        editorRef.current?.setFontSize(
+          stylesState.fontSize.isActive ? null : FONT_SIZE_VALUE
+        );
+        break;
+      case 'letter-spacing':
+        editorRef.current?.setLetterSpacing(
+          stylesState.letterSpacing.isActive ? null : LETTER_SPACING_VALUE
+        );
+        break;
+      case 'line-height':
+        editorRef.current?.setLineHeight(
+          stylesState.lineHeight.isActive ? null : LINE_HEIGHT_VALUE
+        );
+        break;
     }
   };
 
@@ -232,6 +274,14 @@ export const Toolbar: FC<ToolbarProps> = ({
         return stylesState.mention.isBlocking;
       case 'checkbox-list':
         return stylesState.checkboxList.isBlocking;
+      case 'font-family':
+        return stylesState.fontFamily.isBlocking;
+      case 'font-size':
+        return stylesState.fontSize.isBlocking;
+      case 'letter-spacing':
+        return stylesState.letterSpacing.isBlocking;
+      case 'line-height':
+        return stylesState.lineHeight.isBlocking;
       default:
         return false;
     }
@@ -283,6 +333,14 @@ export const Toolbar: FC<ToolbarProps> = ({
         return stylesState.alignment === 'center';
       case 'align-right':
         return stylesState.alignment === 'right';
+      case 'font-family':
+        return stylesState.fontFamily.isActive;
+      case 'font-size':
+        return stylesState.fontSize.isActive;
+      case 'letter-spacing':
+        return stylesState.letterSpacing.isActive;
+      case 'line-height':
+        return stylesState.lineHeight.isActive;
       default:
         return false;
     }
