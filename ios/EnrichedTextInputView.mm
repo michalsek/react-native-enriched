@@ -59,6 +59,7 @@ using namespace facebook::react;
   NSMutableDictionary<NSValue *, UIImageView *> *_attachmentViews;
   NSArray<NSDictionary *> *_contextMenuItems;
   NSString *_submitBehavior;
+  NSString *_verticalAlign;
   NSDictionary<NSAttributedStringKey, id> *_capturedAttributesBeforeChange;
   NSString *_recentlyEmittedAlignment;
   NSArray<NSString *> *_recentlyEmittedTextStyleValues;
@@ -141,6 +142,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   _emitFocusBlur = YES;
   _emitTextChange = NO;
   _isSettingValue = NO;
+  _verticalAlign = @"top";
   dotReplacementRange = nullptr;
 
   defaultTypingAttributes =
@@ -693,6 +695,12 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   // useHtmlNormalizer
   if (newViewProps.useHtmlNormalizer != oldViewProps.useHtmlNormalizer) {
     useHtmlNormalizer = newViewProps.useHtmlNormalizer;
+  }
+
+  // verticalAlign
+  if (newViewProps.verticalAlign != oldViewProps.verticalAlign) {
+    _verticalAlign = [NSString fromCppString:newViewProps.verticalAlign];
+    [self updateVerticalAlignment];
   }
 
   // default value - must be set before placeholder to make sure it correctly
@@ -1420,6 +1428,43 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   _isSettingValue = NO;
 }
 
+// Vertically aligns the text content within the view's fixed bounds by
+// padding the text container from the top. Doing it natively keeps the text
+// position and the text layout in the same draw pass - consumers centering
+// an auto-sized input with flexbox get a one-frame lag instead, which reads
+// as vertical shaking while styles stream in (e.g. a font size slider).
+- (void)updateVerticalAlignment {
+  BOOL isCenter = [_verticalAlign isEqualToString:@"center"];
+  BOOL isBottom = [_verticalAlign isEqualToString:@"bottom"];
+  UIEdgeInsets insets = textView.textContainerInset;
+
+  if (!isCenter && !isBottom) {
+    if (insets.top != 0) {
+      insets.top = 0;
+      textView.textContainerInset = insets;
+    }
+    return;
+  }
+
+  [textView.layoutManager ensureLayoutForTextContainer:textView.textContainer];
+  CGFloat contentHeight =
+      [textView.layoutManager usedRectForTextContainer:textView.textContainer]
+          .size.height;
+  CGFloat freeSpace = textView.bounds.size.height - contentHeight;
+  CGFloat topInset = MAX(0, isCenter ? freeSpace / 2 : freeSpace);
+
+  if (ABS(insets.top - topInset) > 0.5) {
+    insets.top = topInset;
+    textView.textContainerInset = insets;
+  }
+}
+
+- (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
+           oldLayoutMetrics:(const LayoutMetrics &)oldLayoutMetrics {
+  [super updateLayoutMetrics:layoutMetrics oldLayoutMetrics:oldLayoutMetrics];
+  [self updateVerticalAlignment];
+}
+
 - (void)setCustomSelection:(NSInteger)visibleStart end:(NSInteger)visibleEnd {
   NSString *text = textView.textStorage.string;
 
@@ -1826,6 +1871,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   [attributesManager handleDirtyRangesStyling];
   // update height on each character change
   [self tryUpdatingHeight];
+  [self updateVerticalAlignment];
   // update active styles as well
   [self tryUpdatingActiveStyles];
   [self layoutAttachments];

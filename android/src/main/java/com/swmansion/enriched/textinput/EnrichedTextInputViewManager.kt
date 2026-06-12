@@ -128,6 +128,14 @@ class EnrichedTextInputViewManager :
     view?.submitBehavior = submitBehavior
   }
 
+  @ReactProp(name = "verticalAlign")
+  override fun setVerticalAlign(
+    view: EnrichedTextInputView?,
+    verticalAlign: String?,
+  ) {
+    view?.setVerticalAlignment(verticalAlign)
+  }
+
   @ReactProp(name = "returnKeyLabel")
   override fun setReturnKeyLabel(
     view: EnrichedTextInputView?,

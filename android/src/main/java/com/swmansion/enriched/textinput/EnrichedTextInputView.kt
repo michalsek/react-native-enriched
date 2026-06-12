@@ -781,6 +781,16 @@ class EnrichedTextInputView :
     defaultValueDirty = true
   }
 
+  fun setVerticalAlignment(value: String?) {
+    val verticalGravity =
+      when (value) {
+        "center" -> Gravity.CENTER_VERTICAL
+        "bottom" -> Gravity.BOTTOM
+        else -> Gravity.TOP
+      }
+    gravity = verticalGravity or Gravity.START
+  }
+
   fun shouldBlurOnReturn(): Boolean = submitBehavior == "blurAndSubmit"
 
   fun shouldSubmitOnReturn(): Boolean = submitBehavior == "submit" || submitBehavior == "blurAndSubmit"

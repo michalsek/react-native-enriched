@@ -516,6 +516,7 @@ export interface EnrichedTextInputProps extends Omit<ViewProps, 'children'> {
   htmlStyle?: HtmlStyle;
   style?: EnrichedInputStyle;
   scrollEnabled?: boolean;
+  verticalAlign?: 'top' | 'center' | 'bottom';
   linkRegex?: RegExp | null;
   returnKeyType?: ReturnKeyTypeOptions;
   returnKeyLabel?: string;
