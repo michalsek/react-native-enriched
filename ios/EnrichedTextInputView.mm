@@ -1370,10 +1370,12 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 }
 
 - (void)setValue:(NSString *)value {
-  // The internal caret move to the end of the new text must not reach JS -
-  // consumers restoring the selection right after setValue would otherwise
-  // receive a transient end-of-text selection event.
+  // The internal caret moves must not reach JS - consumers restoring the
+  // selection right after setValue would otherwise receive transient
+  // selection events.
   _isSettingValue = YES;
+
+  NSRange previousSelectedRange = textView.selectedRange;
 
   NSString *initiallyProcessedHtml = [parser initiallyProcessHtml:value];
   if (initiallyProcessedHtml == nullptr) {
@@ -1387,8 +1389,13 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     [parser replaceWholeFromHtml:initiallyProcessedHtml];
   }
 
-  // set selectedRange and check for changes
-  textView.selectedRange = NSRange(textView.textStorage.string.length, 0);
+  // Restore the previous selection clamped to the new text, so consecutive
+  // setValue calls (e.g. styling changes streamed from a slider) don't make
+  // the caret visibly jump to the end of the text and back.
+  NSUInteger textLength = textView.textStorage.string.length;
+  NSUInteger location = MIN(previousSelectedRange.location, textLength);
+  NSUInteger length = MIN(previousSelectedRange.length, textLength - location);
+  textView.selectedRange = NSMakeRange(location, length);
   [self anyTextMayHaveBeenModified];
 
   _isSettingValue = NO;

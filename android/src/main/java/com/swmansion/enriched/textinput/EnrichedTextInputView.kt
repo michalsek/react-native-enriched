@@ -431,11 +431,14 @@ class EnrichedTextInputView :
   ) {
     if (value == null) return
 
-    // The internal caret moves (setText resets it, then it jumps to the end)
-    // must not reach JS - consumers restoring the selection right after
-    // setValue would otherwise receive transient selection events.
+    // The internal caret moves must not reach JS - consumers restoring the
+    // selection right after setValue would otherwise receive transient
+    // selection events.
     isSettingValue = true
     try {
+      val previousStart = selectionStart
+      val previousEnd = selectionEnd
+
       runAsATransaction {
         val newText = if (shouldParseHtml) parseText(value) else value
         setText(newText)
@@ -443,8 +446,13 @@ class EnrichedTextInputView :
 
         observeAsyncImages()
 
-        // Scroll to the last line of text
-        setSelection(text?.length ?: 0)
+        // Restore the previous selection clamped to the new text, so
+        // consecutive setValue calls (e.g. styling changes streamed from a
+        // slider) don't make the caret visibly jump to the end and back.
+        val textLength = text?.length ?: 0
+        val start = previousStart.coerceIn(0, textLength)
+        val end = previousEnd.coerceIn(start, textLength)
+        setSelection(start, end)
       }
     } finally {
       isSettingValue = false
