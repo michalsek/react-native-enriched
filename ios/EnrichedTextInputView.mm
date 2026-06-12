@@ -701,6 +701,13 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     NSString *newDefaultValue =
         [NSString fromCppString:newViewProps.defaultValue];
 
+    // Updates after the first one behave like setValue: the selection is
+    // preserved and the internal caret moves are not emitted, so live
+    // defaultValue rewrites don't make the caret jump to the end of the text.
+    BOOL isInitialValue = oldViewProps.defaultValue.empty();
+    _isSettingValue = YES;
+    NSRange previousSelectedRange = textView.selectedRange;
+
     NSString *initiallyProcessedHtml =
         [parser initiallyProcessHtml:newDefaultValue];
     if (initiallyProcessedHtml == nullptr) {
@@ -710,7 +717,19 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       // we've got some seemingly proper html
       [parser replaceWholeFromHtml:initiallyProcessedHtml];
     }
-    textView.selectedRange = NSRange(textView.textStorage.string.length, 0);
+
+    if (isInitialValue) {
+      textView.selectedRange =
+          NSMakeRange(textView.textStorage.string.length, 0);
+    } else {
+      NSUInteger textLength = textView.textStorage.string.length;
+      NSUInteger location = MIN(previousSelectedRange.location, textLength);
+      NSUInteger length =
+          MIN(previousSelectedRange.length, textLength - location);
+      textView.selectedRange = NSMakeRange(location, length);
+    }
+
+    _isSettingValue = NO;
   }
 
   // placeholderTextColor
