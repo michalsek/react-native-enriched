@@ -55,6 +55,7 @@ using namespace facebook::react;
   UIColor *_placeholderColor;
   BOOL _emitFocusBlur;
   BOOL _emitTextChange;
+  BOOL _isSettingValue;
   NSMutableDictionary<NSValue *, UIImageView *> *_attachmentViews;
   NSArray<NSDictionary *> *_contextMenuItems;
   NSString *_submitBehavior;
@@ -139,6 +140,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   blockEmitting = NO;
   _emitFocusBlur = YES;
   _emitTextChange = NO;
+  _isSettingValue = NO;
   dotReplacementRange = nullptr;
 
   defaultTypingAttributes =
@@ -1368,6 +1370,11 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 }
 
 - (void)setValue:(NSString *)value {
+  // The internal caret move to the end of the new text must not reach JS -
+  // consumers restoring the selection right after setValue would otherwise
+  // receive a transient end-of-text selection event.
+  _isSettingValue = YES;
+
   NSString *initiallyProcessedHtml = [parser initiallyProcessHtml:value];
   if (initiallyProcessedHtml == nullptr) {
     // reset the text first and reset typing attributes
@@ -1383,6 +1390,8 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   // set selectedRange and check for changes
   textView.selectedRange = NSRange(textView.textStorage.string.length, 0);
   [self anyTextMayHaveBeenModified];
+
+  _isSettingValue = NO;
 }
 
 - (void)setCustomSelection:(NSInteger)visibleStart end:(NSInteger)visibleEnd {
@@ -2044,7 +2053,8 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
           substringWithRange:textView.selectedRange];
 
   auto emitter = [self getEventEmitter];
-  if (emitter != nullptr) {
+  // selection moves performed internally by setValue are not emitted
+  if (emitter != nullptr && !_isSettingValue) {
     // iOS range works differently because it specifies location and length
     // here, start is the location, but end is the first index BEHIND the end.
     // So a 0 length range will have equal start and end

@@ -57,7 +57,11 @@ class EnrichedSelection(
     start = finalStart
     end = finalEnd
     validateStyles()
-    emitSelectionChangeEvent(view.text, finalStart, finalEnd)
+
+    // Selection moves performed internally by setValue are not emitted.
+    if (!view.isSettingValue) {
+      emitSelectionChangeEvent(view.text, finalStart, finalEnd)
+    }
   }
 
   private fun isZeroWidthSelection(

@@ -91,6 +91,7 @@ class EnrichedTextInputView :
   val alignmentStyles: AlignmentStyles? = AlignmentStyles(this)
   var isDuringTransaction: Boolean = false
   var isRemovingMany: Boolean = false
+  var isSettingValue: Boolean = false
   var scrollEnabled: Boolean = true
   var allowFontScaling: Boolean = EnrichedConstants.ALLOW_FONT_SCALING_DEFAULT
     set(value) {
@@ -430,15 +431,23 @@ class EnrichedTextInputView :
   ) {
     if (value == null) return
 
-    runAsATransaction {
-      val newText = if (shouldParseHtml) parseText(value) else value
-      setText(newText)
-      applyLineSpacing()
+    // The internal caret moves (setText resets it, then it jumps to the end)
+    // must not reach JS - consumers restoring the selection right after
+    // setValue would otherwise receive transient selection events.
+    isSettingValue = true
+    try {
+      runAsATransaction {
+        val newText = if (shouldParseHtml) parseText(value) else value
+        setText(newText)
+        applyLineSpacing()
 
-      observeAsyncImages()
+        observeAsyncImages()
 
-      // Scroll to the last line of text
-      setSelection(text?.length ?: 0)
+        // Scroll to the last line of text
+        setSelection(text?.length ?: 0)
+      }
+    } finally {
+      isSettingValue = false
     }
     layoutManager.invalidateLayout()
   }
