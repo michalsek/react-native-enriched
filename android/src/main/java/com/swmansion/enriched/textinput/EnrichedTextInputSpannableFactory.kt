@@ -11,6 +11,7 @@ import com.swmansion.enriched.textinput.spans.EnrichedInputCheckboxListSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputCodeBlockSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputFontFamilySpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputFontSizeSpan
+import com.swmansion.enriched.textinput.spans.EnrichedInputForegroundColorSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputH1Span
 import com.swmansion.enriched.textinput.spans.EnrichedInputH2Span
 import com.swmansion.enriched.textinput.spans.EnrichedInputH3Span
@@ -106,6 +107,11 @@ class EnrichedTextInputSpannableFactory : EnrichedSpanFactory<HtmlStyle> {
     lineHeight: Float,
     style: HtmlStyle,
   ) = EnrichedInputLineHeightSpan(lineHeight, style)
+
+  override fun createForegroundColorSpan(
+    color: Int,
+    style: HtmlStyle,
+  ) = EnrichedInputForegroundColorSpan(color)
 
   override fun createAlignmentSpan(
     alignment: Layout.Alignment,

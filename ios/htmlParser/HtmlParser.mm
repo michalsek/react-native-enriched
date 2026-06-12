@@ -1,6 +1,7 @@
 #import "HtmlParser.h"
 #import "AlignmentEntry.h"
 #import "AlignmentUtils.h"
+#import "ColorExtension.h"
 #import "ImageData.h"
 #import "LinkData.h"
 #import "MentionParams.h"
@@ -420,7 +421,8 @@
   return value == [FontFamilyStyle getType] ||
          value == [FontSizeStyle getType] ||
          value == [LetterSpacingStyle getType] ||
-         value == [LineHeightStyle getType];
+         value == [LineHeightStyle getType] ||
+         value == [ForegroundColorStyle getType];
 }
 
 // Strips quotes from a CSS font-family value and keeps the first entry of a
@@ -446,6 +448,16 @@
     return nullptr;
   }
   return [NSString stringWithFormat:@"%g", number];
+}
+
+// Validates a CSS color value - only hex notations are supported. The value is
+// kept as the attribute's string and converted to UIColor at styling time.
++ (NSString *)parseCssColor:(NSString *)value {
+  UIColor *color = [UIColor colorFromHexString:value];
+  if (color == nullptr) {
+    return nullptr;
+  }
+  return [value uppercaseString];
 }
 
 // Extracts the supported inline text styles from a span tag's parameters into
@@ -506,6 +518,11 @@
       if (lineHeight != nullptr) {
         result[@([LineHeightStyle getType])] = lineHeight;
       }
+    } else if ([property isEqualToString:@"color"]) {
+      NSString *color = [self parseCssColor:value];
+      if (color != nullptr) {
+        result[@([ForegroundColorStyle getType])] = color;
+      }
     }
   }
 
@@ -548,6 +565,14 @@
   if (lineHeight != nullptr) {
     [declarations
         addObject:[NSString stringWithFormat:@"line-height: %@px", lineHeight]];
+  }
+
+  TextStyleBase *foregroundColorStyle =
+      (TextStyleBase *)host.stylesDict[@([ForegroundColorStyle getType])];
+  NSString *foregroundColor = [foregroundColorStyle getValueAt:location];
+  if (foregroundColor != nullptr) {
+    [declarations
+        addObject:[NSString stringWithFormat:@"color: %@", foregroundColor]];
   }
 
   return [declarations componentsJoinedByString:@"; "];

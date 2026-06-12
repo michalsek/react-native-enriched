@@ -15,6 +15,7 @@ import com.swmansion.enriched.common.spans.EnrichedCheckboxListSpan;
 import com.swmansion.enriched.common.spans.EnrichedCodeBlockSpan;
 import com.swmansion.enriched.common.spans.EnrichedFontFamilySpan;
 import com.swmansion.enriched.common.spans.EnrichedFontSizeSpan;
+import com.swmansion.enriched.common.spans.EnrichedForegroundColorSpan;
 import com.swmansion.enriched.common.spans.EnrichedH1Span;
 import com.swmansion.enriched.common.spans.EnrichedH2Span;
 import com.swmansion.enriched.common.spans.EnrichedH3Span;
@@ -286,7 +287,8 @@ public class EnrichedParser {
     return span instanceof EnrichedFontFamilySpan
         || span instanceof EnrichedFontSizeSpan
         || span instanceof EnrichedLetterSpacingSpan
-        || span instanceof EnrichedInlineLineHeightSpan;
+        || span instanceof EnrichedInlineLineHeightSpan
+        || span instanceof EnrichedForegroundColorSpan;
   }
 
   /** Formats a float omitting the trailing ".0" so the HTML output stays clean. */
@@ -295,6 +297,16 @@ public class EnrichedParser {
       return String.valueOf((long) value);
     }
     return String.valueOf(value);
+  }
+
+  /** Serializes an ARGB color int back to a CSS hex color. */
+  private static String cssFromColor(int color) {
+    int alpha = (color >>> 24) & 0xFF;
+    int rgb = color & 0xFFFFFF;
+    if (alpha == 0xFF) {
+      return String.format("#%06X", rgb);
+    }
+    return String.format("#%06X%02X", rgb, alpha);
   }
 
   /**
@@ -306,6 +318,7 @@ public class EnrichedParser {
     Float fontSize = null;
     Float letterSpacing = null;
     Float lineHeight = null;
+    Integer foregroundColor = null;
 
     for (EnrichedInlineSpan span : spans) {
       if (span instanceof EnrichedFontFamilySpan) {
@@ -316,6 +329,8 @@ public class EnrichedParser {
         letterSpacing = ((EnrichedLetterSpacingSpan) span).getLetterSpacing();
       } else if (span instanceof EnrichedInlineLineHeightSpan) {
         lineHeight = ((EnrichedInlineLineHeightSpan) span).getLineHeight();
+      } else if (span instanceof EnrichedForegroundColorSpan) {
+        foregroundColor = ((EnrichedForegroundColorSpan) span).getColor();
       }
     }
 
@@ -334,6 +349,10 @@ public class EnrichedParser {
     if (lineHeight != null) {
       if (css.length() > 0) css.append("; ");
       css.append("line-height: ").append(formatCssNumber(lineHeight)).append("px");
+    }
+    if (foregroundColor != null) {
+      if (css.length() > 0) css.append("; ");
+      css.append("color: ").append(cssFromColor(foregroundColor));
     }
 
     return css.toString();
@@ -975,12 +994,49 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     }
   }
 
+  /**
+   * Parses a CSS hex color ("#RGB", "#RRGGBB" or "#RRGGBBAA") into an ARGB color int. Other CSS
+   * color notations are not supported.
+   */
+  private static Integer parseCssColor(String value) {
+    String hex = value.trim();
+    if (!hex.startsWith("#")) {
+      return null;
+    }
+    hex = hex.substring(1);
+
+    if (hex.length() == 3) {
+      StringBuilder expanded = new StringBuilder();
+      for (int i = 0; i < hex.length(); i++) {
+        expanded.append(hex.charAt(i)).append(hex.charAt(i));
+      }
+      hex = expanded.toString();
+    }
+
+    if (hex.length() != 6 && hex.length() != 8) {
+      return null;
+    }
+
+    try {
+      long parsed = Long.parseLong(hex, 16);
+      long alpha = 0xFF;
+      if (hex.length() == 8) {
+        alpha = parsed & 0xFF;
+        parsed >>= 8;
+      }
+      return (int) ((alpha << 24) | parsed);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
   private static void startSpan(Editable text, Attributes attributes) {
     String cssStyle = attributes.getValue("", "style");
     String fontFamily = null;
     Float fontSize = null;
     Float letterSpacing = null;
     Float lineHeight = null;
+    Integer foregroundColor = null;
 
     if (cssStyle != null) {
       for (String declaration : cssStyle.split(";")) {
@@ -1007,6 +1063,9 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
           case "line-height":
             lineHeight = parseCssDimension(value);
             break;
+          case "color":
+            foregroundColor = parseCssColor(value);
+            break;
           default:
             break;
         }
@@ -1015,7 +1074,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
 
     // A mark is pushed for every <span> tag (even without supported styles),
     // so that each closing </span> pops the matching mark.
-    start(text, new TextStyle(fontFamily, fontSize, letterSpacing, lineHeight));
+    start(text, new TextStyle(fontFamily, fontSize, letterSpacing, lineHeight, foregroundColor));
   }
 
   private static <T> void endSpan(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
@@ -1036,6 +1095,9 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     }
     if (textStyle.mLineHeight != null) {
       spans.add(spanFactory.createInlineLineHeightSpan(textStyle.mLineHeight, style));
+    }
+    if (textStyle.mForegroundColor != null) {
+      spans.add(spanFactory.createForegroundColorSpan(textStyle.mForegroundColor, style));
     }
 
     if (spans.isEmpty()) {
@@ -1196,12 +1258,19 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     public Float mFontSize;
     public Float mLetterSpacing;
     public Float mLineHeight;
+    public Integer mForegroundColor;
 
-    public TextStyle(String fontFamily, Float fontSize, Float letterSpacing, Float lineHeight) {
+    public TextStyle(
+        String fontFamily,
+        Float fontSize,
+        Float letterSpacing,
+        Float lineHeight,
+        Integer foregroundColor) {
       mFontFamily = fontFamily;
       mFontSize = fontSize;
       mLetterSpacing = letterSpacing;
       mLineHeight = lineHeight;
+      mForegroundColor = foregroundColor;
     }
   }
 

@@ -71,3 +71,6 @@
 
 @implementation EnrichedTextLineHeightStyle
 @end
+
+@implementation EnrichedTextForegroundColorStyle
+@end

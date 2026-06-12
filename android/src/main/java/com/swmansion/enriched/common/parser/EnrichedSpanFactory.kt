@@ -8,6 +8,7 @@ import com.swmansion.enriched.common.spans.EnrichedCheckboxListSpan
 import com.swmansion.enriched.common.spans.EnrichedCodeBlockSpan
 import com.swmansion.enriched.common.spans.EnrichedFontFamilySpan
 import com.swmansion.enriched.common.spans.EnrichedFontSizeSpan
+import com.swmansion.enriched.common.spans.EnrichedForegroundColorSpan
 import com.swmansion.enriched.common.spans.EnrichedH1Span
 import com.swmansion.enriched.common.spans.EnrichedH2Span
 import com.swmansion.enriched.common.spans.EnrichedH3Span
@@ -102,6 +103,11 @@ interface EnrichedSpanFactory<T> {
     lineHeight: Float,
     style: T,
   ): EnrichedInlineLineHeightSpan
+
+  fun createForegroundColorSpan(
+    color: Int,
+    style: T,
+  ): EnrichedForegroundColorSpan
 
   fun createAlignmentSpan(
     alignment: Layout.Alignment,

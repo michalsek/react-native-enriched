@@ -5,6 +5,7 @@ import com.swmansion.enriched.common.parser.EnrichedSpanFactory
 import com.swmansion.enriched.common.spans.EnrichedAlignmentSpan
 import com.swmansion.enriched.common.spans.EnrichedFontFamilySpan
 import com.swmansion.enriched.common.spans.EnrichedFontSizeSpan
+import com.swmansion.enriched.common.spans.EnrichedForegroundColorSpan
 import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan
 import com.swmansion.enriched.common.spans.EnrichedLetterSpacingSpan
 import com.swmansion.enriched.text.spans.EnrichedTextBlockQuoteSpan
@@ -103,6 +104,11 @@ class EnrichedTextSpanFactory : EnrichedSpanFactory<EnrichedTextStyle> {
     lineHeight: Float,
     style: EnrichedTextStyle,
   ) = EnrichedInlineLineHeightSpan(lineHeight, style.allowFontScaling)
+
+  override fun createForegroundColorSpan(
+    color: Int,
+    style: EnrichedTextStyle,
+  ) = EnrichedForegroundColorSpan(color)
 
   override fun createAlignmentSpan(
     alignment: Layout.Alignment,

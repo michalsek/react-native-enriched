@@ -5,6 +5,7 @@ import android.text.Spannable
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.spans.EnrichedInputFontFamilySpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputFontSizeSpan
+import com.swmansion.enriched.textinput.spans.EnrichedInputForegroundColorSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputLetterSpacingSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputLineHeightSpan
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
@@ -306,6 +307,7 @@ class TextStyles(
       EnrichedSpans.FONT_SIZE -> (value as? Float)?.let { EnrichedInputFontSizeSpan(it, view.htmlStyle) }
       EnrichedSpans.LETTER_SPACING -> (value as? Float)?.let { EnrichedInputLetterSpacingSpan(it, view.htmlStyle) }
       EnrichedSpans.LINE_HEIGHT -> (value as? Float)?.let { EnrichedInputLineHeightSpan(it, view.htmlStyle) }
+      EnrichedSpans.FOREGROUND_COLOR -> (value as? Int)?.let { EnrichedInputForegroundColorSpan(it) }
       else -> null
     }
 }

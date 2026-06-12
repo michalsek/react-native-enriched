@@ -840,6 +840,7 @@ class EnrichedTextInputView :
         EnrichedSpans.FONT_SIZE -> textStyles?.removeStyle(EnrichedSpans.FONT_SIZE, start, end)
         EnrichedSpans.LETTER_SPACING -> textStyles?.removeStyle(EnrichedSpans.LETTER_SPACING, start, end)
         EnrichedSpans.LINE_HEIGHT -> textStyles?.removeStyle(EnrichedSpans.LINE_HEIGHT, start, end)
+        EnrichedSpans.FOREGROUND_COLOR -> textStyles?.removeStyle(EnrichedSpans.FOREGROUND_COLOR, start, end)
         else -> false
       }
 
@@ -872,6 +873,7 @@ class EnrichedTextInputView :
         EnrichedSpans.FONT_SIZE -> textStyles?.getStyleRange()
         EnrichedSpans.LETTER_SPACING -> textStyles?.getStyleRange()
         EnrichedSpans.LINE_HEIGHT -> textStyles?.getStyleRange()
+        EnrichedSpans.FOREGROUND_COLOR -> textStyles?.getStyleRange()
         else -> Pair(0, 0)
       }
 

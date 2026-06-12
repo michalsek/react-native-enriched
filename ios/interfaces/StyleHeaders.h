@@ -140,3 +140,6 @@
 
 @interface LineHeightStyle : TextStyleBase
 @end
+
+@interface ForegroundColorStyle : TextStyleBase
+@end

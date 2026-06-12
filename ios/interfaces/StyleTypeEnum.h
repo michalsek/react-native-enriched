@@ -24,6 +24,7 @@ typedef NS_ENUM(NSInteger, StyleType) {
   FontSize,
   LetterSpacing,
   LineHeight,
+  ForegroundColor,
   InlineCode,
   Bold,
   Italic,

@@ -60,6 +60,8 @@ class EnrichedSpanState(
     private set
   var lineHeightStart: Int? = null
     private set
+  var foregroundColorStart: Int? = null
+    private set
   var alignment: String = "auto"
     private set
 
@@ -184,6 +186,11 @@ class EnrichedSpanState(
     emitStateChangeEvent()
   }
 
+  fun setForegroundColorStart(start: Int?) {
+    this.foregroundColorStart = start
+    emitStateChangeEvent()
+  }
+
   fun getStart(name: String): Int? {
     val start =
       when (name) {
@@ -210,6 +217,7 @@ class EnrichedSpanState(
         EnrichedSpans.FONT_SIZE -> fontSizeStart
         EnrichedSpans.LETTER_SPACING -> letterSpacingStart
         EnrichedSpans.LINE_HEIGHT -> lineHeightStart
+        EnrichedSpans.FOREGROUND_COLOR -> foregroundColorStart
         else -> null
       }
 
@@ -244,6 +252,7 @@ class EnrichedSpanState(
       EnrichedSpans.FONT_SIZE -> setFontSizeStart(start)
       EnrichedSpans.LETTER_SPACING -> setLetterSpacingStart(start)
       EnrichedSpans.LINE_HEIGHT -> setLineHeightStart(start)
+      EnrichedSpans.FOREGROUND_COLOR -> setForegroundColorStart(start)
     }
   }
 

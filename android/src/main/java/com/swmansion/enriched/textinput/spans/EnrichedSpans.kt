@@ -60,6 +60,7 @@ object EnrichedSpans {
   const val FONT_SIZE = "font_size"
   const val LETTER_SPACING = "letter_spacing"
   const val LINE_HEIGHT = "line_height"
+  const val FOREGROUND_COLOR = "foreground_color"
 
   val inlineSpans: Map<String, BaseSpanConfig> =
     mapOf(
@@ -105,6 +106,7 @@ object EnrichedSpans {
       FONT_SIZE to BaseSpanConfig(EnrichedInputFontSizeSpan::class.java),
       LETTER_SPACING to BaseSpanConfig(EnrichedInputLetterSpacingSpan::class.java),
       LINE_HEIGHT to BaseSpanConfig(EnrichedInputLineHeightSpan::class.java),
+      FOREGROUND_COLOR to BaseSpanConfig(EnrichedInputForegroundColorSpan::class.java),
     )
 
   val allSpans: Map<String, ISpanConfig> = inlineSpans + paragraphSpans + listSpans + parametrizedStyles + textStyleSpans
@@ -217,6 +219,7 @@ object EnrichedSpans {
               FONT_SIZE,
               LETTER_SPACING,
               LINE_HEIGHT,
+              FOREGROUND_COLOR,
             ),
         )
       }
@@ -257,7 +260,7 @@ object EnrichedSpans {
         )
       }
 
-      FONT_FAMILY, FONT_SIZE, LETTER_SPACING, LINE_HEIGHT -> {
+      FONT_FAMILY, FONT_SIZE, LETTER_SPACING, LINE_HEIGHT, FOREGROUND_COLOR -> {
         StylesMergingConfig(
           blockingStyles = arrayOf(CODE_BLOCK),
         )

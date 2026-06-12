@@ -101,14 +101,16 @@
       @([FontFamilyStyle getType]),
       @([FontSizeStyle getType]),
       @([LetterSpacingStyle getType]),
-      @([LineHeightStyle getType])
+      @([LineHeightStyle getType]),
+      @([ForegroundColorStyle getType])
     ],
     @([ImageStyle getType]) :
         @[ @([LinkStyle getType]), @([MentionStyle getType]) ],
     @([FontFamilyStyle getType]) : @[],
     @([FontSizeStyle getType]) : @[],
     @([LetterSpacingStyle getType]) : @[],
-    @([LineHeightStyle getType]) : @[]
+    @([LineHeightStyle getType]) : @[],
+    @([ForegroundColorStyle getType]) : @[]
   };
 }
 
@@ -144,7 +146,8 @@
     @([FontFamilyStyle getType]) : @[ @([CodeBlockStyle getType]) ],
     @([FontSizeStyle getType]) : @[ @([CodeBlockStyle getType]) ],
     @([LetterSpacingStyle getType]) : @[ @([CodeBlockStyle getType]) ],
-    @([LineHeightStyle getType]) : @[ @([CodeBlockStyle getType]) ]
+    @([LineHeightStyle getType]) : @[ @([CodeBlockStyle getType]) ],
+    @([ForegroundColorStyle getType]) : @[ @([CodeBlockStyle getType]) ]
   };
 }
 
@@ -174,7 +177,8 @@
     [FontFamilyStyle class],
     [FontSizeStyle class],
     [LetterSpacingStyle class],
-    [LineHeightStyle class]
+    [LineHeightStyle class],
+    [ForegroundColorStyle class]
   ];
 
   NSArray<Class> *viewerClasses = @[
@@ -201,7 +205,8 @@
     [EnrichedTextFontFamilyStyle class],
     [EnrichedTextFontSizeStyle class],
     [EnrichedTextLetterSpacingStyle class],
-    [EnrichedTextLineHeightStyle class]
+    [EnrichedTextLineHeightStyle class],
+    [EnrichedTextForegroundColorStyle class]
   ];
 
   NSMutableDictionary *dict = [NSMutableDictionary new];

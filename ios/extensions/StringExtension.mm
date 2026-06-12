@@ -28,10 +28,16 @@
 }
 
 + (NSDictionary *)getEscapedCharactersInfoFrom:(NSString *)text {
+  // Escaping only produces &amp;/&lt;/&gt;, but external HTML can carry the
+  // other common entities, so decode them as well.
   NSDictionary *unescapeMap = @{
     @"&amp;" : @"&",
     @"&lt;" : @"<",
     @"&gt;" : @">",
+    @"&quot;" : @"\"",
+    @"&#39;" : @"'",
+    @"&apos;" : @"'",
+    @"&nbsp;" : @" ",
   };
 
   NSMutableDictionary *results = [[NSMutableDictionary alloc] init];

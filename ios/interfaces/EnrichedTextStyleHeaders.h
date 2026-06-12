@@ -72,3 +72,6 @@
 
 @interface EnrichedTextLineHeightStyle : LineHeightStyle
 @end
+
+@interface EnrichedTextForegroundColorStyle : ForegroundColorStyle
+@end
