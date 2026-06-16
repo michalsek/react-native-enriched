@@ -26,6 +26,7 @@ import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.GumboNormalizer
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
+import com.swmansion.enriched.text.spans.EnrichedTextDefaultLineHeightSpan
 import com.swmansion.enriched.text.spans.EnrichedTextImageSpan
 import com.swmansion.enriched.text.spans.interfaces.EnrichedTextClickableSpan
 import com.swmansion.enriched.text.spans.interfaces.EnrichedTextSpan
@@ -38,6 +39,7 @@ class EnrichedTextView : AppCompatTextView {
   private var fontFamily: String? = null
   private var fontStyle: Int = ReactConstants.UNSET
   private var fontWeight: Int = ReactConstants.UNSET
+  private var lineHeight: Float? = null
   private var fontSize: Float = EnrichedConstants.TEXT_DEFAULT_FONT_SIZE
   private var fontSizeRaw: Float? = null
   private var htmlStyleMap: ReadableMap? = null
@@ -47,6 +49,7 @@ class EnrichedTextView : AppCompatTextView {
       field = value
       fontSizeRaw?.let { setFontSize(it) }
       htmlStyleMap?.let { setHtmlStyle(it) }
+      if (lineHeight != null) valueDirty = true
     }
 
   private var enrichedStyle: EnrichedTextStyle? = null
@@ -177,13 +180,30 @@ class EnrichedTextView : AppCompatTextView {
 
     val parsed = parseText(text, style)
     if (parsed != null) {
-      parsedText = parsed
-      setText(parsed, BufferType.NORMAL)
+      parsedText = applyDefaultLineHeight(parsed)
+      setText(parsedText, BufferType.NORMAL)
       observeAsyncImages()
     } else {
-      parsedText = null
-      this.text = text
+      parsedText = applyDefaultLineHeight(text)
+      setText(parsedText, BufferType.NORMAL)
     }
+  }
+
+  private fun applyDefaultLineHeight(text: CharSequence): CharSequence {
+    val lineHeight = lineHeight ?: return text
+    if (text.isEmpty()) return text
+
+    val spannable = if (text is Spannable) text else SpannableString(text)
+    spannable
+      .getSpans(0, spannable.length, EnrichedTextDefaultLineHeightSpan::class.java)
+      .forEach { spannable.removeSpan(it) }
+    spannable.setSpan(
+      EnrichedTextDefaultLineHeightSpan(lineHeight, allowFontScaling),
+      0,
+      spannable.length,
+      Spannable.SPAN_INCLUSIVE_INCLUSIVE,
+    )
+    return spannable
   }
 
   private fun parseText(
@@ -302,6 +322,14 @@ class EnrichedTextView : AppCompatTextView {
     val sizeInt = ceil(pixelFromSpOrDp(size, allowFontScaling))
     fontSize = sizeInt
     setTextSize(TypedValue.COMPLEX_UNIT_PX, sizeInt)
+  }
+
+  fun setLineHeight(height: Float) {
+    val newLineHeight = height.takeIf { it != 0f }
+    if (lineHeight == newLineHeight) return
+
+    lineHeight = newLineHeight
+    valueDirty = true
   }
 
   fun setFontFamily(family: String?) {

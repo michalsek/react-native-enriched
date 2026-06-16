@@ -98,12 +98,7 @@ open class EnrichedInlineLineHeightSpan(
     fm: Paint.FontMetricsInt,
     lineHeightPx: Float,
   ) {
-    val currentHeight = (fm.descent - fm.ascent).toFloat()
-    if (lineHeightPx <= currentHeight) return
-
-    val extra = (lineHeightPx - currentHeight).toInt()
-    fm.ascent -= extra
-    fm.top = minOf(fm.top, fm.ascent)
+    fm.expandToCenteredLineHeight(lineHeightPx)
   }
 
   private fun resetToNaturalMetrics(

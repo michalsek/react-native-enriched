@@ -2,6 +2,7 @@
 #import "AlignmentEntry.h"
 #import "EnrichedTextView.h"
 #import "HtmlParser.h"
+#import "LineHeightUtils.h"
 #import "LinkData.h"
 #import "MentionParams.h"
 #import "StyleHeaders.h"
@@ -167,6 +168,12 @@
     NSRange adjustedStyleRange = [((NSValue *)entry[1]) rangeValue];
     [style applyStyling:adjustedStyleRange];
   }
+
+  [LineHeightUtils
+      applyBaselineOffsetsInTextStorage:_view->textView.textStorage
+                                  range:NSMakeRange(0,
+                                                    _view->textView.textStorage
+                                                        .string.length)];
 }
 
 - (void)applyProcessedAlignments:(NSArray<AlignmentEntry *> *)alignments {

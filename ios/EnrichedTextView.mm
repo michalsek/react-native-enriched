@@ -4,6 +4,7 @@
 #import "EnrichedTextTextView.h"
 #import "EnrichedTextTouchHandler.h"
 #import "LayoutManagerExtension.h"
+#import "LineHeightUtils.h"
 #import "LinkData.h"
 #import "MentionParams.h"
 #import "MentionStyleProps.h"
@@ -151,6 +152,11 @@ Class<RCTComponentViewProtocol> EnrichedTextViewCls(void) {
     } else {
       [newConfig setPrimaryFontSize:nullptr];
     }
+    stylePropChanged = YES;
+  }
+
+  if (newViewProps.lineHeight != oldViewProps.lineHeight) {
+    [newConfig setPrimaryLineHeight:newViewProps.lineHeight];
     stylePropChanged = YES;
   }
 
@@ -613,8 +619,10 @@ Class<RCTComponentViewProtocol> EnrichedTextViewCls(void) {
   defaultTypingAttributes[NSStrikethroughColorAttributeName] =
       [config primaryColor];
   NSMutableParagraphStyle *pStyle = [[NSMutableParagraphStyle alloc] init];
-  pStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
+  [LineHeightUtils applyLineHeight:[config scaledPrimaryLineHeight]
+                  toParagraphStyle:pStyle];
   defaultTypingAttributes[NSParagraphStyleAttributeName] = pStyle;
+  [LineHeightUtils applyBaselineOffsetToAttributes:defaultTypingAttributes];
   textView.typingAttributes = defaultTypingAttributes;
 }
 

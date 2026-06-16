@@ -2,6 +2,7 @@
 #import "AlignmentUtils.h"
 #import "AttributeEntry.h"
 #import "EnrichedTextInputView.h"
+#import "LineHeightUtils.h"
 #import "ParagraphAttributesUtils.h"
 #import "RangeUtils.h"
 #import "StyleHeaders.h"
@@ -123,6 +124,9 @@
         [style applyStyling:occurenceRange];
       }
     }
+    [LineHeightUtils
+        applyBaselineOffsetsInTextStorage:_input->textView.textStorage
+                                    range:dirtyRange];
   }
   // do the typing attributes management, with no selection
   [self manageTypingAttributesWithOnlySelection:NO];

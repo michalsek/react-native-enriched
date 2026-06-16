@@ -7,6 +7,7 @@
 #import "ImageAttachment.h"
 #import "KeyboardUtils.h"
 #import "LayoutManagerExtension.h"
+#import "LineHeightUtils.h"
 #import "ParagraphAttributesUtils.h"
 #import "RCTFabricComponentsPlugins.h"
 #import "StringExtension.h"
@@ -663,8 +664,10 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
         [config primaryColor];
     NSMutableParagraphStyle *defaultPStyle =
         [[NSMutableParagraphStyle alloc] init];
-    defaultPStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
+    [LineHeightUtils applyLineHeight:[config scaledPrimaryLineHeight]
+                    toParagraphStyle:defaultPStyle];
     defaultTypingAttributes[NSParagraphStyleAttributeName] = defaultPStyle;
+    [LineHeightUtils applyBaselineOffsetToAttributes:defaultTypingAttributes];
 
     // no emitting during styles reload
     blockEmitting = YES;
@@ -919,11 +922,17 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                 if ([lineHeightStyle getValueAt:range.location] != nullptr) {
                   return;
                 }
-                pStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
+                [LineHeightUtils
+                     applyLineHeight:[config scaledPrimaryLineHeight]
+                    toParagraphStyle:pStyle];
                 [textView.textStorage addAttribute:NSParagraphStyleAttributeName
                                              value:pStyle
                                              range:range];
               }];
+  [LineHeightUtils
+      applyBaselineOffsetsInTextStorage:textView.textStorage
+                                  range:NSMakeRange(0, textView.textStorage
+                                                           .string.length)];
 }
 
 // MARK: - Measuring and states
@@ -2174,6 +2183,15 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
   NSMutableDictionary *newTypingAttrs = [defaultTypingAttributes mutableCopy];
   newTypingAttrs[NSFontAttributeName] = [config primaryFont];
+  NSMutableParagraphStyle *pStyle =
+      [newTypingAttrs[NSParagraphStyleAttributeName] mutableCopy];
+  if (pStyle == nil) {
+    pStyle = [[NSMutableParagraphStyle alloc] init];
+  }
+  [LineHeightUtils applyLineHeight:[config scaledPrimaryLineHeight]
+                  toParagraphStyle:pStyle];
+  newTypingAttrs[NSParagraphStyleAttributeName] = pStyle;
+  [LineHeightUtils applyBaselineOffsetToAttributes:newTypingAttrs];
 
   defaultTypingAttributes = newTypingAttrs;
   textView.typingAttributes = defaultTypingAttributes;

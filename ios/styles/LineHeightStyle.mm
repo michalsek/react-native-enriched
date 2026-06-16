@@ -1,4 +1,5 @@
 #import "EnrichedTextInputView.h"
+#import "LineHeightUtils.h"
 #import "StyleHeaders.h"
 
 @implementation LineHeightStyle
@@ -32,12 +33,16 @@
                 if (pStyle == nullptr) {
                   pStyle = [[NSMutableParagraphStyle alloc] init];
                 }
-                pStyle.minimumLineHeight = lineHeight;
+                [LineHeightUtils applyLineHeight:lineHeight
+                                toParagraphStyle:pStyle];
                 [self.host.textView.textStorage
                     addAttribute:NSParagraphStyleAttributeName
                            value:pStyle
                            range:subRange];
               }];
+  [LineHeightUtils
+      applyBaselineOffsetsInTextStorage:self.host.textView.textStorage
+                                  range:range];
 }
 
 - (void)applyStylingToTypingAttrs:(NSMutableDictionary *)attributes {
@@ -55,8 +60,9 @@
   if (pStyle == nullptr) {
     pStyle = [[NSMutableParagraphStyle alloc] init];
   }
-  pStyle.minimumLineHeight = lineHeight;
+  [LineHeightUtils applyLineHeight:lineHeight toParagraphStyle:pStyle];
   attributes[NSParagraphStyleAttributeName] = pStyle;
+  [LineHeightUtils applyBaselineOffsetToAttributes:attributes];
 }
 
 @end
