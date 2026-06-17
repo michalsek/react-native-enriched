@@ -1125,8 +1125,10 @@
     // check each existing style existence
     for (NSNumber *type in host.stylesDict) {
       StyleBase *style = host.stylesDict[type];
-      // we do not want to add <></> tags for alignment
-      if ([style isKindOfClass:[AlignmentStyle class]]) {
+      // Alignment and paragraph margins are serialized as CSS on the enclosing
+      // paragraph, not as wrapper tags.
+      if ([style isKindOfClass:[AlignmentStyle class]] ||
+          [style isKindOfClass:[ParagraphMarginStyle class]]) {
         continue;
       }
       if ([style detect:currentRange]) {
