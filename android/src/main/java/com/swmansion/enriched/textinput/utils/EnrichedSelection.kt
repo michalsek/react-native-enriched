@@ -46,6 +46,13 @@ class EnrichedSelection(
     val textLength = view.text?.length ?: 0
     val finalStart = newStart.coerceAtMost(newEnd).coerceAtLeast(0).coerceAtMost(textLength)
     val finalEnd = newEnd.coerceAtLeast(newStart).coerceAtLeast(0).coerceAtMost(textLength)
+    val coercedStart = view.text?.let { ParagraphMarginSpacers.coerceIndex(it, finalStart) } ?: finalStart
+    val coercedEnd = view.text?.let { ParagraphMarginSpacers.coerceIndex(it, finalEnd) } ?: finalEnd
+
+    if ((coercedStart != finalStart || coercedEnd != finalEnd) && !view.isDuringTransaction) {
+      view.setSelection(coercedStart, coercedEnd)
+      return
+    }
 
     if (isZeroWidthSelection(finalStart, finalEnd) && !view.isDuringTransaction) {
       view.setSelection(finalStart + 1)
@@ -263,9 +270,13 @@ class EnrichedSelection(
     val surfaceId = UIManagerHelper.getSurfaceId(context)
     val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(context, view.id)
 
-    val visibleStart = start - editable.zwsCountBefore(start)
-    val visibleEnd = end - editable.zwsCountBefore(end)
-    val text = editable.substring(start, end).replace(EnrichedConstants.ZWS_STRING, "")
+    val visibleStart = ParagraphMarginSpacers.publicIndexBefore(editable, start)
+    val visibleEnd = ParagraphMarginSpacers.publicIndexBefore(editable, end)
+    val text =
+      ParagraphMarginSpacers
+        .publicText(editable, start, end)
+        .toString()
+        .replace(EnrichedConstants.ZWS_STRING, "")
     dispatcher?.dispatchEvent(
       OnChangeSelectionEvent(
         surfaceId,
@@ -296,7 +307,11 @@ class EnrichedSelection(
     start: Int,
     end: Int,
   ) {
-    val text = spannable.substring(start, end).replace(EnrichedConstants.ZWS_STRING, "")
+    val text =
+      ParagraphMarginSpacers
+        .publicText(spannable, start, end)
+        .toString()
+        .replace(EnrichedConstants.ZWS_STRING, "")
     val url = span?.getUrl() ?: ""
 
     // Prevents emitting unnecessary events
@@ -305,8 +320,8 @@ class EnrichedSelection(
     previousLinkDetectedEvent.put("text", text)
     previousLinkDetectedEvent.put("url", url)
 
-    val visibleStart = start - spannable.zwsCountBefore(start)
-    val visibleEnd = end - spannable.zwsCountBefore(end)
+    val visibleStart = ParagraphMarginSpacers.publicIndexBefore(spannable, start)
+    val visibleEnd = ParagraphMarginSpacers.publicIndexBefore(spannable, end)
 
     val context = view.context as ReactContext
     val surfaceId = UIManagerHelper.getSurfaceId(context)
@@ -330,7 +345,7 @@ class EnrichedSelection(
     start: Int,
     end: Int,
   ) {
-    val text = spannable.substring(start, end)
+    val text = ParagraphMarginSpacers.publicText(spannable, start, end).toString()
     val attributes = span?.getAttributes() ?: emptyMap()
     val indicator = span?.getIndicator() ?: ""
     val payload = JSONObject(attributes).toString()

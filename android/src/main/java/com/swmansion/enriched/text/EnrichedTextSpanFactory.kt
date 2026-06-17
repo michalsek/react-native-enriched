@@ -8,7 +8,6 @@ import com.swmansion.enriched.common.spans.EnrichedFontSizeSpan
 import com.swmansion.enriched.common.spans.EnrichedForegroundColorSpan
 import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan
 import com.swmansion.enriched.common.spans.EnrichedLetterSpacingSpan
-import com.swmansion.enriched.common.spans.EnrichedParagraphMarginSpan
 import com.swmansion.enriched.text.spans.EnrichedTextBlockQuoteSpan
 import com.swmansion.enriched.text.spans.EnrichedTextBoldSpan
 import com.swmansion.enriched.text.spans.EnrichedTextCheckboxListSpan
@@ -25,6 +24,7 @@ import com.swmansion.enriched.text.spans.EnrichedTextItalicSpan
 import com.swmansion.enriched.text.spans.EnrichedTextLinkSpan
 import com.swmansion.enriched.text.spans.EnrichedTextMentionSpan
 import com.swmansion.enriched.text.spans.EnrichedTextOrderedListSpan
+import com.swmansion.enriched.text.spans.EnrichedTextParagraphMarginSpan
 import com.swmansion.enriched.text.spans.EnrichedTextStrikeThroughSpan
 import com.swmansion.enriched.text.spans.EnrichedTextUnderlineSpan
 import com.swmansion.enriched.text.spans.EnrichedTextUnorderedListSpan
@@ -120,5 +120,5 @@ class EnrichedTextSpanFactory : EnrichedSpanFactory<EnrichedTextStyle> {
     marginTop: Float?,
     marginBottom: Float?,
     style: EnrichedTextStyle,
-  ) = EnrichedParagraphMarginSpan(marginTop, marginBottom, style.allowFontScaling)
+  ) = EnrichedTextParagraphMarginSpan(marginTop, marginBottom, style.allowFontScaling)
 }

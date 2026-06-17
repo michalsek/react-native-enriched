@@ -4,7 +4,6 @@ import android.text.Layout
 import com.swmansion.enriched.common.parser.EnrichedSpanFactory
 import com.swmansion.enriched.common.spans.EnrichedCheckboxListSpan
 import com.swmansion.enriched.common.spans.EnrichedImageSpan
-import com.swmansion.enriched.common.spans.EnrichedParagraphMarginSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputBlockQuoteSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputBoldSpan
@@ -27,6 +26,7 @@ import com.swmansion.enriched.textinput.spans.EnrichedInputLineHeightSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputLinkSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputMentionSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputOrderedListSpan
+import com.swmansion.enriched.textinput.spans.EnrichedInputParagraphMarginSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputStrikeThroughSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputUnderlineSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputUnorderedListSpan
@@ -123,5 +123,5 @@ class EnrichedTextInputSpannableFactory : EnrichedSpanFactory<HtmlStyle> {
     marginTop: Float?,
     marginBottom: Float?,
     style: HtmlStyle,
-  ) = EnrichedParagraphMarginSpan(marginTop, marginBottom, style.allowFontScaling)
+  ) = EnrichedInputParagraphMarginSpan(marginTop, marginBottom, style)
 }
