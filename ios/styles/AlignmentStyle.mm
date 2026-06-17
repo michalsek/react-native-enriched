@@ -1,6 +1,5 @@
 #import "AlignmentUtils.h"
 #import "StyleHeaders.h"
-#import "TextListsUtils.h"
 
 @implementation AlignmentStyle
 
@@ -9,11 +8,7 @@
 }
 
 - (NSString *)getValue {
-  return @"EnrichedAlignmentNatural";
-}
-
-- (NSString *)getMarkerPrefix {
-  return @"EnrichedAlignment";
+  return [AlignmentUtils alignmentToString:NSTextAlignmentNatural];
 }
 
 - (BOOL)isParagraph {
@@ -29,28 +24,8 @@
 }
 
 - (void)applyStyling:(NSRange)range {
-  [self.host.textView.textStorage
-      enumerateAttribute:NSParagraphStyleAttributeName
-                 inRange:range
-                 options:0
-              usingBlock:^(id _Nullable value, NSRange subRange,
-                           BOOL *_Nonnull stop) {
-                NSMutableParagraphStyle *pStyle =
-                    [(NSParagraphStyle *)value mutableCopy];
-
-                NSString *marker =
-                    [TextListsUtils
-                        firstTextListWithPrefix:[self getMarkerPrefix]
-                                        inArray:pStyle.textLists]
-                        .markerFormat;
-                NSTextAlignment alignment =
-                    [AlignmentUtils markerToAlignment:marker];
-                pStyle.alignment = alignment;
-                [self.host.textView.textStorage
-                    addAttribute:NSParagraphStyleAttributeName
-                           value:pStyle
-                           range:subRange];
-              }];
+  // Alignment is stored directly on NSParagraphStyle, so there is no separate
+  // visual style to re-apply.
 }
 
 - (NSRange)actualUsedRange:(NSRange)range {
@@ -63,33 +38,63 @@
                range:(NSRange)range
           withTyping:(BOOL)withTyping
       withDirtyRange:(BOOL)withDirtyRange {
-  NSString *value = [AlignmentUtils alignmentToMarker:alignment];
+  NSRange actualRange = [self actualUsedRange:range];
 
-  [self add:range
-           withValue:value
-          withTyping:withTyping
-      withDirtyRange:withDirtyRange];
+  [self.host.textView.textStorage
+      enumerateAttribute:NSParagraphStyleAttributeName
+                 inRange:actualRange
+                 options:0
+              usingBlock:^(id _Nullable existingValue, NSRange subRange,
+                           BOOL *_Nonnull stop) {
+                NSMutableParagraphStyle *pStyle =
+                    [(NSParagraphStyle *)existingValue mutableCopy];
+                if (pStyle == nil) {
+                  pStyle = [[NSMutableParagraphStyle alloc] init];
+                }
+
+                pStyle.alignment = alignment;
+                [self.host.textView.textStorage
+                    addAttribute:NSParagraphStyleAttributeName
+                           value:pStyle
+                           range:subRange];
+              }];
+
+  if (withTyping) {
+    NSMutableDictionary *newTypingAttrs =
+        [self.host.textView.typingAttributes mutableCopy];
+    NSMutableParagraphStyle *pStyle =
+        [newTypingAttrs[NSParagraphStyleAttributeName] mutableCopy];
+    if (pStyle == nil) {
+      pStyle = [[NSMutableParagraphStyle alloc] init];
+    }
+    pStyle.alignment = alignment;
+    newTypingAttrs[NSParagraphStyleAttributeName] = pStyle;
+    self.host.textView.typingAttributes = newTypingAttrs;
+  }
+
+  if (withDirtyRange) {
+    [self.host.attributesManager addDirtyRange:actualRange];
+  }
 }
 
 - (BOOL)styleCondition:(id)value range:(NSRange)range {
   NSParagraphStyle *pStyle = (NSParagraphStyle *)value;
   if (pStyle == nil)
     return NO;
-  return [TextListsUtils textLists:pStyle.textLists
-                    containsPrefix:[self getMarkerPrefix]];
+  return pStyle.alignment != NSTextAlignmentNatural;
 }
 
 - (void)reapplyFromStylePair:(StylePair *)pair {
   NSRange range = [pair.rangeValue rangeValue];
   NSParagraphStyle *savedPStyle = pair.styleValue;
-  NSString *markerFormat =
-      [TextListsUtils firstTextListWithPrefix:[self getMarkerPrefix]
-                                      inArray:savedPStyle.textLists]
-          .markerFormat;
-  if (markerFormat == nil)
+  if (savedPStyle == nil || savedPStyle.alignment == NSTextAlignmentNatural) {
     return;
+  }
 
-  [self add:range withValue:markerFormat withTyping:NO withDirtyRange:NO];
+  [self addAlignment:savedPStyle.alignment
+               range:range
+          withTyping:NO
+      withDirtyRange:NO];
 }
 
 - (NSString *)getStyleState {
@@ -97,26 +102,31 @@
   NSParagraphStyle *paraStyle =
       textView.typingAttributes[NSParagraphStyleAttributeName];
 
-  NSString *marker =
-      [TextListsUtils firstTextListWithPrefix:[self getMarkerPrefix]
-                                      inArray:paraStyle.textLists]
-          .markerFormat;
-
-  NSTextAlignment currentAlignment = [AlignmentUtils markerToAlignment:marker];
-  return [AlignmentUtils alignmentToString:currentAlignment];
+  return [AlignmentUtils alignmentToString:paraStyle ? paraStyle.alignment
+                                                     : NSTextAlignmentNatural];
 }
 
 - (void)applyStylingToTypingAttrs:(NSMutableDictionary *)attributes {
   NSMutableParagraphStyle *pStyle =
       [attributes[NSParagraphStyleAttributeName] mutableCopy];
-  if (pStyle == nil)
+  if (pStyle == nil) {
+    pStyle = [[NSMutableParagraphStyle alloc] init];
+  }
+
+  NSRange selectedRange = self.host.textView.selectedRange;
+  NSString *text = self.host.textView.textStorage.string;
+  if (text.length == 0) {
+    attributes[NSParagraphStyleAttributeName] = pStyle;
     return;
-  NSString *marker =
-      [TextListsUtils firstTextListWithPrefix:[self getMarkerPrefix]
-                                      inArray:pStyle.textLists]
-          .markerFormat;
-  NSTextAlignment alignment = [AlignmentUtils markerToAlignment:marker];
-  pStyle.alignment = alignment;
+  }
+
+  NSUInteger location = MIN(selectedRange.location, text.length - 1);
+  NSParagraphStyle *selectedPStyle =
+      [self.host.textView.textStorage attribute:NSParagraphStyleAttributeName
+                                        atIndex:location
+                                 effectiveRange:nil];
+  pStyle.alignment =
+      selectedPStyle ? selectedPStyle.alignment : NSTextAlignmentNatural;
   attributes[NSParagraphStyleAttributeName] = pStyle;
 }
 

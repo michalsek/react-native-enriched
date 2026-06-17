@@ -1,10 +1,8 @@
 #import "EnrichedInputTextView.h"
-#import "AlignmentUtils.h"
 #import "EnrichedTextInputView.h"
 #import "HtmlParser.h"
 #import "StringExtension.h"
 #import "TextInsertionUtils.h"
-#import "TextListsUtils.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 @implementation EnrichedInputTextView
@@ -45,11 +43,7 @@
     return rect;
   }
 
-  NSString *marker =
-      [TextListsUtils firstTextListWithPrefix:@"EnrichedAlignment"
-                                      inArray:pStyle.textLists]
-          .markerFormat;
-  NSTextAlignment alignment = [AlignmentUtils markerToAlignment:marker];
+  NSTextAlignment alignment = pStyle.alignment;
   CGFloat containerWidth = self.textContainer.size.width;
 
   if (alignment == NSTextAlignmentCenter) {

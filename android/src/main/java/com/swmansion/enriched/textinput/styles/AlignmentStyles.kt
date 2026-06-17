@@ -6,6 +6,7 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import com.swmansion.enriched.common.EnrichedAlignmentMapping
 import com.swmansion.enriched.common.EnrichedConstants
+import com.swmansion.enriched.common.ForceRedrawSpan
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
@@ -19,6 +20,8 @@ class AlignmentStyles(
     val selection = view.selection ?: return
     val spannable = view.text as? SpannableStringBuilder ?: return
     val alignment = EnrichedAlignmentMapping.cssToAlignment(alignmentString)
+    var redrawStart = 0
+    var redrawEnd = 0
 
     view.runAsATransaction {
       val (selectionStart, selectionEnd) = selection.getParagraphSelection()
@@ -26,6 +29,8 @@ class AlignmentStyles(
       // applied to all contiguous items of that list.
       val start = expandToListBoundary(spannable, selectionStart, backward = true)
       var end = expandToListBoundary(spannable, selectionEnd, backward = false)
+      redrawStart = start
+      redrawEnd = end
 
       for (span in spannable.getSpans(start, end, EnrichedInputAlignmentSpan::class.java)) {
         spannable.removeSpan(span)
@@ -43,6 +48,7 @@ class AlignmentStyles(
           spannable.insert(pStart, EnrichedConstants.ZWS_STRING)
           spanEnd = pStart + 1
           end += 1
+          redrawEnd = end
         }
 
         setAlignmentSpan(spannable, pStart, spanEnd, EnrichedInputAlignmentSpan(alignment, view.htmlStyle))
@@ -51,6 +57,7 @@ class AlignmentStyles(
       }
     }
 
+    forceRedraw(spannable, redrawStart, redrawEnd)
     selection.validateStyles()
   }
 
@@ -143,6 +150,37 @@ class AlignmentStyles(
 
     val (safeStart, safeEnd) = spannable.getSafeSpanBoundaries(start, spanEnd)
     spannable.setSpan(span, safeStart, safeEnd, Spanned.SPAN_PARAGRAPH)
+  }
+
+  private fun forceRedraw(
+    spannable: Spannable,
+    start: Int,
+    end: Int,
+  ) {
+    if (spannable.isEmpty()) return
+
+    var safeStart = start.coerceIn(0, spannable.length)
+    var safeEnd = end.coerceIn(safeStart, spannable.length)
+
+    if (safeStart == safeEnd) {
+      if (safeEnd < spannable.length) {
+        safeEnd += 1
+      } else if (safeStart > 0) {
+        safeStart -= 1
+      }
+    }
+
+    if (safeStart == safeEnd) return
+
+    val (spanStart, spanEnd) = spannable.getSafeSpanBoundaries(safeStart, safeEnd)
+    if (spanStart == spanEnd) return
+
+    val redrawSpan = ForceRedrawSpan()
+    spannable.setSpan(redrawSpan, spanStart, spanEnd, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+    spannable.removeSpan(redrawSpan)
+
+    view.invalidate()
+    view.requestLayout()
   }
 
   private fun getListTypeAt(

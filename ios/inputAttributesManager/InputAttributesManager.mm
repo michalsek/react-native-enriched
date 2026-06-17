@@ -1,5 +1,4 @@
 #import "InputAttributesManager.h"
-#import "AlignmentUtils.h"
 #import "AttributeEntry.h"
 #import "EnrichedTextInputView.h"
 #import "LineHeightUtils.h"
@@ -171,15 +170,17 @@
   for (NSString *key in _input->textView.typingAttributes.allKeys) {
     if ([_customAttributesKeys containsObject:key]) {
       if ([key isEqualToString:NSParagraphStyleAttributeName]) {
-        // NSParagraphStyle for paragraph styles -> only keep the textLists
-        // property
+        // NSParagraphStyle for paragraph styles -> keep list markers and
+        // direct paragraph alignment.
         NSParagraphStyle *pStyle =
             (NSParagraphStyle *)_input->textView
                 .typingAttributes[NSParagraphStyleAttributeName];
-        if (pStyle != nullptr && pStyle.textLists.count >= 1) {
+        if (pStyle != nullptr && (pStyle.textLists.count >= 1 ||
+                                  pStyle.alignment != NSTextAlignmentNatural)) {
           NSMutableParagraphStyle *newPStyle =
               [[NSMutableParagraphStyle alloc] init];
           newPStyle.textLists = pStyle.textLists;
+          newPStyle.alignment = pStyle.alignment;
           newAttrs[NSParagraphStyleAttributeName] = newPStyle;
         }
       } else {

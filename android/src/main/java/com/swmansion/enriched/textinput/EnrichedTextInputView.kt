@@ -1044,6 +1044,9 @@ class EnrichedTextInputView :
 
   fun setTextAlignment(alignment: String) {
     alignmentStyles?.setAlignment(alignment)
+    (text as? Spannable)?.let { spanWatcher?.emitEvent(it, null) }
+    invalidate()
+    requestLayout()
     layoutManager.invalidateLayout()
   }
 

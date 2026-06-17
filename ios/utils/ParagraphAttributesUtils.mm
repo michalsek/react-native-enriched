@@ -1,5 +1,4 @@
 #import "ParagraphAttributesUtils.h"
-#import "AlignmentUtils.h"
 #import "EnrichedTextInputView.h"
 #import "RangeUtils.h"
 #import "StyleHeaders.h"
@@ -267,9 +266,6 @@
   NSMutableParagraphStyle *paraStyle =
       [resetAttrs[NSParagraphStyleAttributeName] mutableCopy]
           ?: [[NSMutableParagraphStyle alloc] init];
-  paraStyle.textLists = @[ [[NSTextList alloc]
-      initWithMarkerFormat:[AlignmentUtils alignmentToMarker:alignment]
-                   options:0] ];
   paraStyle.alignment = alignment;
   resetAttrs[NSParagraphStyleAttributeName] = paraStyle;
 
