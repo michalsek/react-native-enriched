@@ -237,8 +237,14 @@
             (NSArray<ParagraphMarginEntry *> *)paragraphMargins
                                 offset:(NSInteger)offset {
   for (ParagraphMarginEntry *entry in paragraphMargins) {
+    NSString *string = _input->textView.textStorage.string;
+    NSUInteger start = MIN(offset + entry.range.location, string.length);
+    NSUInteger end = MIN(start + entry.range.length, string.length);
+    if (end <= start) {
+      continue;
+    }
     NSRange finalRange =
-        NSMakeRange(offset + entry.range.location, entry.range.length);
+        [string paragraphRangeForRange:NSMakeRange(start, end - start)];
 
     [_input->textView.textStorage
         enumerateAttribute:NSParagraphStyleAttributeName

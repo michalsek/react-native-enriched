@@ -6,14 +6,14 @@ import android.text.TextPaint
 import android.text.style.LineHeightSpan
 import android.text.style.UpdateLayout
 import com.swmansion.enriched.common.pixelFromSpOrDp
-import com.swmansion.enriched.common.spans.interfaces.EnrichedParagraphSpan
+import com.swmansion.enriched.common.spans.interfaces.EnrichedSpan
 
 open class EnrichedParagraphMarginSpan(
   val marginTop: Float?,
   val marginBottom: Float?,
   private val allowFontScaling: Boolean,
 ) : LineHeightSpan.WithDensity,
-  EnrichedParagraphSpan,
+  EnrichedSpan,
   UpdateLayout {
   fun marginTopPx(): Float = marginTop?.let { pixelFromSpOrDp(it, allowFontScaling) } ?: 0f
 

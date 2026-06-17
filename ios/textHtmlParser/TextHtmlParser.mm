@@ -200,9 +200,18 @@
 - (void)applyProcessedParagraphMargins:
     (NSArray<ParagraphMarginEntry *> *)paragraphMargins {
   for (ParagraphMarginEntry *entry in paragraphMargins) {
+    NSString *string = _view->textView.textStorage.string;
+    NSUInteger start = MIN(entry.range.location, string.length);
+    NSUInteger end = MIN(start + entry.range.length, string.length);
+    if (end <= start) {
+      continue;
+    }
+    NSRange finalRange =
+        [string paragraphRangeForRange:NSMakeRange(start, end - start)];
+
     [_view->textView.textStorage
         enumerateAttribute:NSParagraphStyleAttributeName
-                   inRange:entry.range
+                   inRange:finalRange
                    options:0
                 usingBlock:^(id _Nullable value, NSRange subRange,
                              BOOL *_Nonnull stop) {

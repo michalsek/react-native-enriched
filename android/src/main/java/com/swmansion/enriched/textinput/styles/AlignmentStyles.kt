@@ -3,6 +3,7 @@ package com.swmansion.enriched.textinput.styles
 import android.text.Editable
 import android.text.Spannable
 import android.text.SpannableStringBuilder
+import android.text.Spanned
 import com.swmansion.enriched.common.EnrichedAlignmentMapping
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.textinput.EnrichedTextInputView
@@ -44,13 +45,7 @@ class AlignmentStyles(
           end += 1
         }
 
-        val (safeStart, safeEnd) = spannable.getSafeSpanBoundaries(pStart, spanEnd)
-        spannable.setSpan(
-          EnrichedInputAlignmentSpan(alignment, view.htmlStyle),
-          safeStart,
-          safeEnd,
-          Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
-        )
+        setAlignmentSpan(spannable, pStart, spanEnd, EnrichedInputAlignmentSpan(alignment, view.htmlStyle))
 
         paragraphStart = spanEnd + 1
       }
@@ -101,13 +96,7 @@ class AlignmentStyles(
       while (cursor <= spanEnd && cursor <= s.length) {
         val (paragraphStart, paragraphEnd) = s.getParagraphBounds(cursor)
         if (paragraphEnd > paragraphStart && coveredParagraphs.add(paragraphStart)) {
-          val (safeStart, safeEnd) = s.getSafeSpanBoundaries(paragraphStart, paragraphEnd)
-          s.setSpan(
-            EnrichedInputAlignmentSpan(span.alignment, view.htmlStyle),
-            safeStart,
-            safeEnd,
-            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
-          )
+          setAlignmentSpan(s, paragraphStart, paragraphEnd, EnrichedInputAlignmentSpan(span.alignment, view.htmlStyle))
         }
         cursor = paragraphEnd + 1
       }
@@ -138,13 +127,22 @@ class AlignmentStyles(
       spanEnd = pStart + 1
     }
 
-    val (safeStart, safeEnd) = s.getSafeSpanBoundaries(pStart, spanEnd)
-    s.setSpan(
-      EnrichedInputAlignmentSpan(previousSpan.alignment, view.htmlStyle),
-      safeStart,
-      safeEnd,
-      Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
-    )
+    setAlignmentSpan(s, pStart, spanEnd, EnrichedInputAlignmentSpan(previousSpan.alignment, view.htmlStyle))
+  }
+
+  private fun setAlignmentSpan(
+    spannable: Spannable,
+    start: Int,
+    end: Int,
+    span: EnrichedInputAlignmentSpan,
+  ) {
+    var spanEnd = end
+    if (spanEnd < spannable.length && spannable[spanEnd] == '\n') {
+      spanEnd += 1
+    }
+
+    val (safeStart, safeEnd) = spannable.getSafeSpanBoundaries(start, spanEnd)
+    spannable.setSpan(span, safeStart, safeEnd, Spanned.SPAN_PARAGRAPH)
   }
 
   private fun getListTypeAt(

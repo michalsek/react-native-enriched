@@ -576,13 +576,21 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
           end--;
         }
       }
+      boolean isAlignmentSpan = obj[i] instanceof EnrichedAlignmentSpan;
+      if (isAlignmentSpan && end < mSpannableStringBuilder.length()) {
+        if (mSpannableStringBuilder.charAt(end) == '\n') {
+          end++;
+        }
+      }
+
       if (end == start) {
         mSpannableStringBuilder.removeSpan(obj[i]);
       } else {
         // TODO: verify if Spannable.SPAN_EXCLUSIVE_EXCLUSIVE does not break anything.
         // Previously it was SPAN_PARAGRAPH. I've changed that in order to fix ranges for list
         // items.
-        mSpannableStringBuilder.setSpan(obj[i], start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        int flags = isAlignmentSpan ? Spannable.SPAN_PARAGRAPH : Spannable.SPAN_EXCLUSIVE_EXCLUSIVE;
+        mSpannableStringBuilder.setSpan(obj[i], start, end, flags);
       }
     }
 
