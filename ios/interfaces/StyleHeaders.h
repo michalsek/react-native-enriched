@@ -98,6 +98,14 @@
 - (NSString *)getStyleState;
 @end
 
+@interface ParagraphMarginStyle : StyleBase
+- (void)addMarginTop:(NSNumber *)marginTop
+        marginBottom:(NSNumber *)marginBottom
+               range:(NSRange)range
+          withTyping:(BOOL)withTyping
+      withDirtyRange:(BOOL)withDirtyRange;
+@end
+
 @interface BlockQuoteStyle : StyleBase
 @end
 

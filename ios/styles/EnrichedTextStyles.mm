@@ -57,6 +57,9 @@
 @implementation EnrichedTextAlignmentStyle
 @end
 
+@implementation EnrichedTextParagraphMarginStyle
+@end
+
 @implementation EnrichedTextImageStyle
 @end
 

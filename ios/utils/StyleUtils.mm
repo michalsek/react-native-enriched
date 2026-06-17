@@ -74,6 +74,7 @@
       @([BlockQuoteStyle getType]), @([CodeBlockStyle getType])
     ],
     @([AlignmentStyle getType]) : @[],
+    @([ParagraphMarginStyle getType]) : @[],
     @([BlockQuoteStyle getType]) : @[
       @([H1Style getType]), @([H2Style getType]), @([H3Style getType]),
       @([H4Style getType]), @([H5Style getType]), @([H6Style getType]),
@@ -140,6 +141,7 @@
     @([OrderedListStyle getType]) : @[],
     @([CheckboxListStyle getType]) : @[],
     @([AlignmentStyle getType]) : @[],
+    @([ParagraphMarginStyle getType]) : @[],
     @([BlockQuoteStyle getType]) : @[],
     @([CodeBlockStyle getType]) : @[],
     @([ImageStyle getType]) : @[ @([InlineCodeStyle getType]) ],
@@ -154,31 +156,19 @@
 + (NSDictionary *)stylesDictForHost:(id<EnrichedViewHost>)host
                             isInput:(BOOL)isInput {
   NSArray<Class> *baseClasses = @[
-    [BoldStyle class],
-    [ItalicStyle class],
-    [UnderlineStyle class],
-    [StrikethroughStyle class],
-    [InlineCodeStyle class],
-    [LinkStyle class],
-    [MentionStyle class],
-    [H1Style class],
-    [H2Style class],
-    [H3Style class],
-    [H4Style class],
-    [H5Style class],
-    [H6Style class],
-    [UnorderedListStyle class],
-    [OrderedListStyle class],
-    [CheckboxListStyle class],
-    [AlignmentStyle class],
-    [BlockQuoteStyle class],
-    [CodeBlockStyle class],
-    [ImageStyle class],
-    [FontFamilyStyle class],
-    [FontSizeStyle class],
-    [LetterSpacingStyle class],
-    [LineHeightStyle class],
-    [ForegroundColorStyle class]
+    [BoldStyle class],        [ItalicStyle class],
+    [UnderlineStyle class],   [StrikethroughStyle class],
+    [InlineCodeStyle class],  [LinkStyle class],
+    [MentionStyle class],     [H1Style class],
+    [H2Style class],          [H3Style class],
+    [H4Style class],          [H5Style class],
+    [H6Style class],          [UnorderedListStyle class],
+    [OrderedListStyle class], [CheckboxListStyle class],
+    [AlignmentStyle class],   [ParagraphMarginStyle class],
+    [BlockQuoteStyle class],  [CodeBlockStyle class],
+    [ImageStyle class],       [FontFamilyStyle class],
+    [FontSizeStyle class],    [LetterSpacingStyle class],
+    [LineHeightStyle class],  [ForegroundColorStyle class]
   ];
 
   NSArray<Class> *viewerClasses = @[
@@ -199,6 +189,7 @@
     [EnrichedTextOrderedListStyle class],
     [EnrichedTextCheckboxListStyle class],
     [EnrichedTextAlignmentStyle class],
+    [EnrichedTextParagraphMarginStyle class],
     [EnrichedTextBlockQuoteStyle class],
     [EnrichedTextCodeBlockStyle class],
     [EnrichedTextImageStyle class],

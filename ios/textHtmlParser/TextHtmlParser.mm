@@ -199,6 +199,13 @@
 
 - (void)applyProcessedParagraphMargins:
     (NSArray<ParagraphMarginEntry *> *)paragraphMargins {
+  ParagraphMarginStyle *paragraphMarginStyle =
+      _view.stylesDict[@([ParagraphMarginStyle getType])];
+
+  if (paragraphMarginStyle == nil) {
+    return;
+  }
+
   for (ParagraphMarginEntry *entry in paragraphMargins) {
     NSString *string = _view->textView.textStorage.string;
     NSUInteger start = MIN(entry.range.location, string.length);
@@ -209,29 +216,11 @@
     NSRange finalRange =
         [string paragraphRangeForRange:NSMakeRange(start, end - start)];
 
-    [_view->textView.textStorage
-        enumerateAttribute:NSParagraphStyleAttributeName
-                   inRange:finalRange
-                   options:0
-                usingBlock:^(id _Nullable value, NSRange subRange,
-                             BOOL *_Nonnull stop) {
-                  NSMutableParagraphStyle *pStyle =
-                      [(NSParagraphStyle *)value mutableCopy];
-                  if (pStyle == nullptr) {
-                    pStyle = [[NSMutableParagraphStyle alloc] init];
-                  }
-                  if (entry.marginTop != nil) {
-                    pStyle.paragraphSpacingBefore =
-                        [entry.marginTop floatValue];
-                  }
-                  if (entry.marginBottom != nil) {
-                    pStyle.paragraphSpacing = [entry.marginBottom floatValue];
-                  }
-                  [_view->textView.textStorage
-                      addAttribute:NSParagraphStyleAttributeName
-                             value:pStyle
-                             range:subRange];
-                }];
+    [paragraphMarginStyle addMarginTop:entry.marginTop
+                          marginBottom:entry.marginBottom
+                                 range:finalRange
+                            withTyping:NO
+                        withDirtyRange:NO];
   }
 }
 

@@ -61,6 +61,9 @@
 @interface EnrichedTextAlignmentStyle : AlignmentStyle
 @end
 
+@interface EnrichedTextParagraphMarginStyle : ParagraphMarginStyle
+@end
+
 @interface EnrichedTextFontFamilyStyle : FontFamilyStyle
 @end
 
