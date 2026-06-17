@@ -5,6 +5,7 @@
 #import "LineHeightUtils.h"
 #import "LinkData.h"
 #import "MentionParams.h"
+#import "ParagraphMarginEntry.h"
 #import "StyleHeaders.h"
 #import "StyleUtils.h"
 #import "ZeroWidthSpaceUtils.h"
@@ -36,6 +37,7 @@
     NSString *plainText = result[0];
     NSArray *processedStyles = result[1];
     NSArray *alignments = result[2];
+    NSArray *paragraphMargins = result[3];
 
     NSMutableAttributedString *body = [[NSMutableAttributedString alloc]
         initWithString:plainText
@@ -43,6 +45,7 @@
     [_view->textView.textStorage setAttributedString:body];
     [self applyProcessedStyles:processedStyles];
     [self applyProcessedAlignments:alignments];
+    [self applyProcessedParagraphMargins:paragraphMargins];
   } @catch (NSException *exception) {
     RCTLogWarn(@"[EnrichedTextView]: Failed to parse HTML: (%@), falling back "
                @"to raw input.",
@@ -191,6 +194,35 @@
                       withTyping:NO
                   withDirtyRange:NO];
     [alignmentStyle applyStyling:finalRange];
+  }
+}
+
+- (void)applyProcessedParagraphMargins:
+    (NSArray<ParagraphMarginEntry *> *)paragraphMargins {
+  for (ParagraphMarginEntry *entry in paragraphMargins) {
+    [_view->textView.textStorage
+        enumerateAttribute:NSParagraphStyleAttributeName
+                   inRange:entry.range
+                   options:0
+                usingBlock:^(id _Nullable value, NSRange subRange,
+                             BOOL *_Nonnull stop) {
+                  NSMutableParagraphStyle *pStyle =
+                      [(NSParagraphStyle *)value mutableCopy];
+                  if (pStyle == nullptr) {
+                    pStyle = [[NSMutableParagraphStyle alloc] init];
+                  }
+                  if (entry.marginTop != nil) {
+                    pStyle.paragraphSpacingBefore =
+                        [entry.marginTop floatValue];
+                  }
+                  if (entry.marginBottom != nil) {
+                    pStyle.paragraphSpacing = [entry.marginBottom floatValue];
+                  }
+                  [_view->textView.textStorage
+                      addAttribute:NSParagraphStyleAttributeName
+                             value:pStyle
+                             range:subRange];
+                }];
   }
 }
 

@@ -2,6 +2,7 @@
 #import "AlignmentEntry.h"
 #import "EnrichedTextInputView.h"
 #import "HtmlParser.h"
+#import "ParagraphMarginEntry.h"
 #import "StringExtension.h"
 #import "StyleHeaders.h"
 #import "StyleUtils.h"
@@ -28,6 +29,7 @@
     NSString *plainText = (NSString *)processingResult[0];
     NSArray *stylesInfo = (NSArray *)processingResult[1];
     NSArray *alignments = (NSArray *)processingResult[2];
+    NSArray *paragraphMargins = (NSArray *)processingResult[3];
 
     // set new text
     _input->textView.text = plainText;
@@ -37,6 +39,7 @@
            offsetFromBeginning:0
                plainTextLength:plainText.length];
     [self applyProcessedAlignments:alignments offset:0];
+    [self applyProcessedParagraphMargins:paragraphMargins offset:0];
     [_input anyTextMayHaveBeenModified];
   } @catch (NSException *exception) {
     RCTLogWarn(@"[EnrichedTextInput]: Failed to parse HTML: (%@), falling back "
@@ -54,6 +57,7 @@
     NSString *plainText = (NSString *)processingResult[0];
     NSArray *stylesInfo = (NSArray *)processingResult[1];
     NSArray *alignments = (NSArray *)processingResult[2];
+    NSArray *paragraphMargins = (NSArray *)processingResult[3];
 
     // we can use ready replace util
     [TextInsertionUtils replaceText:plainText
@@ -66,6 +70,8 @@
            offsetFromBeginning:range.location
                plainTextLength:plainText.length];
     [self applyProcessedAlignments:alignments offset:range.location];
+    [self applyProcessedParagraphMargins:paragraphMargins
+                                  offset:range.location];
     [_input anyTextMayHaveBeenModified];
   } @catch (NSException *exception) {
     RCTLogWarn(@"[EnrichedTextInput]: Failed to parse HTML: (%@), falling back "
@@ -85,6 +91,7 @@
     NSString *plainText = (NSString *)processingResult[0];
     NSArray *stylesInfo = (NSArray *)processingResult[1];
     NSArray *alignments = (NSArray *)processingResult[2];
+    NSArray *paragraphMargins = (NSArray *)processingResult[3];
 
     // same here, insertion utils got our back
     [TextInsertionUtils insertText:plainText
@@ -97,6 +104,7 @@
            offsetFromBeginning:location
                plainTextLength:plainText.length];
     [self applyProcessedAlignments:alignments offset:location];
+    [self applyProcessedParagraphMargins:paragraphMargins offset:location];
     [_input anyTextMayHaveBeenModified];
   } @catch (NSException *exception) {
     RCTLogWarn(@"[EnrichedTextInput]: Failed to parse HTML: (%@), falling back "
@@ -222,6 +230,39 @@
                            range:finalRange
                       withTyping:NO
                   withDirtyRange:NO];
+  }
+}
+
+- (void)applyProcessedParagraphMargins:
+            (NSArray<ParagraphMarginEntry *> *)paragraphMargins
+                                offset:(NSInteger)offset {
+  for (ParagraphMarginEntry *entry in paragraphMargins) {
+    NSRange finalRange =
+        NSMakeRange(offset + entry.range.location, entry.range.length);
+
+    [_input->textView.textStorage
+        enumerateAttribute:NSParagraphStyleAttributeName
+                   inRange:finalRange
+                   options:0
+                usingBlock:^(id _Nullable value, NSRange subRange,
+                             BOOL *_Nonnull stop) {
+                  NSMutableParagraphStyle *pStyle =
+                      [(NSParagraphStyle *)value mutableCopy];
+                  if (pStyle == nullptr) {
+                    pStyle = [[NSMutableParagraphStyle alloc] init];
+                  }
+                  if (entry.marginTop != nil) {
+                    pStyle.paragraphSpacingBefore =
+                        [entry.marginTop floatValue];
+                  }
+                  if (entry.marginBottom != nil) {
+                    pStyle.paragraphSpacing = [entry.marginBottom floatValue];
+                  }
+                  [_input->textView.textStorage
+                      addAttribute:NSParagraphStyleAttributeName
+                             value:pStyle
+                             range:subRange];
+                }];
   }
 }
 

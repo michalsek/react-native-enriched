@@ -23,6 +23,7 @@ import com.swmansion.enriched.common.spans.EnrichedLetterSpacingSpan
 import com.swmansion.enriched.common.spans.EnrichedLinkSpan
 import com.swmansion.enriched.common.spans.EnrichedMentionSpan
 import com.swmansion.enriched.common.spans.EnrichedOrderedListSpan
+import com.swmansion.enriched.common.spans.EnrichedParagraphMarginSpan
 import com.swmansion.enriched.common.spans.EnrichedStrikeThroughSpan
 import com.swmansion.enriched.common.spans.EnrichedUnderlineSpan
 import com.swmansion.enriched.common.spans.EnrichedUnorderedListSpan
@@ -113,4 +114,10 @@ interface EnrichedSpanFactory<T> {
     alignment: Layout.Alignment,
     style: T,
   ): EnrichedAlignmentSpan
+
+  fun createParagraphMarginSpan(
+    marginTop: Float?,
+    marginBottom: Float?,
+    style: T,
+  ): EnrichedParagraphMarginSpan
 }

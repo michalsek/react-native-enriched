@@ -24,7 +24,6 @@ import {
   Editor,
 } from '@tiptap/react';
 import Document from '@tiptap/extension-document';
-import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import History from '@tiptap/extension-history';
 import { Placeholder } from '@tiptap/extensions/placeholder';
@@ -49,6 +48,7 @@ import { EnrichedItalic } from './formats/EnrichedItalic';
 import { EnrichedStrike } from './formats/EnrichedStrike';
 import { EnrichedUnderline } from './formats/EnrichedUnderline';
 import { EnrichedCode } from './formats/EnrichedCode';
+import { EnrichedParagraph } from './formats/EnrichedParagraph';
 import { EnrichedHeading } from './formats/EnrichedHeading';
 import { EnrichedBlockquote } from './formats/EnrichedBlockquote';
 import { EnrichedCodeBlock } from './formats/EnrichedCodeBlock';
@@ -186,7 +186,7 @@ export const EnrichedTextInput = ({
   const extensions = useMemo(
     () => [
       Document,
-      Paragraph,
+      EnrichedParagraph,
       Text,
       History,
       EnrichedBold,

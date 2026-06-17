@@ -30,6 +30,7 @@ import com.swmansion.enriched.common.spans.EnrichedLetterSpacingSpan;
 import com.swmansion.enriched.common.spans.EnrichedLinkSpan;
 import com.swmansion.enriched.common.spans.EnrichedMentionSpan;
 import com.swmansion.enriched.common.spans.EnrichedOrderedListSpan;
+import com.swmansion.enriched.common.spans.EnrichedParagraphMarginSpan;
 import com.swmansion.enriched.common.spans.EnrichedStrikeThroughSpan;
 import com.swmansion.enriched.common.spans.EnrichedUnderlineSpan;
 import com.swmansion.enriched.common.spans.EnrichedUnorderedListSpan;
@@ -249,7 +250,9 @@ public class EnrichedParser {
           }
         }
 
-        // Mirrors iOS: list items don't carry the text-align style attribute
+        ArrayList<String> cssDeclarations = new ArrayList<>();
+
+        // Mirrors iOS: list items don't carry paragraph style attributes
         if (!isList) {
           EnrichedAlignmentSpan[] alignmentSpans =
               text.getSpans(i, next, EnrichedAlignmentSpan.class);
@@ -257,9 +260,31 @@ public class EnrichedParser {
             String alignmentCss =
                 EnrichedAlignmentMapping.alignmentToCss(alignmentSpans[0].getAlignment());
             if (alignmentCss != null) {
-              out.append(" style=\"text-align: ").append(alignmentCss).append("\"");
+              cssDeclarations.add("text-align: " + alignmentCss);
             }
           }
+
+          EnrichedParagraphMarginSpan[] marginSpans =
+              text.getSpans(i, next, EnrichedParagraphMarginSpan.class);
+          if (marginSpans.length > 0) {
+            EnrichedParagraphMarginSpan margin = marginSpans[0];
+            if (margin.getMarginTop() != null && margin.getMarginTop() > 0) {
+              cssDeclarations.add("margin-top: " + formatCssNumber(margin.getMarginTop()) + "px");
+            }
+            if (margin.getMarginBottom() != null && margin.getMarginBottom() > 0) {
+              cssDeclarations.add(
+                  "margin-bottom: " + formatCssNumber(margin.getMarginBottom()) + "px");
+            }
+          }
+        }
+
+        if (!cssDeclarations.isEmpty()) {
+          out.append(" style=\"");
+          for (int styleIndex = 0; styleIndex < cssDeclarations.size(); styleIndex++) {
+            if (styleIndex > 0) out.append("; ");
+            out.append(cssDeclarations.get(styleIndex));
+          }
+          out.append("\"");
         }
 
         out.append(">");
@@ -591,6 +616,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
       isEmptyTag = true;
       startBlockElement(mSpannableStringBuilder);
       startAlignment(mSpannableStringBuilder, attributes);
+      startParagraphMargin(mSpannableStringBuilder, attributes);
     } else if (tag.equalsIgnoreCase("ul")) {
       isInOrderedList = false;
       String dataType = attributes.getValue("", "data-type");
@@ -738,6 +764,24 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
             Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
       }
     }
+    ParagraphMargin margin = getLast(text, ParagraphMargin.class);
+    if (margin != null) {
+      int where = text.getSpanStart(margin);
+      text.removeSpan(margin);
+      int len = text.length();
+
+      if (len > 0 && text.charAt(len - 1) == '\n') {
+        len--;
+      }
+
+      if (where >= 0 && where < len) {
+        text.setSpan(
+            spanFactory.createParagraphMarginSpan(margin.mTop, margin.mBottom, style),
+            where,
+            len,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+      }
+    }
   }
 
   private void startAlignment(Editable text, Attributes attributes) {
@@ -757,6 +801,15 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     }
 
     start(text, new Alignment(alignment));
+  }
+
+  private void startParagraphMargin(Editable text, Attributes attributes) {
+    ParagraphMargin margin = parseParagraphMargin(attributes);
+    if (margin == null) {
+      return;
+    }
+
+    start(text, margin);
   }
 
   private static void handleBr(Editable text) {
@@ -820,6 +873,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
   private void startHeading(Editable text, int level, Attributes attributes) {
     startBlockElement(text);
     startAlignment(text, attributes);
+    startParagraphMargin(text, attributes);
 
     switch (level) {
       case 1:
@@ -992,6 +1046,56 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     } catch (NumberFormatException e) {
       return null;
     }
+  }
+
+  private static ParagraphMargin parseParagraphMargin(Attributes attributes) {
+    String cssStyle = attributes.getValue("", "style");
+    if (cssStyle == null) {
+      return null;
+    }
+
+    Float marginTop = null;
+    Float marginBottom = null;
+
+    for (String declaration : cssStyle.split(";")) {
+      int colonIndex = declaration.indexOf(':');
+      if (colonIndex < 0) {
+        continue;
+      }
+      String property = declaration.substring(0, colonIndex).trim().toLowerCase(Locale.US);
+      String value = declaration.substring(colonIndex + 1).trim();
+      if (value.isEmpty()) {
+        continue;
+      }
+
+      switch (property) {
+        case "margin-top":
+          marginTop = parseCssDimension(value);
+          break;
+        case "margin-bottom":
+          marginBottom = parseCssDimension(value);
+          break;
+        case "margin":
+          String[] parts = value.trim().split("\\s+");
+          if (parts.length > 0) {
+            Float shorthandTop = parseCssDimension(parts[0]);
+            Float shorthandBottom = parseCssDimension(parts.length >= 3 ? parts[2] : parts[0]);
+            if (marginTop == null) {
+              marginTop = shorthandTop;
+            }
+            if (marginBottom == null) {
+              marginBottom = shorthandBottom;
+            }
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    return marginTop != null || marginBottom != null
+        ? new ParagraphMargin(marginTop, marginBottom)
+        : null;
   }
 
   /**
@@ -1279,6 +1383,16 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
 
     public Newline(int numNewlines) {
       mNumNewlines = numNewlines;
+    }
+  }
+
+  private static class ParagraphMargin {
+    private final Float mTop;
+    private final Float mBottom;
+
+    public ParagraphMargin(Float top, Float bottom) {
+      mTop = top;
+      mBottom = bottom;
     }
   }
 

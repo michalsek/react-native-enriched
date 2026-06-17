@@ -8,6 +8,7 @@ import com.swmansion.enriched.common.spans.EnrichedFontSizeSpan
 import com.swmansion.enriched.common.spans.EnrichedForegroundColorSpan
 import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan
 import com.swmansion.enriched.common.spans.EnrichedLetterSpacingSpan
+import com.swmansion.enriched.common.spans.EnrichedParagraphMarginSpan
 import com.swmansion.enriched.text.spans.EnrichedTextBlockQuoteSpan
 import com.swmansion.enriched.text.spans.EnrichedTextBoldSpan
 import com.swmansion.enriched.text.spans.EnrichedTextCheckboxListSpan
@@ -114,4 +115,10 @@ class EnrichedTextSpanFactory : EnrichedSpanFactory<EnrichedTextStyle> {
     alignment: Layout.Alignment,
     style: EnrichedTextStyle,
   ) = EnrichedAlignmentSpan(alignment, style)
+
+  override fun createParagraphMarginSpan(
+    marginTop: Float?,
+    marginBottom: Float?,
+    style: EnrichedTextStyle,
+  ) = EnrichedParagraphMarginSpan(marginTop, marginBottom, style.allowFontScaling)
 }

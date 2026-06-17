@@ -4,6 +4,7 @@ import android.text.Layout
 import com.swmansion.enriched.common.parser.EnrichedSpanFactory
 import com.swmansion.enriched.common.spans.EnrichedCheckboxListSpan
 import com.swmansion.enriched.common.spans.EnrichedImageSpan
+import com.swmansion.enriched.common.spans.EnrichedParagraphMarginSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputBlockQuoteSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputBoldSpan
@@ -117,4 +118,10 @@ class EnrichedTextInputSpannableFactory : EnrichedSpanFactory<HtmlStyle> {
     alignment: Layout.Alignment,
     style: HtmlStyle,
   ) = EnrichedInputAlignmentSpan(alignment, style)
+
+  override fun createParagraphMarginSpan(
+    marginTop: Float?,
+    marginBottom: Float?,
+    style: HtmlStyle,
+  ) = EnrichedParagraphMarginSpan(marginTop, marginBottom, style.allowFontScaling)
 }
