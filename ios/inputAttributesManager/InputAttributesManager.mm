@@ -5,7 +5,10 @@
 #import "ParagraphAttributesUtils.h"
 #import "RangeUtils.h"
 #import "StyleHeaders.h"
+#import "TextListsUtils.h"
 #import "ZeroWidthSpaceUtils.h"
+
+static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
 
 @implementation InputAttributesManager {
   NSMutableArray<NSValue *> *_dirtyRanges;
@@ -179,7 +182,9 @@
                                   pStyle.alignment != NSTextAlignmentNatural)) {
           NSMutableParagraphStyle *newPStyle =
               [[NSMutableParagraphStyle alloc] init];
-          newPStyle.textLists = pStyle.textLists;
+          newPStyle.textLists = [TextListsUtils
+              textListsByRemovingPrefix:EnrichedAlignmentMarkerPrefix
+                              fromArray:pStyle.textLists];
           newPStyle.alignment = pStyle.alignment;
           newAttrs[NSParagraphStyleAttributeName] = newPStyle;
         }

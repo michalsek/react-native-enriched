@@ -4,6 +4,9 @@
 #import "StyleHeaders.h"
 #import "StyleUtils.h"
 #import "TextInsertionUtils.h"
+#import "TextListsUtils.h"
+
+static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
 
 @implementation ParagraphAttributesUtils
 
@@ -266,6 +269,9 @@
   NSMutableParagraphStyle *paraStyle =
       [resetAttrs[NSParagraphStyleAttributeName] mutableCopy]
           ?: [[NSMutableParagraphStyle alloc] init];
+  paraStyle.textLists =
+      [TextListsUtils textListsByRemovingPrefix:EnrichedAlignmentMarkerPrefix
+                                      fromArray:paraStyle.textLists];
   paraStyle.alignment = alignment;
   resetAttrs[NSParagraphStyleAttributeName] = paraStyle;
 

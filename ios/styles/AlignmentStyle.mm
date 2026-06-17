@@ -1,5 +1,8 @@
 #import "AlignmentUtils.h"
 #import "StyleHeaders.h"
+#import "TextListsUtils.h"
+
+static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
 
 @implementation AlignmentStyle
 
@@ -52,6 +55,9 @@
                   pStyle = [[NSMutableParagraphStyle alloc] init];
                 }
 
+                pStyle.textLists = [TextListsUtils
+                    textListsByRemovingPrefix:EnrichedAlignmentMarkerPrefix
+                                    fromArray:pStyle.textLists];
                 pStyle.alignment = alignment;
                 [self.host.textView.textStorage
                     addAttribute:NSParagraphStyleAttributeName
@@ -67,6 +73,9 @@
     if (pStyle == nil) {
       pStyle = [[NSMutableParagraphStyle alloc] init];
     }
+    pStyle.textLists =
+        [TextListsUtils textListsByRemovingPrefix:EnrichedAlignmentMarkerPrefix
+                                        fromArray:pStyle.textLists];
     pStyle.alignment = alignment;
     newTypingAttrs[NSParagraphStyleAttributeName] = pStyle;
     self.host.textView.typingAttributes = newTypingAttrs;
@@ -112,6 +121,9 @@
   if (pStyle == nil) {
     pStyle = [[NSMutableParagraphStyle alloc] init];
   }
+  pStyle.textLists =
+      [TextListsUtils textListsByRemovingPrefix:EnrichedAlignmentMarkerPrefix
+                                      fromArray:pStyle.textLists];
 
   NSRange selectedRange = self.host.textView.selectedRange;
   NSString *text = self.host.textView.textStorage.string;
