@@ -31,6 +31,42 @@
     paraRange = [text paragraphRangeForRange:NSMakeRange(idx, 0)];
   }
 
+  NSUInteger styleIndex = NSNotFound;
+  if (self.textStorage.length > 0) {
+    styleIndex =
+        idx < self.textStorage.length ? idx : self.textStorage.length - 1;
+  }
+
+  NSParagraphStyle *rectPStyle = nil;
+  UIFont *font = nil;
+  if (styleIndex != NSNotFound) {
+    NSDictionary *attributes = [self.textStorage attributesAtIndex:styleIndex
+                                                    effectiveRange:nil];
+    rectPStyle = attributes[NSParagraphStyleAttributeName];
+    font = attributes[NSFontAttributeName];
+  }
+  if (rectPStyle == nil) {
+    rectPStyle = self.typingAttributes[NSParagraphStyleAttributeName];
+  }
+  if (font == nil) {
+    font = self.typingAttributes[NSFontAttributeName];
+  }
+
+  CGFloat textHeight = font != nil ? font.lineHeight : 0;
+  if (rectPStyle.minimumLineHeight > textHeight) {
+    textHeight = rectPStyle.minimumLineHeight;
+  }
+
+  if (rectPStyle != nil && textHeight > 0 &&
+      rect.size.height > textHeight + 1) {
+    CGFloat extraHeight = rect.size.height - textHeight;
+    CGFloat removedTop = MIN(rectPStyle.paragraphSpacingBefore, extraHeight);
+    rect.origin.y += removedTop;
+    extraHeight -= removedTop;
+    rect.size.height -=
+        removedTop + MIN(rectPStyle.paragraphSpacing, extraHeight);
+  }
+
   // Non-empty paragraph gets its caret drawn the usual way.
   if (paraRange.length != 0) {
     return rect;
