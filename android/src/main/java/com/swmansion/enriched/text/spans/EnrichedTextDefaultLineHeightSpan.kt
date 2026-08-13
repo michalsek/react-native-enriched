@@ -7,7 +7,7 @@ import android.text.style.LineHeightSpan
 import android.text.style.MetricAffectingSpan
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan
-import com.swmansion.enriched.common.spans.expandToCenteredLineHeight
+import com.swmansion.enriched.common.spans.centerInLineHeight
 
 class EnrichedTextDefaultLineHeightSpan(
   private val lineHeight: Float,
@@ -33,6 +33,6 @@ class EnrichedTextDefaultLineHeightSpan(
     val spannable = text as? Spannable ?: return
     if (spannable.getSpans(start, end, EnrichedInlineLineHeightSpan::class.java).isNotEmpty()) return
 
-    fm.expandToCenteredLineHeight(pixelFromSpOrDp(lineHeight, allowFontScaling))
+    fm.centerInLineHeight(pixelFromSpOrDp(lineHeight, allowFontScaling))
   }
 }

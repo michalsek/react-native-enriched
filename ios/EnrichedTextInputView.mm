@@ -7,6 +7,7 @@
 #import "ImageAttachment.h"
 #import "KeyboardUtils.h"
 #import "LayoutManagerExtension.h"
+#import "LineBoxLayoutDelegate.h"
 #import "LineHeightUtils.h"
 #import "ParagraphAttributesUtils.h"
 #import "RCTFabricComponentsPlugins.h"
@@ -166,6 +167,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   textView.delegate = self;
   textView.input = self;
   textView.layoutManager.input = self;
+  textView.layoutManager.delegate = [LineBoxLayoutDelegate shared];
   textView.textStorage.delegate = self;
 
   textView.adjustsFontForContentSizeCategory = YES;

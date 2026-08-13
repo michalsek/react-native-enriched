@@ -98,7 +98,7 @@ open class EnrichedInlineLineHeightSpan(
     fm: Paint.FontMetricsInt,
     lineHeightPx: Float,
   ) {
-    fm.expandToCenteredLineHeight(lineHeightPx)
+    fm.centerInLineHeight(lineHeightPx)
   }
 
   private fun resetToNaturalMetrics(
