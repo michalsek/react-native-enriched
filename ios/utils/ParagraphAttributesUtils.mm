@@ -1,10 +1,12 @@
 #import "ParagraphAttributesUtils.h"
-#import "AlignmentUtils.h"
 #import "EnrichedTextInputView.h"
 #import "RangeUtils.h"
 #import "StyleHeaders.h"
 #import "StyleUtils.h"
 #import "TextInsertionUtils.h"
+#import "TextListsUtils.h"
+
+static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
 
 @implementation ParagraphAttributesUtils
 
@@ -267,9 +269,9 @@
   NSMutableParagraphStyle *paraStyle =
       [resetAttrs[NSParagraphStyleAttributeName] mutableCopy]
           ?: [[NSMutableParagraphStyle alloc] init];
-  paraStyle.textLists = @[ [[NSTextList alloc]
-      initWithMarkerFormat:[AlignmentUtils alignmentToMarker:alignment]
-                   options:0] ];
+  paraStyle.textLists =
+      [TextListsUtils textListsByRemovingPrefix:EnrichedAlignmentMarkerPrefix
+                                      fromArray:paraStyle.textLists];
   paraStyle.alignment = alignment;
   resetAttrs[NSParagraphStyleAttributeName] = paraStyle;
 

@@ -8,4 +8,5 @@
 - (UIFont *)setItalic;
 - (UIFont *)withFontTraits:(UIFont *)from;
 - (UIFont *)setSize:(CGFloat)size;
+- (UIFont *)setFamily:(NSString *)family;
 @end

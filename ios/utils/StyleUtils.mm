@@ -74,6 +74,7 @@
       @([BlockQuoteStyle getType]), @([CodeBlockStyle getType])
     ],
     @([AlignmentStyle getType]) : @[],
+    @([ParagraphMarginStyle getType]) : @[],
     @([BlockQuoteStyle getType]) : @[
       @([H1Style getType]), @([H2Style getType]), @([H3Style getType]),
       @([H4Style getType]), @([H5Style getType]), @([H6Style getType]),
@@ -81,17 +82,36 @@
       @([CodeBlockStyle getType]), @([CheckboxListStyle getType])
     ],
     @([CodeBlockStyle getType]) : @[
-      @([H1Style getType]), @([H2Style getType]), @([H3Style getType]),
-      @([H4Style getType]), @([H5Style getType]), @([H6Style getType]),
-      @([BoldStyle getType]), @([UnderlineStyle getType]),
-      @([ItalicStyle getType]), @([StrikethroughStyle getType]),
-      @([UnorderedListStyle getType]), @([OrderedListStyle getType]),
-      @([BlockQuoteStyle getType]), @([InlineCodeStyle getType]),
-      @([MentionStyle getType]), @([LinkStyle getType]),
-      @([CheckboxListStyle getType])
+      @([H1Style getType]),
+      @([H2Style getType]),
+      @([H3Style getType]),
+      @([H4Style getType]),
+      @([H5Style getType]),
+      @([H6Style getType]),
+      @([BoldStyle getType]),
+      @([UnderlineStyle getType]),
+      @([ItalicStyle getType]),
+      @([StrikethroughStyle getType]),
+      @([UnorderedListStyle getType]),
+      @([OrderedListStyle getType]),
+      @([BlockQuoteStyle getType]),
+      @([InlineCodeStyle getType]),
+      @([MentionStyle getType]),
+      @([LinkStyle getType]),
+      @([CheckboxListStyle getType]),
+      @([FontFamilyStyle getType]),
+      @([FontSizeStyle getType]),
+      @([LetterSpacingStyle getType]),
+      @([LineHeightStyle getType]),
+      @([ForegroundColorStyle getType])
     ],
     @([ImageStyle getType]) :
-        @[ @([LinkStyle getType]), @([MentionStyle getType]) ]
+        @[ @([LinkStyle getType]), @([MentionStyle getType]) ],
+    @([FontFamilyStyle getType]) : @[],
+    @([FontSizeStyle getType]) : @[],
+    @([LetterSpacingStyle getType]) : @[],
+    @([LineHeightStyle getType]) : @[],
+    @([ForegroundColorStyle getType]) : @[]
   };
 }
 
@@ -121,9 +141,15 @@
     @([OrderedListStyle getType]) : @[],
     @([CheckboxListStyle getType]) : @[],
     @([AlignmentStyle getType]) : @[],
+    @([ParagraphMarginStyle getType]) : @[],
     @([BlockQuoteStyle getType]) : @[],
     @([CodeBlockStyle getType]) : @[],
-    @([ImageStyle getType]) : @[ @([InlineCodeStyle getType]) ]
+    @([ImageStyle getType]) : @[ @([InlineCodeStyle getType]) ],
+    @([FontFamilyStyle getType]) : @[ @([CodeBlockStyle getType]) ],
+    @([FontSizeStyle getType]) : @[ @([CodeBlockStyle getType]) ],
+    @([LetterSpacingStyle getType]) : @[ @([CodeBlockStyle getType]) ],
+    @([LineHeightStyle getType]) : @[ @([CodeBlockStyle getType]) ],
+    @([ForegroundColorStyle getType]) : @[ @([CodeBlockStyle getType]) ]
   };
 }
 
@@ -138,8 +164,11 @@
     [H4Style class],          [H5Style class],
     [H6Style class],          [UnorderedListStyle class],
     [OrderedListStyle class], [CheckboxListStyle class],
-    [AlignmentStyle class],   [BlockQuoteStyle class],
-    [CodeBlockStyle class],   [ImageStyle class]
+    [AlignmentStyle class],   [ParagraphMarginStyle class],
+    [BlockQuoteStyle class],  [CodeBlockStyle class],
+    [ImageStyle class],       [FontFamilyStyle class],
+    [FontSizeStyle class],    [LetterSpacingStyle class],
+    [LineHeightStyle class],  [ForegroundColorStyle class]
   ];
 
   NSArray<Class> *viewerClasses = @[
@@ -160,9 +189,15 @@
     [EnrichedTextOrderedListStyle class],
     [EnrichedTextCheckboxListStyle class],
     [EnrichedTextAlignmentStyle class],
+    [EnrichedTextParagraphMarginStyle class],
     [EnrichedTextBlockQuoteStyle class],
     [EnrichedTextCodeBlockStyle class],
-    [EnrichedTextImageStyle class]
+    [EnrichedTextImageStyle class],
+    [EnrichedTextFontFamilyStyle class],
+    [EnrichedTextFontSizeStyle class],
+    [EnrichedTextLetterSpacingStyle class],
+    [EnrichedTextLineHeightStyle class],
+    [EnrichedTextForegroundColorStyle class]
   ];
 
   NSMutableDictionary *dict = [NSMutableDictionary new];

@@ -123,7 +123,33 @@ export interface OnChangeStateEvent {
     isConflicting: boolean;
     isBlocking: boolean;
   };
+  fontFamily: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
+  fontSize: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
+  letterSpacing: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
+  lineHeight: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
   alignment: string;
+  // Values of the inline text styles at the current selection.
+  // Empty string / 0 means the default (no custom value) is used.
+  fontFamilyValue: string;
+  fontSizeValue: Float;
+  letterSpacingValue: Float;
+  lineHeightValue: Float;
 }
 
 export interface OnLinkDetected {
@@ -274,7 +300,31 @@ export interface OnContextMenuItemPressEvent {
       isConflicting: boolean;
       isBlocking: boolean;
     };
+    fontFamily: {
+      isActive: boolean;
+      isConflicting: boolean;
+      isBlocking: boolean;
+    };
+    fontSize: {
+      isActive: boolean;
+      isConflicting: boolean;
+      isBlocking: boolean;
+    };
+    letterSpacing: {
+      isActive: boolean;
+      isConflicting: boolean;
+      isBlocking: boolean;
+    };
+    lineHeight: {
+      isActive: boolean;
+      isConflicting: boolean;
+      isBlocking: boolean;
+    };
     alignment: string;
+    fontFamilyValue: string;
+    fontSizeValue: Float;
+    letterSpacingValue: Float;
+    lineHeightValue: Float;
   };
 }
 
@@ -371,6 +421,7 @@ export interface NativeProps extends ViewProps {
   returnKeyLabel?: string;
   submitBehavior?: string;
   allowFontScaling?: boolean;
+  verticalAlign?: string;
 
   // event callbacks
   onInputFocus?: DirectEventHandler<TargetedEvent>;
@@ -476,6 +527,28 @@ interface NativeCommands {
     viewRef: React.ElementRef<ComponentType>,
     alignment: string
   ) => void;
+  // Inline text style commands. They apply the given value to the current
+  // selection (or to the typing attributes when the selection is empty).
+  // An empty string / 0 removes the style.
+  // Note: these are intentionally NOT named after the props (fontFamily,
+  // fontSize, lineHeight) because codegen would generate conflicting
+  // setter names in the Android ViewManager interface.
+  setSelectionFontFamily: (
+    viewRef: React.ElementRef<ComponentType>,
+    fontFamily: string
+  ) => void;
+  setSelectionFontSize: (
+    viewRef: React.ElementRef<ComponentType>,
+    fontSize: Float
+  ) => void;
+  setSelectionLetterSpacing: (
+    viewRef: React.ElementRef<ComponentType>,
+    letterSpacing: Float
+  ) => void;
+  setSelectionLineHeight: (
+    viewRef: React.ElementRef<ComponentType>,
+    lineHeight: Float
+  ) => void;
 }
 
 export const Commands: NativeCommands = codegenNativeCommands<NativeCommands>({
@@ -510,6 +583,10 @@ export const Commands: NativeCommands = codegenNativeCommands<NativeCommands>({
     'addMention',
     'requestHTML',
     'setTextAlignment',
+    'setSelectionFontFamily',
+    'setSelectionFontSize',
+    'setSelectionLetterSpacing',
+    'setSelectionLineHeight',
   ],
 });
 

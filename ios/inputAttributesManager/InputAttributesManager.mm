@@ -1,11 +1,14 @@
 #import "InputAttributesManager.h"
-#import "AlignmentUtils.h"
 #import "AttributeEntry.h"
 #import "EnrichedTextInputView.h"
+#import "LineHeightUtils.h"
 #import "ParagraphAttributesUtils.h"
 #import "RangeUtils.h"
 #import "StyleHeaders.h"
+#import "TextListsUtils.h"
 #import "ZeroWidthSpaceUtils.h"
+
+static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
 
 @implementation InputAttributesManager {
   NSMutableArray<NSValue *> *_dirtyRanges;
@@ -97,14 +100,16 @@
 
     // Sort style types so paragraph styles come first. Their broad visual
     // attributes (e.g. foreground color, font) are laid down before inline
-    // styles override them on their specific sub-ranges.
+    // styles override them on their specific sub-ranges. Styles of the same
+    // kind apply in the StyleType order so the styling stays deterministic
+    // (e.g. inline code's monospaced font wins over a custom font family).
     NSArray *sortedStyleTypes = [presentStyles.allKeys
         sortedArrayUsingComparator:^NSComparisonResult(NSNumber *a,
                                                        NSNumber *b) {
           BOOL aPara = [_input->stylesDict[a] isParagraph];
           BOOL bPara = [_input->stylesDict[b] isParagraph];
           if (aPara == bPara)
-            return NSOrderedSame;
+            return [a compare:b];
           return aPara ? NSOrderedAscending : NSOrderedDescending;
         }];
 
@@ -121,6 +126,9 @@
         [style applyStyling:occurenceRange];
       }
     }
+    [LineHeightUtils
+        applyBaselineOffsetsInTextStorage:_input->textView.textStorage
+                                    range:dirtyRange];
   }
   // do the typing attributes management, with no selection
   [self manageTypingAttributesWithOnlySelection:NO];
@@ -165,15 +173,19 @@
   for (NSString *key in _input->textView.typingAttributes.allKeys) {
     if ([_customAttributesKeys containsObject:key]) {
       if ([key isEqualToString:NSParagraphStyleAttributeName]) {
-        // NSParagraphStyle for paragraph styles -> only keep the textLists
-        // property
+        // NSParagraphStyle for paragraph styles -> keep list markers and
+        // direct paragraph alignment.
         NSParagraphStyle *pStyle =
             (NSParagraphStyle *)_input->textView
                 .typingAttributes[NSParagraphStyleAttributeName];
-        if (pStyle != nullptr && pStyle.textLists.count >= 1) {
+        if (pStyle != nullptr && (pStyle.textLists.count >= 1 ||
+                                  pStyle.alignment != NSTextAlignmentNatural)) {
           NSMutableParagraphStyle *newPStyle =
               [[NSMutableParagraphStyle alloc] init];
-          newPStyle.textLists = pStyle.textLists;
+          newPStyle.textLists = [TextListsUtils
+              textListsByRemovingPrefix:EnrichedAlignmentMarkerPrefix
+                              fromArray:pStyle.textLists];
+          newPStyle.alignment = pStyle.alignment;
           newAttrs[NSParagraphStyleAttributeName] = newPStyle;
         }
       } else {

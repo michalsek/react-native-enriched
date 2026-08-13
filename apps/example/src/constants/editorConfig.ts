@@ -32,7 +32,15 @@ export const DEFAULT_STYLES: StylesState = {
   image: DEFAULT_STYLE_STATE,
   mention: DEFAULT_STYLE_STATE,
   checkboxList: DEFAULT_STYLE_STATE,
+  fontFamily: DEFAULT_STYLE_STATE,
+  fontSize: DEFAULT_STYLE_STATE,
+  letterSpacing: DEFAULT_STYLE_STATE,
+  lineHeight: DEFAULT_STYLE_STATE,
   alignment: 'left',
+  fontFamilyValue: '',
+  fontSizeValue: 0,
+  letterSpacingValue: 0,
+  lineHeightValue: 0,
 };
 
 export const DEFAULT_LINK_STATE = {

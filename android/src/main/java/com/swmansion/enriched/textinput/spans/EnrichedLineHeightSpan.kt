@@ -6,6 +6,8 @@ import android.text.TextPaint
 import android.text.style.LineHeightSpan
 import android.text.style.MetricAffectingSpan
 import com.swmansion.enriched.common.pixelFromSpOrDp
+import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan
+import com.swmansion.enriched.common.spans.expandToCenteredLineHeight
 import com.swmansion.enriched.common.spans.interfaces.EnrichedHeadingSpan
 
 class EnrichedLineHeightSpan(
@@ -34,12 +36,11 @@ class EnrichedLineHeightSpan(
     // In the future we may consider adding custom lineHeight support for each paragraph style
     if (spannable.getSpans(start, end, EnrichedHeadingSpan::class.java).isNotEmpty()) return
 
-    val lineHeightPx = pixelFromSpOrDp(lineHeight, allowFontScaling)
-    val currentHeight = (fm.descent - fm.ascent).toFloat()
-    if (lineHeightPx <= currentHeight) return
+    // An inline (per-selection) line height takes precedence over the
+    // input-wide one on the lines it covers
+    if (spannable.getSpans(start, end, EnrichedInlineLineHeightSpan::class.java).isNotEmpty()) return
 
-    val extra = (lineHeightPx - currentHeight).toInt()
-    fm.ascent -= extra
-    fm.top = minOf(fm.top, fm.ascent)
+    val lineHeightPx = pixelFromSpOrDp(lineHeight, allowFontScaling)
+    fm.expandToCenteredLineHeight(lineHeightPx)
   }
 }

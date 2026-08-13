@@ -55,6 +55,13 @@ object EnrichedSpans {
   const val IMAGE = "image"
   const val MENTION = "mention"
 
+  // inline text styles (parametrized by a value)
+  const val FONT_FAMILY = "font_family"
+  const val FONT_SIZE = "font_size"
+  const val LETTER_SPACING = "letter_spacing"
+  const val LINE_HEIGHT = "line_height"
+  const val FOREGROUND_COLOR = "foreground_color"
+
   val inlineSpans: Map<String, BaseSpanConfig> =
     mapOf(
       BOLD to BaseSpanConfig(EnrichedInputBoldSpan::class.java),
@@ -90,7 +97,19 @@ object EnrichedSpans {
       MENTION to BaseSpanConfig(EnrichedInputMentionSpan::class.java),
     )
 
-  val allSpans: Map<String, ISpanConfig> = inlineSpans + paragraphSpans + listSpans + parametrizedStyles
+  // Inline styles carrying a custom value. They cannot be handled by
+  // InlineStyles (spans are not created via a reflective single-argument
+  // constructor) - they are managed by TextStyles instead.
+  val textStyleSpans: Map<String, BaseSpanConfig> =
+    mapOf(
+      FONT_FAMILY to BaseSpanConfig(EnrichedInputFontFamilySpan::class.java),
+      FONT_SIZE to BaseSpanConfig(EnrichedInputFontSizeSpan::class.java),
+      LETTER_SPACING to BaseSpanConfig(EnrichedInputLetterSpacingSpan::class.java),
+      LINE_HEIGHT to BaseSpanConfig(EnrichedInputLineHeightSpan::class.java),
+      FOREGROUND_COLOR to BaseSpanConfig(EnrichedInputForegroundColorSpan::class.java),
+    )
+
+  val allSpans: Map<String, ISpanConfig> = inlineSpans + paragraphSpans + listSpans + parametrizedStyles + textStyleSpans
 
   fun getMergingConfigForStyle(
     style: String,
@@ -196,6 +215,11 @@ object EnrichedSpans {
               INLINE_CODE,
               LINK,
               MENTION,
+              FONT_FAMILY,
+              FONT_SIZE,
+              LETTER_SPACING,
+              LINE_HEIGHT,
+              FOREGROUND_COLOR,
             ),
         )
       }
@@ -233,6 +257,12 @@ object EnrichedSpans {
       MENTION -> {
         StylesMergingConfig(
           blockingStyles = arrayOf(INLINE_CODE, CODE_BLOCK, LINK),
+        )
+      }
+
+      FONT_FAMILY, FONT_SIZE, LETTER_SPACING, LINE_HEIGHT, FOREGROUND_COLOR -> {
+        StylesMergingConfig(
+          blockingStyles = arrayOf(CODE_BLOCK),
         )
       }
 

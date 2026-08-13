@@ -60,3 +60,21 @@
 
 @interface EnrichedTextAlignmentStyle : AlignmentStyle
 @end
+
+@interface EnrichedTextParagraphMarginStyle : ParagraphMarginStyle
+@end
+
+@interface EnrichedTextFontFamilyStyle : FontFamilyStyle
+@end
+
+@interface EnrichedTextFontSizeStyle : FontSizeStyle
+@end
+
+@interface EnrichedTextLetterSpacingStyle : LetterSpacingStyle
+@end
+
+@interface EnrichedTextLineHeightStyle : LineHeightStyle
+@end
+
+@interface EnrichedTextForegroundColorStyle : ForegroundColorStyle
+@end

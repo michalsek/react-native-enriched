@@ -1,5 +1,6 @@
 package com.swmansion.enriched.textinput.styles
 
+import android.content.res.AssetManager
 import android.graphics.Color
 import com.facebook.react.bridge.ColorPropConverter
 import com.facebook.react.bridge.ReactContext
@@ -18,6 +19,12 @@ import kotlin.math.ceil
 class HtmlStyle : EnrichedStyle {
   private var style: ReadableMap? = null
   private var view: EnrichedTextInputView? = null
+
+  internal val allowFontScaling: Boolean
+    get() = view?.allowFontScaling ?: EnrichedConstants.ALLOW_FONT_SCALING_DEFAULT
+
+  internal val assets: AssetManager?
+    get() = view?.context?.assets
 
   // Default values are ignored as they are specified on the JS side.
   // They are specified only because they are required by the constructor.

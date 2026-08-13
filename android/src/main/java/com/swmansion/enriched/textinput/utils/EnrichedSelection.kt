@@ -4,11 +4,13 @@ import android.text.Editable
 import android.text.Spannable
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.uimanager.UIManagerHelper
+import com.swmansion.enriched.common.EnrichedAlignmentMapping
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.events.OnChangeSelectionEvent
 import com.swmansion.enriched.textinput.events.OnLinkDetectedEvent
 import com.swmansion.enriched.textinput.events.OnMentionDetectedEvent
+import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputLinkSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputMentionSpan
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
@@ -44,6 +46,13 @@ class EnrichedSelection(
     val textLength = view.text?.length ?: 0
     val finalStart = newStart.coerceAtMost(newEnd).coerceAtLeast(0).coerceAtMost(textLength)
     val finalEnd = newEnd.coerceAtLeast(newStart).coerceAtLeast(0).coerceAtMost(textLength)
+    val coercedStart = view.text?.let { ParagraphMarginSpacers.coerceIndex(it, finalStart) } ?: finalStart
+    val coercedEnd = view.text?.let { ParagraphMarginSpacers.coerceIndex(it, finalEnd) } ?: finalEnd
+
+    if ((coercedStart != finalStart || coercedEnd != finalEnd) && !view.isDuringTransaction) {
+      view.setSelection(coercedStart, coercedEnd)
+      return
+    }
 
     if (isZeroWidthSelection(finalStart, finalEnd) && !view.isDuringTransaction) {
       view.setSelection(finalStart + 1)
@@ -55,7 +64,11 @@ class EnrichedSelection(
     start = finalStart
     end = finalEnd
     validateStyles()
-    emitSelectionChangeEvent(view.text, finalStart, finalEnd)
+
+    // Selection moves performed internally by setValue are not emitted.
+    if (!view.isSettingValue) {
+      emitSelectionChangeEvent(view.text, finalStart, finalEnd)
+    }
   }
 
   private fun isZeroWidthSelection(
@@ -89,6 +102,10 @@ class EnrichedSelection(
       for ((style, config) in EnrichedSpans.inlineSpans) {
         state.setStart(style, getInlineStyleStart(config.clazz))
       }
+
+      for ((style, config) in EnrichedSpans.textStyleSpans) {
+        state.setStart(style, getInlineStyleStart(config.clazz))
+      }
     } else {
       view.isRemovingMany = false
     }
@@ -104,6 +121,22 @@ class EnrichedSelection(
     for ((style, config) in EnrichedSpans.parametrizedStyles) {
       state.setStart(style, getParametrizedStyleStart(config.clazz))
     }
+
+    state.setAlignment(getCurrentAlignment())
+
+    view.textStyles?.onValidateStyles()
+  }
+
+  private fun getCurrentAlignment(): String {
+    val spannable = view.text as? Spannable ?: return "auto"
+    val (selectionStart, _) = getInlineSelection()
+    val (paragraphStart, paragraphEnd) = spannable.getParagraphBounds(selectionStart)
+    val span =
+      spannable
+        .getSpans(paragraphStart, paragraphEnd, EnrichedInputAlignmentSpan::class.java)
+        .firstOrNull() ?: return "auto"
+
+    return EnrichedAlignmentMapping.alignmentToCss(span.alignment) ?: "auto"
   }
 
   fun getInlineSelection(): Pair<Int, Int> {
@@ -237,9 +270,13 @@ class EnrichedSelection(
     val surfaceId = UIManagerHelper.getSurfaceId(context)
     val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(context, view.id)
 
-    val visibleStart = start - editable.zwsCountBefore(start)
-    val visibleEnd = end - editable.zwsCountBefore(end)
-    val text = editable.substring(start, end).replace(EnrichedConstants.ZWS_STRING, "")
+    val visibleStart = ParagraphMarginSpacers.publicIndexBefore(editable, start)
+    val visibleEnd = ParagraphMarginSpacers.publicIndexBefore(editable, end)
+    val text =
+      ParagraphMarginSpacers
+        .publicText(editable, start, end)
+        .toString()
+        .replace(EnrichedConstants.ZWS_STRING, "")
     dispatcher?.dispatchEvent(
       OnChangeSelectionEvent(
         surfaceId,
@@ -270,7 +307,11 @@ class EnrichedSelection(
     start: Int,
     end: Int,
   ) {
-    val text = spannable.substring(start, end).replace(EnrichedConstants.ZWS_STRING, "")
+    val text =
+      ParagraphMarginSpacers
+        .publicText(spannable, start, end)
+        .toString()
+        .replace(EnrichedConstants.ZWS_STRING, "")
     val url = span?.getUrl() ?: ""
 
     // Prevents emitting unnecessary events
@@ -279,8 +320,8 @@ class EnrichedSelection(
     previousLinkDetectedEvent.put("text", text)
     previousLinkDetectedEvent.put("url", url)
 
-    val visibleStart = start - spannable.zwsCountBefore(start)
-    val visibleEnd = end - spannable.zwsCountBefore(end)
+    val visibleStart = ParagraphMarginSpacers.publicIndexBefore(spannable, start)
+    val visibleEnd = ParagraphMarginSpacers.publicIndexBefore(spannable, end)
 
     val context = view.context as ReactContext
     val surfaceId = UIManagerHelper.getSurfaceId(context)
@@ -304,7 +345,7 @@ class EnrichedSelection(
     start: Int,
     end: Int,
   ) {
-    val text = spannable.substring(start, end)
+    val text = ParagraphMarginSpacers.publicText(spannable, start, end).toString()
     val attributes = span?.getAttributes() ?: emptyMap()
     val indicator = span?.getIndicator() ?: ""
     val payload = JSONObject(attributes).toString()

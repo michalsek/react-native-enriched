@@ -128,6 +128,14 @@ class EnrichedTextInputViewManager :
     view?.submitBehavior = submitBehavior
   }
 
+  @ReactProp(name = "verticalAlign")
+  override fun setVerticalAlign(
+    view: EnrichedTextInputView?,
+    verticalAlign: String?,
+  ) {
+    view?.setVerticalAlignment(verticalAlign)
+  }
+
   @ReactProp(name = "returnKeyLabel")
   override fun setReturnKeyLabel(
     view: EnrichedTextInputView?,
@@ -460,7 +468,35 @@ class EnrichedTextInputViewManager :
     view: EnrichedTextInputView?,
     alignment: String,
   ) {
-    TODO("Not yet implemented")
+    view?.setTextAlignment(alignment)
+  }
+
+  override fun setSelectionFontFamily(
+    view: EnrichedTextInputView?,
+    fontFamily: String?,
+  ) {
+    view?.setSelectionFontFamily(fontFamily)
+  }
+
+  override fun setSelectionFontSize(
+    view: EnrichedTextInputView?,
+    fontSize: Float,
+  ) {
+    view?.setSelectionFontSize(fontSize)
+  }
+
+  override fun setSelectionLetterSpacing(
+    view: EnrichedTextInputView?,
+    letterSpacing: Float,
+  ) {
+    view?.setSelectionLetterSpacing(letterSpacing)
+  }
+
+  override fun setSelectionLineHeight(
+    view: EnrichedTextInputView?,
+    lineHeight: Float,
+  ) {
+    view?.setSelectionLineHeight(lineHeight)
   }
 
   override fun measure(

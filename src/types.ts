@@ -347,7 +347,35 @@ export interface OnChangeStateEvent {
     isConflicting: boolean;
     isBlocking: boolean;
   };
+  fontFamily: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
+  fontSize: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
+  letterSpacing: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
+  lineHeight: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
   alignment: string;
+  /**
+   * Values of the inline text styles at the current selection.
+   * An empty string / 0 means no custom value is applied.
+   */
+  fontFamilyValue: string;
+  fontSizeValue: number;
+  letterSpacingValue: number;
+  lineHeightValue: number;
 }
 
 export interface OnLinkDetected {
@@ -428,6 +456,31 @@ export interface EnrichedTextInputInstance extends NativeMethods {
   setTextAlignment: (
     alignment: 'left' | 'center' | 'right' | 'justify' | 'auto'
   ) => void;
+  /**
+   * Applies the given font family to the current selection
+   * (or to the text typed next when the selection is empty).
+   * Passing `null` (or an empty string) restores the default font family.
+   */
+  setFontFamily: (fontFamily: string | null) => void;
+  /**
+   * Applies the given font size to the current selection
+   * (or to the text typed next when the selection is empty).
+   * Passing `null` (or `0`) restores the default font size.
+   */
+  setFontSize: (fontSize: number | null) => void;
+  /**
+   * Applies the given letter spacing to the current selection
+   * (or to the text typed next when the selection is empty).
+   * Passing `null` (or `0`) restores the default letter spacing.
+   */
+  setLetterSpacing: (letterSpacing: number | null) => void;
+  /**
+   * Applies the given line height to the current selection
+   * (or to the text typed next when the selection is empty).
+   * Affects the lines that the selected text spans.
+   * Passing `null` (or `0`) restores the default line height.
+   */
+  setLineHeight: (lineHeight: number | null) => void;
 }
 
 export interface ContextMenuItem {
@@ -463,6 +516,7 @@ export interface EnrichedTextInputProps extends Omit<ViewProps, 'children'> {
   htmlStyle?: HtmlStyle;
   style?: EnrichedInputStyle;
   scrollEnabled?: boolean;
+  verticalAlign?: 'top' | 'center' | 'bottom';
   linkRegex?: RegExp | null;
   returnKeyType?: ReturnKeyTypeOptions;
   returnKeyLabel?: string;

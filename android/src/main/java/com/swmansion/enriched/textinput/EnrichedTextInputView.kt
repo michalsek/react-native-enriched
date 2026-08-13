@@ -57,18 +57,20 @@ import com.swmansion.enriched.textinput.spans.EnrichedInputImageSpan
 import com.swmansion.enriched.textinput.spans.EnrichedLineHeightSpan
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
 import com.swmansion.enriched.textinput.spans.interfaces.EnrichedInputSpan
+import com.swmansion.enriched.textinput.styles.AlignmentStyles
 import com.swmansion.enriched.textinput.styles.HtmlStyle
 import com.swmansion.enriched.textinput.styles.InlineStyles
 import com.swmansion.enriched.textinput.styles.ListStyles
 import com.swmansion.enriched.textinput.styles.ParagraphStyles
 import com.swmansion.enriched.textinput.styles.ParametrizedStyles
+import com.swmansion.enriched.textinput.styles.TextStyles
 import com.swmansion.enriched.textinput.utils.EnrichedEditableFactory
 import com.swmansion.enriched.textinput.utils.EnrichedSelection
 import com.swmansion.enriched.textinput.utils.EnrichedSpanState
+import com.swmansion.enriched.textinput.utils.ParagraphMarginSpacers
 import com.swmansion.enriched.textinput.utils.RichContentReceiver
 import com.swmansion.enriched.textinput.utils.mergeSpannables
 import com.swmansion.enriched.textinput.utils.setCheckboxClickListener
-import com.swmansion.enriched.textinput.utils.zwsCountBefore
 import com.swmansion.enriched.textinput.watchers.EnrichedSpanWatcher
 import com.swmansion.enriched.textinput.watchers.EnrichedTextWatcher
 import java.util.regex.Pattern
@@ -85,8 +87,11 @@ class EnrichedTextInputView :
   val paragraphStyles: ParagraphStyles? = ParagraphStyles(this)
   val listStyles: ListStyles? = ListStyles(this)
   val parametrizedStyles: ParametrizedStyles? = ParametrizedStyles(this)
+  val textStyles: TextStyles? = TextStyles(this)
+  val alignmentStyles: AlignmentStyles? = AlignmentStyles(this)
   var isDuringTransaction: Boolean = false
   var isRemovingMany: Boolean = false
+  var isSettingValue: Boolean = false
   var scrollEnabled: Boolean = true
   var allowFontScaling: Boolean = EnrichedConstants.ALLOW_FONT_SCALING_DEFAULT
     set(value) {
@@ -121,6 +126,7 @@ class EnrichedTextInputView :
   var shouldEmitOnChangeText: Boolean = false
   var experimentalSynchronousEvents: Boolean = false
   var useHtmlNormalizer: Boolean = false
+  var isNormalizingParagraphMarginSpacers: Boolean = false
 
   private var fontSizeRaw: Float? = null
   var fontSize: Float? = null
@@ -342,7 +348,7 @@ class EnrichedTextInputView :
     val spannable = text as Spannable
 
     if (start < end) {
-      val selectedText = spannable.subSequence(start, end) as Spannable
+      val selectedText = ParagraphMarginSpacers.publicText(spannable, start, end)
       val selectedHtml = EnrichedParser.toHtml(selectedText)
 
       val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -379,7 +385,7 @@ class EnrichedTextInputView :
     // replacement-safe: oldLength - removed + inserted
     val insertedLength = finalText.length - (lengthBefore - (end - start))
     val pasteEnd = (start + insertedLength).coerceIn(0, finalText.length)
-    setSelection(pasteEnd)
+    setSelection(ParagraphMarginSpacers.coerceIndex(text ?: finalText, pasteEnd))
 
     // Detect links in the newly pasted range
     parametrizedStyles?.detectLinksInRange(finalText, start.coerceAtMost(pasteEnd), pasteEnd)
@@ -397,7 +403,7 @@ class EnrichedTextInputView :
 
     return try {
       val parsed = EnrichedParser.fromHtml(normalized, htmlStyle, spannableFactory)
-      parsed.trimEnd('\n')
+      ParagraphMarginSpacers.normalized(parsed.trimEnd('\n'))
     } catch (e: Exception) {
       Log.e(TAG, "Error parsing normalized HTML: ${e.message}")
       text
@@ -410,7 +416,7 @@ class EnrichedTextInputView :
     if (isInternalHtml) {
       try {
         val parsed = EnrichedParser.fromHtml(text.toString(), htmlStyle, spannableFactory)
-        return parsed.trimEnd('\n')
+        return ParagraphMarginSpacers.normalized(parsed.trimEnd('\n'))
       } catch (e: Exception) {
         Log.e(TAG, "Error parsing HTML: ${e.message}")
         return normalizeHtmlIfNeeded(text)
@@ -426,15 +432,32 @@ class EnrichedTextInputView :
   ) {
     if (value == null) return
 
-    runAsATransaction {
-      val newText = if (shouldParseHtml) parseText(value) else value
-      setText(newText)
-      applyLineSpacing()
+    // The internal caret moves must not reach JS - consumers restoring the
+    // selection right after setValue would otherwise receive transient
+    // selection events.
+    isSettingValue = true
+    try {
+      val previousStart = selectionStart
+      val previousEnd = selectionEnd
 
-      observeAsyncImages()
+      runAsATransaction {
+        val newText = if (shouldParseHtml) parseText(value) else value
+        setText(newText)
+        normalizeParagraphMarginSpacers()
+        applyLineSpacing()
 
-      // Scroll to the last line of text
-      setSelection(text?.length ?: 0)
+        observeAsyncImages()
+
+        // Restore the previous selection clamped to the new text, so
+        // consecutive setValue calls (e.g. styling changes streamed from a
+        // slider) don't make the caret visibly jump to the end and back.
+        val textLength = text?.length ?: 0
+        val start = ParagraphMarginSpacers.coerceIndex(text ?: "", previousStart.coerceIn(0, textLength))
+        val end = ParagraphMarginSpacers.coerceIndex(text ?: "", previousEnd.coerceIn(start, textLength))
+        setSelection(start, end)
+      }
+    } finally {
+      isSettingValue = false
     }
     layoutManager.invalidateLayout()
   }
@@ -449,25 +472,10 @@ class EnrichedTextInputView :
     setSelection(actualStart, actualEnd)
   }
 
-  // Helper: Walks through the string skipping ZWSPs to find the Nth visible character
+  // Helper: Walks through the string skipping hidden editor characters to find the Nth visible character.
   private fun getActualIndex(visibleIndex: Int): Int {
     val currentText = text as Spannable
-    var currentVisibleCount = 0
-    var actualIndex = 0
-
-    while (actualIndex < currentText.length) {
-      if (currentVisibleCount == visibleIndex) {
-        return actualIndex
-      }
-
-      // If the current char is not a hidden space, it counts towards our visible index
-      if (currentText[actualIndex] != EnrichedConstants.ZWS) {
-        currentVisibleCount++
-      }
-      actualIndex++
-    }
-
-    return actualIndex
+    return ParagraphMarginSpacers.actualIndexForPublicIndex(currentText, visibleIndex)
   }
 
   /**
@@ -720,10 +728,14 @@ class EnrichedTextInputView :
     val end = selection.end
     val styleState = spanState?.getStyleStatePayload() ?: return
     val currentText = text ?: return
-    val selectedText = currentText.subSequence(start, end).toString().replace(EnrichedConstants.ZWS_STRING, "")
+    val selectedText =
+      ParagraphMarginSpacers
+        .publicText(currentText, start, end)
+        .toString()
+        .replace(EnrichedConstants.ZWS_STRING, "")
 
-    val visibleStart = start - currentText.zwsCountBefore(start)
-    val visibleEnd = end - currentText.zwsCountBefore(end)
+    val visibleStart = ParagraphMarginSpacers.publicIndexBefore(currentText, start)
+    val visibleEnd = ParagraphMarginSpacers.publicIndexBefore(currentText, end)
 
     val reactContext = context as ReactContext
     val surfaceId = UIManagerHelper.getSurfaceId(reactContext)
@@ -758,6 +770,16 @@ class EnrichedTextInputView :
   fun setDefaultValue(value: CharSequence?) {
     defaultValue = value
     defaultValueDirty = true
+  }
+
+  fun setVerticalAlignment(value: String?) {
+    val verticalGravity =
+      when (value) {
+        "center" -> Gravity.CENTER_VERTICAL
+        "bottom" -> Gravity.BOTTOM
+        else -> Gravity.TOP
+      }
+    gravity = verticalGravity or Gravity.START
   }
 
   fun shouldBlurOnReturn(): Boolean = submitBehavior == "blurAndSubmit"
@@ -832,6 +854,11 @@ class EnrichedTextInputView :
         EnrichedSpans.LINK -> parametrizedStyles?.removeStyle(EnrichedSpans.LINK, start, end)
         EnrichedSpans.IMAGE -> parametrizedStyles?.removeStyle(EnrichedSpans.IMAGE, start, end)
         EnrichedSpans.MENTION -> parametrizedStyles?.removeStyle(EnrichedSpans.MENTION, start, end)
+        EnrichedSpans.FONT_FAMILY -> textStyles?.removeStyle(EnrichedSpans.FONT_FAMILY, start, end)
+        EnrichedSpans.FONT_SIZE -> textStyles?.removeStyle(EnrichedSpans.FONT_SIZE, start, end)
+        EnrichedSpans.LETTER_SPACING -> textStyles?.removeStyle(EnrichedSpans.LETTER_SPACING, start, end)
+        EnrichedSpans.LINE_HEIGHT -> textStyles?.removeStyle(EnrichedSpans.LINE_HEIGHT, start, end)
+        EnrichedSpans.FOREGROUND_COLOR -> textStyles?.removeStyle(EnrichedSpans.FOREGROUND_COLOR, start, end)
         else -> false
       }
 
@@ -860,6 +887,11 @@ class EnrichedTextInputView :
         EnrichedSpans.LINK -> parametrizedStyles?.getStyleRange()
         EnrichedSpans.IMAGE -> parametrizedStyles?.getStyleRange()
         EnrichedSpans.MENTION -> parametrizedStyles?.getStyleRange()
+        EnrichedSpans.FONT_FAMILY -> textStyles?.getStyleRange()
+        EnrichedSpans.FONT_SIZE -> textStyles?.getStyleRange()
+        EnrichedSpans.LETTER_SPACING -> textStyles?.getStyleRange()
+        EnrichedSpans.LINE_HEIGHT -> textStyles?.getStyleRange()
+        EnrichedSpans.FOREGROUND_COLOR -> textStyles?.getStyleRange()
         else -> Pair(0, 0)
       }
 
@@ -978,10 +1010,50 @@ class EnrichedTextInputView :
     parametrizedStyles?.setMentionSpan(text, indicator, attributes)
   }
 
+  fun setSelectionFontFamily(fontFamily: String?) {
+    setTextStyleValue(EnrichedSpans.FONT_FAMILY, fontFamily?.takeIf { it.isNotEmpty() })
+  }
+
+  fun setSelectionFontSize(fontSize: Float) {
+    setTextStyleValue(EnrichedSpans.FONT_SIZE, fontSize.takeIf { it != 0f })
+  }
+
+  fun setSelectionLetterSpacing(letterSpacing: Float) {
+    setTextStyleValue(EnrichedSpans.LETTER_SPACING, letterSpacing.takeIf { it != 0f })
+  }
+
+  fun setSelectionLineHeight(lineHeight: Float) {
+    setTextStyleValue(EnrichedSpans.LINE_HEIGHT, lineHeight.takeIf { it != 0f })
+  }
+
+  private fun setTextStyleValue(
+    name: String,
+    value: Any?,
+  ) {
+    if (value != null) {
+      val isValid = verifyStyle(name)
+      if (!isValid) return
+    }
+
+    runAsATransaction {
+      textStyles?.setStyleValue(name, value)
+    }
+
+    layoutManager.invalidateLayout()
+  }
+
+  fun setTextAlignment(alignment: String) {
+    alignmentStyles?.setAlignment(alignment)
+    (text as? Spannable)?.let { spanWatcher?.emitEvent(it, null) }
+    invalidate()
+    requestLayout()
+    layoutManager.invalidateLayout()
+  }
+
   fun requestHTML(requestId: Int) {
     val html =
       try {
-        EnrichedParser.toHtmlWithDefault(text)
+        EnrichedParser.toHtmlWithDefault(text?.let { ParagraphMarginSpacers.publicText(it) })
       } catch (_: Exception) {
         null
       }
@@ -990,6 +1062,18 @@ class EnrichedTextInputView :
     val surfaceId = UIManagerHelper.getSurfaceId(reactContext)
     val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(reactContext, id)
     dispatcher?.dispatchEvent(OnRequestHtmlResultEvent(surfaceId, id, requestId, html, experimentalSynchronousEvents))
+  }
+
+  fun normalizeParagraphMarginSpacers() {
+    if (isNormalizingParagraphMarginSpacers) return
+    val editable = text ?: return
+
+    isNormalizingParagraphMarginSpacers = true
+    try {
+      ParagraphMarginSpacers.normalize(editable)
+    } finally {
+      isNormalizingParagraphMarginSpacers = false
+    }
   }
 
   // Sometimes setting up style triggers many changes in sequence
@@ -1091,6 +1175,7 @@ class EnrichedTextInputView :
         selection?.validateStyles()
       }
     }
+    normalizeParagraphMarginSpacers()
     layoutManager.invalidateLayout()
     forceScrollToSelection()
   }

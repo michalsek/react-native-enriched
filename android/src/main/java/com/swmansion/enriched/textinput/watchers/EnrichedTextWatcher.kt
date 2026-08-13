@@ -6,6 +6,7 @@ import com.facebook.react.bridge.ReactContext
 import com.facebook.react.uimanager.UIManagerHelper
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.events.OnChangeTextEvent
+import com.swmansion.enriched.textinput.utils.ParagraphMarginSpacers
 
 class EnrichedTextWatcher(
   private val view: EnrichedTextInputView,
@@ -37,11 +38,15 @@ class EnrichedTextWatcher(
 
   override fun afterTextChanged(s: Editable?) {
     if (s == null) return
-    emitEvents(s)
+    if (view.isNormalizingParagraphMarginSpacers) return
 
-    if (view.isDuringTransaction) return
-    applyStyles(s)
-    view.layoutManager.invalidateLayout()
+    if (!view.isDuringTransaction) {
+      applyStyles(s)
+      view.normalizeParagraphMarginSpacers()
+      view.layoutManager.invalidateLayout()
+    }
+
+    emitEvents(view.text ?: s)
   }
 
   private fun applyStyles(s: Editable) {
@@ -49,6 +54,8 @@ class EnrichedTextWatcher(
     view.paragraphStyles?.afterTextChanged(s, endCursorPosition, previousTextLength)
     view.listStyles?.afterTextChanged(s, endCursorPosition, previousTextLength)
     view.parametrizedStyles?.afterTextChanged(s, startCursorPosition, endCursorPosition)
+    view.textStyles?.afterTextChanged(s, startCursorPosition, endCursorPosition)
+    view.alignmentStyles?.afterTextChanged(s, endCursorPosition, previousTextLength)
   }
 
   private fun emitChangeText(editable: Editable) {
@@ -62,7 +69,7 @@ class EnrichedTextWatcher(
       OnChangeTextEvent(
         surfaceId,
         view.id,
-        editable,
+        ParagraphMarginSpacers.publicText(editable),
         view.experimentalSynchronousEvents,
       ),
     )

@@ -6,12 +6,16 @@ import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
-import android.text.style.AlignmentSpan;
 import android.text.style.ParagraphStyle;
+import com.swmansion.enriched.common.EnrichedAlignmentMapping;
 import com.swmansion.enriched.common.EnrichedConstants;
+import com.swmansion.enriched.common.spans.EnrichedAlignmentSpan;
 import com.swmansion.enriched.common.spans.EnrichedBoldSpan;
 import com.swmansion.enriched.common.spans.EnrichedCheckboxListSpan;
 import com.swmansion.enriched.common.spans.EnrichedCodeBlockSpan;
+import com.swmansion.enriched.common.spans.EnrichedFontFamilySpan;
+import com.swmansion.enriched.common.spans.EnrichedFontSizeSpan;
+import com.swmansion.enriched.common.spans.EnrichedForegroundColorSpan;
 import com.swmansion.enriched.common.spans.EnrichedH1Span;
 import com.swmansion.enriched.common.spans.EnrichedH2Span;
 import com.swmansion.enriched.common.spans.EnrichedH3Span;
@@ -20,10 +24,13 @@ import com.swmansion.enriched.common.spans.EnrichedH5Span;
 import com.swmansion.enriched.common.spans.EnrichedH6Span;
 import com.swmansion.enriched.common.spans.EnrichedImageSpan;
 import com.swmansion.enriched.common.spans.EnrichedInlineCodeSpan;
+import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan;
 import com.swmansion.enriched.common.spans.EnrichedItalicSpan;
+import com.swmansion.enriched.common.spans.EnrichedLetterSpacingSpan;
 import com.swmansion.enriched.common.spans.EnrichedLinkSpan;
 import com.swmansion.enriched.common.spans.EnrichedMentionSpan;
 import com.swmansion.enriched.common.spans.EnrichedOrderedListSpan;
+import com.swmansion.enriched.common.spans.EnrichedParagraphMarginSpan;
 import com.swmansion.enriched.common.spans.EnrichedStrikeThroughSpan;
 import com.swmansion.enriched.common.spans.EnrichedUnderlineSpan;
 import com.swmansion.enriched.common.spans.EnrichedUnorderedListSpan;
@@ -33,8 +40,12 @@ import com.swmansion.enriched.common.spans.interfaces.EnrichedParagraphSpan;
 import com.swmansion.enriched.common.spans.interfaces.EnrichedZeroWidthSpaceSpan;
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.ccil.cowan.tagsoup.HTMLSchema;
 import org.ccil.cowan.tagsoup.Parser;
 import org.xml.sax.Attributes;
@@ -239,6 +250,43 @@ public class EnrichedParser {
           }
         }
 
+        ArrayList<String> cssDeclarations = new ArrayList<>();
+
+        // Mirrors iOS: list items don't carry paragraph style attributes
+        if (!isList) {
+          EnrichedAlignmentSpan[] alignmentSpans =
+              text.getSpans(i, next, EnrichedAlignmentSpan.class);
+          if (alignmentSpans.length > 0) {
+            String alignmentCss =
+                EnrichedAlignmentMapping.alignmentToCss(alignmentSpans[0].getAlignment());
+            if (alignmentCss != null) {
+              cssDeclarations.add("text-align: " + alignmentCss);
+            }
+          }
+
+          EnrichedParagraphMarginSpan[] marginSpans =
+              text.getSpans(i, next, EnrichedParagraphMarginSpan.class);
+          if (marginSpans.length > 0) {
+            EnrichedParagraphMarginSpan margin = marginSpans[0];
+            if (margin.getMarginTop() != null && margin.getMarginTop() > 0) {
+              cssDeclarations.add("margin-top: " + formatCssNumber(margin.getMarginTop()) + "px");
+            }
+            if (margin.getMarginBottom() != null && margin.getMarginBottom() > 0) {
+              cssDeclarations.add(
+                  "margin-bottom: " + formatCssNumber(margin.getMarginBottom()) + "px");
+            }
+          }
+        }
+
+        if (!cssDeclarations.isEmpty()) {
+          out.append(" style=\"");
+          for (int styleIndex = 0; styleIndex < cssDeclarations.size(); styleIndex++) {
+            if (styleIndex > 0) out.append("; ");
+            out.append(cssDeclarations.get(styleIndex));
+          }
+          out.append("\"");
+        }
+
         out.append(">");
         withinParagraph(out, text, i, next);
         out.append("</");
@@ -259,12 +307,105 @@ public class EnrichedParser {
     }
   }
 
+  /** Checks whether the span is one of the inline text style (value) spans. */
+  private static boolean isTextStyleSpan(EnrichedInlineSpan span) {
+    return span instanceof EnrichedFontFamilySpan
+        || span instanceof EnrichedFontSizeSpan
+        || span instanceof EnrichedLetterSpacingSpan
+        || span instanceof EnrichedInlineLineHeightSpan
+        || span instanceof EnrichedForegroundColorSpan;
+  }
+
+  /** Formats a float omitting the trailing ".0" so the HTML output stays clean. */
+  private static String formatCssNumber(float value) {
+    if (value == (long) value) {
+      return String.valueOf((long) value);
+    }
+    return String.valueOf(value);
+  }
+
+  /** Serializes an ARGB color int back to a CSS hex color. */
+  private static String cssFromColor(int color) {
+    int alpha = (color >>> 24) & 0xFF;
+    int rgb = color & 0xFFFFFF;
+    if (alpha == 0xFF) {
+      return String.format("#%06X", rgb);
+    }
+    return String.format("#%06X%02X", rgb, alpha);
+  }
+
+  /**
+   * Combines all inline text style spans present in the run into a single CSS declaration string,
+   * e.g. "font-family: Arial; font-size: 16px".
+   */
+  private static String getTextStyleCss(EnrichedInlineSpan[] spans) {
+    String fontFamily = null;
+    Float fontSize = null;
+    Float letterSpacing = null;
+    Float lineHeight = null;
+    Integer foregroundColor = null;
+
+    for (EnrichedInlineSpan span : spans) {
+      if (span instanceof EnrichedFontFamilySpan) {
+        fontFamily = ((EnrichedFontFamilySpan) span).getFontFamily();
+      } else if (span instanceof EnrichedFontSizeSpan) {
+        fontSize = ((EnrichedFontSizeSpan) span).getFontSize();
+      } else if (span instanceof EnrichedLetterSpacingSpan) {
+        letterSpacing = ((EnrichedLetterSpacingSpan) span).getLetterSpacing();
+      } else if (span instanceof EnrichedInlineLineHeightSpan) {
+        lineHeight = ((EnrichedInlineLineHeightSpan) span).getLineHeight();
+      } else if (span instanceof EnrichedForegroundColorSpan) {
+        foregroundColor = ((EnrichedForegroundColorSpan) span).getColor();
+      }
+    }
+
+    StringBuilder css = new StringBuilder();
+    if (fontFamily != null) {
+      css.append("font-family: ").append(fontFamily);
+    }
+    if (fontSize != null) {
+      if (css.length() > 0) css.append("; ");
+      css.append("font-size: ").append(formatCssNumber(fontSize)).append("px");
+    }
+    if (letterSpacing != null) {
+      if (css.length() > 0) css.append("; ");
+      css.append("letter-spacing: ").append(formatCssNumber(letterSpacing)).append("px");
+    }
+    if (lineHeight != null) {
+      if (css.length() > 0) css.append("; ");
+      css.append("line-height: ").append(formatCssNumber(lineHeight)).append("px");
+    }
+    if (foregroundColor != null) {
+      if (css.length() > 0) css.append("; ");
+      css.append("color: ").append(cssFromColor(foregroundColor));
+    }
+
+    return css.toString();
+  }
+
   private static void withinParagraph(StringBuilder out, Spanned text, int start, int end) {
     int next;
     for (int i = start; i < end; i = next) {
       next = text.nextSpanTransition(i, end, EnrichedInlineSpan.class);
       EnrichedInlineSpan[] style = text.getSpans(i, next, EnrichedInlineSpan.class);
+
+      // All inline text style spans of a run are emitted as a single <span> tag
+      // with a combined style attribute. The tag is opened (and closed) at the
+      // position of the first such span to keep the tags properly nested.
+      int firstTextStyleIndex = -1;
       for (int j = 0; j < style.length; j++) {
+        if (isTextStyleSpan(style[j])) {
+          firstTextStyleIndex = j;
+          break;
+        }
+      }
+
+      for (int j = 0; j < style.length; j++) {
+        if (j == firstTextStyleIndex) {
+          out.append("<span style=\"");
+          out.append(getTextStyleCss(style));
+          out.append("\">");
+        }
         if (style[j] instanceof EnrichedBoldSpan) {
           out.append("<b>");
         }
@@ -324,6 +465,9 @@ public class EnrichedParser {
       }
       withinStyle(out, text, i, next);
       for (int j = style.length - 1; j >= 0; j--) {
+        if (j == firstTextStyleIndex) {
+          out.append("</span>");
+        }
         if (style[j] instanceof EnrichedLinkSpan) {
           out.append("</a>");
         }
@@ -386,6 +530,9 @@ public class EnrichedParser {
 }
 
 class HtmlToSpannedConverter<T> implements ContentHandler {
+  private static final Pattern TEXT_ALIGN_PATTERN =
+      Pattern.compile("text-align\\s*:\\s*(left|center|right|justify)", Pattern.CASE_INSENSITIVE);
+
   private final EnrichedSpanFactory<T> mSpanFactory;
   private final T mStyle;
   private final String mSource;
@@ -429,13 +576,21 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
           end--;
         }
       }
+      boolean isAlignmentSpan = obj[i] instanceof EnrichedAlignmentSpan;
+      if (isAlignmentSpan && end < mSpannableStringBuilder.length()) {
+        if (mSpannableStringBuilder.charAt(end) == '\n') {
+          end++;
+        }
+      }
+
       if (end == start) {
         mSpannableStringBuilder.removeSpan(obj[i]);
       } else {
         // TODO: verify if Spannable.SPAN_EXCLUSIVE_EXCLUSIVE does not break anything.
         // Previously it was SPAN_PARAGRAPH. I've changed that in order to fix ranges for list
         // items.
-        mSpannableStringBuilder.setSpan(obj[i], start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        int flags = isAlignmentSpan ? Spannable.SPAN_PARAGRAPH : Spannable.SPAN_EXCLUSIVE_EXCLUSIVE;
+        mSpannableStringBuilder.setSpan(obj[i], start, end, flags);
       }
     }
 
@@ -468,6 +623,8 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     } else if (tag.equalsIgnoreCase("p")) {
       isEmptyTag = true;
       startBlockElement(mSpannableStringBuilder);
+      startAlignment(mSpannableStringBuilder, attributes);
+      startParagraphMargin(mSpannableStringBuilder, attributes);
     } else if (tag.equalsIgnoreCase("ul")) {
       isInOrderedList = false;
       String dataType = attributes.getValue("", "data-type");
@@ -499,17 +656,17 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     } else if (tag.equalsIgnoreCase("strike")) {
       start(mSpannableStringBuilder, new Strikethrough());
     } else if (tag.equalsIgnoreCase("h1")) {
-      startHeading(mSpannableStringBuilder, 1);
+      startHeading(mSpannableStringBuilder, 1, attributes);
     } else if (tag.equalsIgnoreCase("h2")) {
-      startHeading(mSpannableStringBuilder, 2);
+      startHeading(mSpannableStringBuilder, 2, attributes);
     } else if (tag.equalsIgnoreCase("h3")) {
-      startHeading(mSpannableStringBuilder, 3);
+      startHeading(mSpannableStringBuilder, 3, attributes);
     } else if (tag.equalsIgnoreCase("h4")) {
-      startHeading(mSpannableStringBuilder, 4);
+      startHeading(mSpannableStringBuilder, 4, attributes);
     } else if (tag.equalsIgnoreCase("h5")) {
-      startHeading(mSpannableStringBuilder, 5);
+      startHeading(mSpannableStringBuilder, 5, attributes);
     } else if (tag.equalsIgnoreCase("h6")) {
-      startHeading(mSpannableStringBuilder, 6);
+      startHeading(mSpannableStringBuilder, 6, attributes);
     } else if (tag.equalsIgnoreCase("img")) {
       // Image content means the current tag is not empty (e.g. <li><img .../></li>).
       isEmptyTag = false;
@@ -518,6 +675,8 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
       start(mSpannableStringBuilder, new Code());
     } else if (tag.equalsIgnoreCase("mention")) {
       startMention(mSpannableStringBuilder, attributes);
+    } else if (tag.equalsIgnoreCase("span")) {
+      startSpan(mSpannableStringBuilder, attributes);
     }
   }
 
@@ -525,9 +684,9 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     if (tag.equalsIgnoreCase("br")) {
       handleBr(mSpannableStringBuilder);
     } else if (tag.equalsIgnoreCase("p")) {
-      endBlockElement(mSpannableStringBuilder);
+      endBlockElement(mSpannableStringBuilder, mStyle, mSpanFactory);
     } else if (tag.equalsIgnoreCase("ul")) {
-      endBlockElement(mSpannableStringBuilder);
+      endBlockElement(mSpannableStringBuilder, mStyle, mSpanFactory);
     } else if (tag.equalsIgnoreCase("li")) {
       endLi(mSpannableStringBuilder, mStyle, mSpanFactory);
     } else if (tag.equalsIgnoreCase("b")) {
@@ -563,6 +722,8 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
       end(mSpannableStringBuilder, Code.class, mSpanFactory.createInlineCodeSpan(mStyle));
     } else if (tag.equalsIgnoreCase("mention")) {
       endMention(mSpannableStringBuilder, mStyle, mSpanFactory);
+    } else if (tag.equalsIgnoreCase("span")) {
+      endSpan(mSpannableStringBuilder, mStyle, mSpanFactory);
     }
   }
 
@@ -585,7 +746,8 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     start(text, new Newline(1));
   }
 
-  private static void endBlockElement(Editable text) {
+  private static <T> void endBlockElement(
+      Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
     Newline n = getLast(text, Newline.class);
     if (n != null) {
       appendNewlines(text, n.mNumNewlines);
@@ -593,8 +755,69 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     }
     Alignment a = getLast(text, Alignment.class);
     if (a != null) {
-      setSpanFromMark(text, a, new AlignmentSpan.Standard(a.mAlignment));
+      int where = text.getSpanStart(a);
+      text.removeSpan(a);
+      int len = text.length();
+
+      // Keep the span within the paragraph - exclude the trailing newline
+      if (len > 0 && text.charAt(len - 1) == '\n') {
+        len--;
+      }
+
+      if (where >= 0 && where < len) {
+        text.setSpan(
+            spanFactory.createAlignmentSpan(a.mAlignment, style),
+            where,
+            len,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+      }
     }
+    ParagraphMargin margin = getLast(text, ParagraphMargin.class);
+    if (margin != null) {
+      int where = text.getSpanStart(margin);
+      text.removeSpan(margin);
+      int len = text.length();
+
+      if (len > 0 && text.charAt(len - 1) == '\n') {
+        len--;
+      }
+
+      if (where >= 0 && where < len) {
+        text.setSpan(
+            spanFactory.createParagraphMarginSpan(margin.mTop, margin.mBottom, style),
+            where,
+            len,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+      }
+    }
+  }
+
+  private void startAlignment(Editable text, Attributes attributes) {
+    String styleAttribute = attributes.getValue("", "style");
+    if (styleAttribute == null) {
+      return;
+    }
+
+    Matcher matcher = TEXT_ALIGN_PATTERN.matcher(styleAttribute);
+    if (!matcher.find()) {
+      return;
+    }
+
+    Layout.Alignment alignment = EnrichedAlignmentMapping.cssToAlignment(matcher.group(1));
+    if (alignment == null) {
+      return;
+    }
+
+    start(text, new Alignment(alignment));
+  }
+
+  private void startParagraphMargin(Editable text, Attributes attributes) {
+    ParagraphMargin margin = parseParagraphMargin(attributes);
+    if (margin == null) {
+      return;
+    }
+
+    start(text, margin);
   }
 
   private static void handleBr(Editable text) {
@@ -616,7 +839,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
   }
 
   private static <T> void endLi(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    endBlockElement(text);
+    endBlockElement(text, style, spanFactory);
 
     List l = getLast(text, List.class);
     if (l != null) {
@@ -629,7 +852,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
       }
     }
 
-    endBlockElement(text);
+    endBlockElement(text, style, spanFactory);
   }
 
   private void startBlockquote(Editable text) {
@@ -639,7 +862,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
 
   private static <T> void endBlockquote(
       Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    endBlockElement(text);
+    endBlockElement(text, style, spanFactory);
     Blockquote last = getLast(text, Blockquote.class);
     setParagraphSpanFromMark(text, last, spanFactory.createBlockQuoteSpan(style));
   }
@@ -650,13 +873,15 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
   }
 
   private static <T> void endCodeBlock(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    endBlockElement(text);
+    endBlockElement(text, style, spanFactory);
     CodeBlock last = getLast(text, CodeBlock.class);
     setParagraphSpanFromMark(text, last, spanFactory.createCodeBlockSpan(style));
   }
 
-  private void startHeading(Editable text, int level) {
+  private void startHeading(Editable text, int level, Attributes attributes) {
     startBlockElement(text);
+    startAlignment(text, attributes);
+    startParagraphMargin(text, attributes);
 
     switch (level) {
       case 1:
@@ -684,7 +909,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
 
   private static <T> void endHeading(
       Editable text, T style, EnrichedSpanFactory<T> spanFactory, int level) {
-    endBlockElement(text);
+    endBlockElement(text, style, spanFactory);
 
     switch (level) {
       case 1:
@@ -802,6 +1027,197 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
         setSpanFromMark(text, h, spanFactory.createLinkSpan(h.mHref, style));
       }
     }
+  }
+
+  /** Strips quotes from a CSS font-family value and keeps the first entry of a font stack. */
+  private static String parseCssFontFamily(String value) {
+    String firstFamily = value.split(",")[0].trim();
+    firstFamily = firstFamily.replace("\"", "").replace("'", "").trim();
+    return firstFamily.isEmpty() ? null : firstFamily;
+  }
+
+  /** Parses a CSS dimension value (e.g. "16px", "1.5") into a float, ignoring the unit. */
+  private static Float parseCssDimension(String value) {
+    String numeric = value.trim();
+    int end = 0;
+    while (end < numeric.length()
+        && (Character.isDigit(numeric.charAt(end))
+            || numeric.charAt(end) == '.'
+            || numeric.charAt(end) == '-')) {
+      end++;
+    }
+    if (end == 0) {
+      return null;
+    }
+    try {
+      return Float.parseFloat(numeric.substring(0, end));
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  private static ParagraphMargin parseParagraphMargin(Attributes attributes) {
+    String cssStyle = attributes.getValue("", "style");
+    if (cssStyle == null) {
+      return null;
+    }
+
+    Float marginTop = null;
+    Float marginBottom = null;
+
+    for (String declaration : cssStyle.split(";")) {
+      int colonIndex = declaration.indexOf(':');
+      if (colonIndex < 0) {
+        continue;
+      }
+      String property = declaration.substring(0, colonIndex).trim().toLowerCase(Locale.US);
+      String value = declaration.substring(colonIndex + 1).trim();
+      if (value.isEmpty()) {
+        continue;
+      }
+
+      switch (property) {
+        case "margin-top":
+          marginTop = parseCssDimension(value);
+          break;
+        case "margin-bottom":
+          marginBottom = parseCssDimension(value);
+          break;
+        case "margin":
+          String[] parts = value.trim().split("\\s+");
+          if (parts.length > 0) {
+            Float shorthandTop = parseCssDimension(parts[0]);
+            Float shorthandBottom = parseCssDimension(parts.length >= 3 ? parts[2] : parts[0]);
+            if (marginTop == null) {
+              marginTop = shorthandTop;
+            }
+            if (marginBottom == null) {
+              marginBottom = shorthandBottom;
+            }
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    return marginTop != null || marginBottom != null
+        ? new ParagraphMargin(marginTop, marginBottom)
+        : null;
+  }
+
+  /**
+   * Parses a CSS hex color ("#RGB", "#RRGGBB" or "#RRGGBBAA") into an ARGB color int. Other CSS
+   * color notations are not supported.
+   */
+  private static Integer parseCssColor(String value) {
+    String hex = value.trim();
+    if (!hex.startsWith("#")) {
+      return null;
+    }
+    hex = hex.substring(1);
+
+    if (hex.length() == 3) {
+      StringBuilder expanded = new StringBuilder();
+      for (int i = 0; i < hex.length(); i++) {
+        expanded.append(hex.charAt(i)).append(hex.charAt(i));
+      }
+      hex = expanded.toString();
+    }
+
+    if (hex.length() != 6 && hex.length() != 8) {
+      return null;
+    }
+
+    try {
+      long parsed = Long.parseLong(hex, 16);
+      long alpha = 0xFF;
+      if (hex.length() == 8) {
+        alpha = parsed & 0xFF;
+        parsed >>= 8;
+      }
+      return (int) ((alpha << 24) | parsed);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  private static void startSpan(Editable text, Attributes attributes) {
+    String cssStyle = attributes.getValue("", "style");
+    String fontFamily = null;
+    Float fontSize = null;
+    Float letterSpacing = null;
+    Float lineHeight = null;
+    Integer foregroundColor = null;
+
+    if (cssStyle != null) {
+      for (String declaration : cssStyle.split(";")) {
+        int colonIndex = declaration.indexOf(':');
+        if (colonIndex < 0) {
+          continue;
+        }
+        String property = declaration.substring(0, colonIndex).trim().toLowerCase(Locale.US);
+        String value = declaration.substring(colonIndex + 1).trim();
+        if (value.isEmpty()) {
+          continue;
+        }
+
+        switch (property) {
+          case "font-family":
+            fontFamily = parseCssFontFamily(value);
+            break;
+          case "font-size":
+            fontSize = parseCssDimension(value);
+            break;
+          case "letter-spacing":
+            letterSpacing = parseCssDimension(value);
+            break;
+          case "line-height":
+            lineHeight = parseCssDimension(value);
+            break;
+          case "color":
+            foregroundColor = parseCssColor(value);
+            break;
+          default:
+            break;
+        }
+      }
+    }
+
+    // A mark is pushed for every <span> tag (even without supported styles),
+    // so that each closing </span> pops the matching mark.
+    start(text, new TextStyle(fontFamily, fontSize, letterSpacing, lineHeight, foregroundColor));
+  }
+
+  private static <T> void endSpan(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
+    TextStyle textStyle = getLast(text, TextStyle.class);
+    if (textStyle == null) {
+      return;
+    }
+
+    ArrayList<Object> spans = new ArrayList<>();
+    if (textStyle.mFontFamily != null) {
+      spans.add(spanFactory.createFontFamilySpan(textStyle.mFontFamily, style));
+    }
+    if (textStyle.mFontSize != null) {
+      spans.add(spanFactory.createFontSizeSpan(textStyle.mFontSize, style));
+    }
+    if (textStyle.mLetterSpacing != null) {
+      spans.add(spanFactory.createLetterSpacingSpan(textStyle.mLetterSpacing, style));
+    }
+    if (textStyle.mLineHeight != null) {
+      spans.add(spanFactory.createInlineLineHeightSpan(textStyle.mLineHeight, style));
+    }
+    if (textStyle.mForegroundColor != null) {
+      spans.add(spanFactory.createForegroundColorSpan(textStyle.mForegroundColor, style));
+    }
+
+    if (spans.isEmpty()) {
+      text.removeSpan(textStyle);
+      return;
+    }
+
+    setSpanFromMark(text, textStyle, spans.toArray());
   }
 
   private static void startMention(Editable mention, Attributes attributes) {
@@ -949,11 +1365,42 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     }
   }
 
+  private static class TextStyle {
+    public String mFontFamily;
+    public Float mFontSize;
+    public Float mLetterSpacing;
+    public Float mLineHeight;
+    public Integer mForegroundColor;
+
+    public TextStyle(
+        String fontFamily,
+        Float fontSize,
+        Float letterSpacing,
+        Float lineHeight,
+        Integer foregroundColor) {
+      mFontFamily = fontFamily;
+      mFontSize = fontSize;
+      mLetterSpacing = letterSpacing;
+      mLineHeight = lineHeight;
+      mForegroundColor = foregroundColor;
+    }
+  }
+
   private static class Newline {
     private final int mNumNewlines;
 
     public Newline(int numNewlines) {
       mNumNewlines = numNewlines;
+    }
+  }
+
+  private static class ParagraphMargin {
+    private final Float mTop;
+    private final Float mBottom;
+
+    public ParagraphMargin(Float top, Float bottom) {
+      mTop = top;
+      mBottom = bottom;
     }
   }
 

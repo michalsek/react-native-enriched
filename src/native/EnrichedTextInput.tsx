@@ -276,6 +276,30 @@ export const EnrichedTextInput = ({
     ) => {
       Commands.setTextAlignment(nullthrows(nativeRef.current), alignment);
     },
+    setFontFamily: (fontFamily: string | null) => {
+      Commands.setSelectionFontFamily(
+        nullthrows(nativeRef.current),
+        fontFamily ?? ''
+      );
+    },
+    setFontSize: (fontSize: number | null) => {
+      Commands.setSelectionFontSize(
+        nullthrows(nativeRef.current),
+        fontSize ?? 0
+      );
+    },
+    setLetterSpacing: (letterSpacing: number | null) => {
+      Commands.setSelectionLetterSpacing(
+        nullthrows(nativeRef.current),
+        letterSpacing ?? 0
+      );
+    },
+    setLineHeight: (lineHeight: number | null) => {
+      Commands.setSelectionLineHeight(
+        nullthrows(nativeRef.current),
+        lineHeight ?? 0
+      );
+    },
   }));
 
   const handleMentionEvent = (e: NativeSyntheticEvent<OnMentionEvent>) => {

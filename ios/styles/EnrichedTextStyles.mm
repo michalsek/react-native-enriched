@@ -57,5 +57,23 @@
 @implementation EnrichedTextAlignmentStyle
 @end
 
+@implementation EnrichedTextParagraphMarginStyle
+@end
+
 @implementation EnrichedTextImageStyle
+@end
+
+@implementation EnrichedTextFontFamilyStyle
+@end
+
+@implementation EnrichedTextFontSizeStyle
+@end
+
+@implementation EnrichedTextLetterSpacingStyle
+@end
+
+@implementation EnrichedTextLineHeightStyle
+@end
+
+@implementation EnrichedTextForegroundColorStyle
 @end

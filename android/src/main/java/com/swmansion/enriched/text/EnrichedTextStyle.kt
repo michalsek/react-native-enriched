@@ -1,10 +1,12 @@
 package com.swmansion.enriched.text
 
+import android.content.res.AssetManager
 import android.graphics.Color
 import com.facebook.react.bridge.ColorPropConverter
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.views.text.ReactTypefaceUtils.parseFontWeight
+import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.EnrichedStyle
 import com.swmansion.enriched.common.MentionStyle
 import com.swmansion.enriched.common.pixelFromSpOrDp
@@ -57,6 +59,9 @@ data class EnrichedTextStyle(
   override val inlineCodeBackgroundColor: Int,
   // Mentions
   override val mentionsStyle: Map<String, MentionStyle>,
+  // Inline text styles configuration
+  val allowFontScaling: Boolean = EnrichedConstants.ALLOW_FONT_SCALING_DEFAULT,
+  val assets: AssetManager? = null,
 ) : EnrichedStyle {
   companion object {
     fun fromReadableMap(
@@ -118,6 +123,8 @@ data class EnrichedTextStyle(
         inlineCodeColor = parseColor(context, inlineCode, "color"),
         inlineCodeBackgroundColor = parseColorWithOpacity(context, inlineCode, "backgroundColor", 80),
         mentionsStyle = parseMentionsStyle(context, mentions),
+        allowFontScaling = allowFontScaling,
+        assets = context.assets,
       )
     }
 

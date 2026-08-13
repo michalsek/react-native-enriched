@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Typeface
 import android.graphics.text.LineBreaker
 import android.os.Build
+import android.text.Spannable
+import android.text.SpannableString
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
@@ -20,6 +22,7 @@ import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.allowFontScalingFromProps
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
+import com.swmansion.enriched.text.spans.EnrichedTextDefaultLineHeightSpan
 import kotlin.math.ceil
 
 object MeasurementStore {
@@ -139,7 +142,11 @@ object MeasurementStore {
     props: ReadableMap?,
   ): Long {
     val fontSize = getInitialFontSize(props)
-    val text = getInitialText(context, fontSize.toInt(), props)
+    val text =
+      applyDefaultLineHeight(
+        getInitialText(context, fontSize.toInt(), props),
+        props,
+      )
 
     val fontFamily = props?.getString("fontFamily")
     val numberOfLines = props?.getInt("numberOfLines") ?: 0
@@ -150,6 +157,23 @@ object MeasurementStore {
     val size = measure(width, text, typeface, fontSize, numberOfLines, ellipsizeMode)
 
     return size
+  }
+
+  private fun applyDefaultLineHeight(
+    text: CharSequence,
+    props: ReadableMap?,
+  ): CharSequence {
+    val lineHeight = props?.getDouble("lineHeight")?.toFloat() ?: 0f
+    if (lineHeight == 0f || text.isEmpty()) return text
+
+    val spannable = if (text is Spannable) text else SpannableString(text)
+    spannable.setSpan(
+      EnrichedTextDefaultLineHeightSpan(lineHeight, allowFontScalingFromProps(props)),
+      0,
+      spannable.length,
+      Spannable.SPAN_INCLUSIVE_INCLUSIVE,
+    )
+    return spannable
   }
 
   fun getMeasureById(

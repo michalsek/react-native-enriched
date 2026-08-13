@@ -13,6 +13,7 @@ import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.events.OnChangeHtmlEvent
 import com.swmansion.enriched.textinput.spans.EnrichedInputOrderedListSpan
 import com.swmansion.enriched.textinput.spans.interfaces.EnrichedInputSpan
+import com.swmansion.enriched.textinput.utils.ParagraphMarginSpacers
 import com.swmansion.enriched.textinput.utils.getSafeSpanBoundaries
 
 class EnrichedSpanWatcher(
@@ -90,7 +91,7 @@ class EnrichedSpanWatcher(
     // Emit event only if we change one of ours spans
     if (what != null && what !is EnrichedInputSpan) return
 
-    val html = EnrichedParser.toHtml(s)
+    val html = EnrichedParser.toHtml(ParagraphMarginSpacers.publicText(s))
     if (html == previousHtml) return
 
     previousHtml = html
