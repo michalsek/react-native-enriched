@@ -282,6 +282,7 @@ class EnrichedSpanState(
         if (fontSizeStart != null) EnrichedSpans.FONT_SIZE else null,
         if (letterSpacingStart != null) EnrichedSpans.LETTER_SPACING else null,
         if (lineHeightStart != null) EnrichedSpans.LINE_HEIGHT else null,
+        if (foregroundColorStart != null) EnrichedSpans.FOREGROUND_COLOR else null,
       )
     val payload = Arguments.createMap()
     payload.putMap("bold", getStyleState(activeStyles, EnrichedSpans.BOLD))
@@ -307,6 +308,7 @@ class EnrichedSpanState(
     payload.putMap("fontSize", getStyleState(activeStyles, EnrichedSpans.FONT_SIZE))
     payload.putMap("letterSpacing", getStyleState(activeStyles, EnrichedSpans.LETTER_SPACING))
     payload.putMap("lineHeight", getStyleState(activeStyles, EnrichedSpans.LINE_HEIGHT))
+    payload.putMap("foregroundColor", getStyleState(activeStyles, EnrichedSpans.FOREGROUND_COLOR))
 
     payload.putString("alignment", alignment)
 
@@ -326,6 +328,11 @@ class EnrichedSpanState(
     payload.putDouble(
       "lineHeightValue",
       (textStyles?.getActiveValue(EnrichedSpans.LINE_HEIGHT) as? Float)?.toDouble() ?: 0.0,
+    )
+    val foregroundColor = textStyles?.getActiveValue(EnrichedSpans.FOREGROUND_COLOR) as? Int
+    payload.putString(
+      "foregroundColorValue",
+      foregroundColor?.let { String.format("#%06X", 0xFFFFFF and it) } ?: "",
     )
 
     return payload

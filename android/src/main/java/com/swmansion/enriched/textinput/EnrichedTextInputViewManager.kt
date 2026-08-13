@@ -474,29 +474,41 @@ class EnrichedTextInputViewManager :
   override fun setSelectionFontFamily(
     view: EnrichedTextInputView?,
     fontFamily: String?,
+    collapsedSelectionMode: String,
   ) {
-    view?.setSelectionFontFamily(fontFamily)
+    view?.setSelectionFontFamily(fontFamily, collapsedSelectionMode)
   }
 
   override fun setSelectionFontSize(
     view: EnrichedTextInputView?,
     fontSize: Float,
+    collapsedSelectionMode: String,
   ) {
-    view?.setSelectionFontSize(fontSize)
+    view?.setSelectionFontSize(fontSize, collapsedSelectionMode)
   }
 
   override fun setSelectionLetterSpacing(
     view: EnrichedTextInputView?,
     letterSpacing: Float,
+    collapsedSelectionMode: String,
   ) {
-    view?.setSelectionLetterSpacing(letterSpacing)
+    view?.setSelectionLetterSpacing(letterSpacing, collapsedSelectionMode)
   }
 
   override fun setSelectionLineHeight(
     view: EnrichedTextInputView?,
     lineHeight: Float,
+    collapsedSelectionMode: String,
   ) {
-    view?.setSelectionLineHeight(lineHeight)
+    view?.setSelectionLineHeight(lineHeight, collapsedSelectionMode)
+  }
+
+  override fun setSelectionForegroundColor(
+    view: EnrichedTextInputView?,
+    foregroundColor: String?,
+    collapsedSelectionMode: String,
+  ) {
+    view?.setSelectionForegroundColor(foregroundColor, collapsedSelectionMode)
   }
 
   override fun measure(

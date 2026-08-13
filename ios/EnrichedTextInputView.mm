@@ -1154,8 +1154,13 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   NSString *currentLineHeight =
       [(TextStyleBase *)stylesDict[@([LineHeightStyle getType])] getActiveValue]
           ?: @"";
+  NSString *currentForegroundColor =
+      [(TextStyleBase *)stylesDict[@([ForegroundColorStyle getType])]
+          getActiveValue]
+          ?: @"";
   NSArray<NSString *> *currentTextStyleValues = @[
-    currentFontFamily, currentFontSize, currentLetterSpacing, currentLineHeight
+    currentFontFamily, currentFontSize, currentLetterSpacing, currentLineHeight,
+    currentForegroundColor
   ];
   if (![currentTextStyleValues
           isEqualToArray:_recentlyEmittedTextStyleValues]) {
@@ -1195,11 +1200,13 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
            .fontSize = GET_STYLE_STATE([FontSizeStyle getType]),
            .letterSpacing = GET_STYLE_STATE([LetterSpacingStyle getType]),
            .lineHeight = GET_STYLE_STATE([LineHeightStyle getType]),
+           .foregroundColor = GET_STYLE_STATE([ForegroundColorStyle getType]),
            .alignment = [currentAlignment UTF8String],
            .fontFamilyValue = [currentFontFamily toCppString],
            .fontSizeValue = [currentFontSize floatValue],
            .letterSpacingValue = [currentLetterSpacing floatValue],
-           .lineHeightValue = [currentLineHeight floatValue]});
+           .lineHeightValue = [currentLineHeight floatValue],
+           .foregroundColorValue = [currentForegroundColor toCppString]});
     }
   }
 
@@ -1349,36 +1356,59 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     }
   } else if ([commandName isEqualToString:@"setSelectionFontFamily"]) {
     NSString *fontFamily = (NSString *)args[0];
+    NSString *collapsedSelectionMode = (NSString *)args[1];
     [self setTextStyle:[FontFamilyStyle getType]
-                 value:fontFamily.length > 0 ? fontFamily : nullptr];
+                         value:fontFamily.length > 0 ? fontFamily : nullptr
+        collapsedSelectionMode:collapsedSelectionMode];
   } else if ([commandName isEqualToString:@"setSelectionFontSize"]) {
     float fontSize = [(NSNumber *)args[0] floatValue];
-    [self
-        setTextStyle:[FontSizeStyle getType]
-               value:fontSize != 0 ? [NSString stringWithFormat:@"%g", fontSize]
-                                   : nullptr];
+    NSString *collapsedSelectionMode = (NSString *)args[1];
+    [self setTextStyle:[FontSizeStyle getType]
+                         value:fontSize != 0
+                                   ? [NSString stringWithFormat:@"%g", fontSize]
+                                   : nullptr
+        collapsedSelectionMode:collapsedSelectionMode];
   } else if ([commandName isEqualToString:@"setSelectionLetterSpacing"]) {
     float letterSpacing = [(NSNumber *)args[0] floatValue];
+    NSString *collapsedSelectionMode = (NSString *)args[1];
     [self setTextStyle:[LetterSpacingStyle getType]
-                 value:letterSpacing != 0
-                           ? [NSString stringWithFormat:@"%g", letterSpacing]
-                           : nullptr];
+                         value:letterSpacing != 0
+                                   ? [NSString
+                                         stringWithFormat:@"%g", letterSpacing]
+                                   : nullptr
+        collapsedSelectionMode:collapsedSelectionMode];
   } else if ([commandName isEqualToString:@"setSelectionLineHeight"]) {
     float lineHeight = [(NSNumber *)args[0] floatValue];
+    NSString *collapsedSelectionMode = (NSString *)args[1];
     [self setTextStyle:[LineHeightStyle getType]
-                 value:lineHeight != 0
-                           ? [NSString stringWithFormat:@"%g", lineHeight]
-                           : nullptr];
+                         value:lineHeight != 0
+                                   ? [NSString
+                                         stringWithFormat:@"%g", lineHeight]
+                                   : nullptr
+        collapsedSelectionMode:collapsedSelectionMode];
+  } else if ([commandName isEqualToString:@"setSelectionForegroundColor"]) {
+    NSString *foregroundColor = (NSString *)args[0];
+    NSString *collapsedSelectionMode = (NSString *)args[1];
+    [self setTextStyle:[ForegroundColorStyle getType]
+                         value:foregroundColor.length > 0 ? foregroundColor
+                                                          : nullptr
+        collapsedSelectionMode:collapsedSelectionMode];
   }
 }
 
-- (void)setTextStyle:(StyleType)type value:(NSString *)value {
+- (void)setTextStyle:(StyleType)type
+                     value:(NSString *)value
+    collapsedSelectionMode:(NSString *)collapsedSelectionMode {
   TextStyleBase *style = (TextStyleBase *)stylesDict[@(type)];
   if (style == nullptr) {
     return;
   }
 
   NSRange range = textView.selectedRange;
+  if (range.length == 0 &&
+      [collapsedSelectionMode isEqualToString:@"paragraph"]) {
+    range = [textView.textStorage.string paragraphRangeForRange:range];
+  }
   if (value != nullptr && ![StyleUtils handleStyleBlocksAndConflicts:type
                                                                range:range
                                                              forHost:self]) {

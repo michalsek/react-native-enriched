@@ -1010,20 +1010,40 @@ class EnrichedTextInputView :
     parametrizedStyles?.setMentionSpan(text, indicator, attributes)
   }
 
-  fun setSelectionFontFamily(fontFamily: String?) {
-    setTextStyleValue(EnrichedSpans.FONT_FAMILY, fontFamily?.takeIf { it.isNotEmpty() })
+  fun setSelectionFontFamily(
+    fontFamily: String?,
+    collapsedSelectionMode: String,
+  ) {
+    setTextStyleValue(EnrichedSpans.FONT_FAMILY, fontFamily?.takeIf { it.isNotEmpty() }, collapsedSelectionMode)
   }
 
-  fun setSelectionFontSize(fontSize: Float) {
-    setTextStyleValue(EnrichedSpans.FONT_SIZE, fontSize.takeIf { it != 0f })
+  fun setSelectionFontSize(
+    fontSize: Float,
+    collapsedSelectionMode: String,
+  ) {
+    setTextStyleValue(EnrichedSpans.FONT_SIZE, fontSize.takeIf { it != 0f }, collapsedSelectionMode)
   }
 
-  fun setSelectionLetterSpacing(letterSpacing: Float) {
-    setTextStyleValue(EnrichedSpans.LETTER_SPACING, letterSpacing.takeIf { it != 0f })
+  fun setSelectionLetterSpacing(
+    letterSpacing: Float,
+    collapsedSelectionMode: String,
+  ) {
+    setTextStyleValue(EnrichedSpans.LETTER_SPACING, letterSpacing.takeIf { it != 0f }, collapsedSelectionMode)
   }
 
-  fun setSelectionLineHeight(lineHeight: Float) {
-    setTextStyleValue(EnrichedSpans.LINE_HEIGHT, lineHeight.takeIf { it != 0f })
+  fun setSelectionLineHeight(
+    lineHeight: Float,
+    collapsedSelectionMode: String,
+  ) {
+    setTextStyleValue(EnrichedSpans.LINE_HEIGHT, lineHeight.takeIf { it != 0f }, collapsedSelectionMode)
+  }
+
+  fun setSelectionForegroundColor(
+    foregroundColor: String?,
+    collapsedSelectionMode: String,
+  ) {
+    val color = foregroundColor?.takeIf { it.isNotEmpty() }?.let(android.graphics.Color::parseColor)
+    setTextStyleValue(EnrichedSpans.FOREGROUND_COLOR, color, collapsedSelectionMode)
   }
 
   private fun setTextStyleValue(

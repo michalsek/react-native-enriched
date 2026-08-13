@@ -143,6 +143,11 @@ export interface OnChangeStateEvent {
     isConflicting: boolean;
     isBlocking: boolean;
   };
+  foregroundColor: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
   alignment: string;
   // Values of the inline text styles at the current selection.
   // Empty string / 0 means the default (no custom value) is used.
@@ -150,6 +155,7 @@ export interface OnChangeStateEvent {
   fontSizeValue: Float;
   letterSpacingValue: Float;
   lineHeightValue: Float;
+  foregroundColorValue: string;
 }
 
 export interface OnLinkDetected {
@@ -320,11 +326,17 @@ export interface OnContextMenuItemPressEvent {
       isConflicting: boolean;
       isBlocking: boolean;
     };
+    foregroundColor: {
+      isActive: boolean;
+      isConflicting: boolean;
+      isBlocking: boolean;
+    };
     alignment: string;
     fontFamilyValue: string;
     fontSizeValue: Float;
     letterSpacingValue: Float;
     lineHeightValue: Float;
+    foregroundColorValue: string;
   };
 }
 
@@ -535,19 +547,28 @@ interface NativeCommands {
   // setter names in the Android ViewManager interface.
   setSelectionFontFamily: (
     viewRef: React.ElementRef<ComponentType>,
-    fontFamily: string
+    fontFamily: string,
+    collapsedSelectionMode: string
   ) => void;
   setSelectionFontSize: (
     viewRef: React.ElementRef<ComponentType>,
-    fontSize: Float
+    fontSize: Float,
+    collapsedSelectionMode: string
   ) => void;
   setSelectionLetterSpacing: (
     viewRef: React.ElementRef<ComponentType>,
-    letterSpacing: Float
+    letterSpacing: Float,
+    collapsedSelectionMode: string
   ) => void;
   setSelectionLineHeight: (
     viewRef: React.ElementRef<ComponentType>,
-    lineHeight: Float
+    lineHeight: Float,
+    collapsedSelectionMode: string
+  ) => void;
+  setSelectionForegroundColor: (
+    viewRef: React.ElementRef<ComponentType>,
+    foregroundColor: string,
+    collapsedSelectionMode: string
   ) => void;
 }
 
@@ -587,6 +608,7 @@ export const Commands: NativeCommands = codegenNativeCommands<NativeCommands>({
     'setSelectionFontSize',
     'setSelectionLetterSpacing',
     'setSelectionLineHeight',
+    'setSelectionForegroundColor',
   ],
 });
 
