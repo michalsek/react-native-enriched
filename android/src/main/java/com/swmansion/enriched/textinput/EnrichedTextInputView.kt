@@ -1049,6 +1049,7 @@ class EnrichedTextInputView :
   private fun setTextStyleValue(
     name: String,
     value: Any?,
+    collapsedSelectionMode: String,
   ) {
     if (value != null) {
       val isValid = verifyStyle(name)
@@ -1056,7 +1057,7 @@ class EnrichedTextInputView :
     }
 
     runAsATransaction {
-      textStyles?.setStyleValue(name, value)
+      textStyles?.setStyleValue(name, value, collapsedSelectionMode)
     }
 
     layoutManager.invalidateLayout()
