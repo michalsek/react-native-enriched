@@ -9,30 +9,17 @@
   }
 
   paragraphStyle.minimumLineHeight = lineHeight;
+  // CSS line-height is the exact line box height, so a font whose natural
+  // height exceeds it must overflow the box rather than grow it.
+  paragraphStyle.maximumLineHeight = lineHeight;
 }
 
-+ (NSNumber *)baselineOffsetForLineHeight:(CGFloat)lineHeight
-                                     font:(UIFont *)font {
-  if (font == nil || lineHeight <= font.lineHeight) {
-    return nil;
-  }
-
-  return @((lineHeight - font.lineHeight) / 2.0);
-}
-
+// Vertical placement is decided per line by LineBoxLayoutDelegate, which moves
+// the line's shared baseline. A per-run NSBaselineOffsetAttributeName would
+// stack on top of that and shift runs against each other, so it is stripped
+// wherever this used to write one.
 + (void)applyBaselineOffsetToAttributes:(NSMutableDictionary *)attributes {
-  NSParagraphStyle *paragraphStyle = attributes[NSParagraphStyleAttributeName];
-  UIFont *font = attributes[NSFontAttributeName];
-  CGFloat lineHeight =
-      paragraphStyle != nil ? paragraphStyle.minimumLineHeight : 0;
-  NSNumber *baselineOffset = [self baselineOffsetForLineHeight:lineHeight
-                                                          font:font];
-
-  if (baselineOffset == nil) {
-    [attributes removeObjectForKey:NSBaselineOffsetAttributeName];
-  } else {
-    attributes[NSBaselineOffsetAttributeName] = baselineOffset;
-  }
+  [attributes removeObjectForKey:NSBaselineOffsetAttributeName];
 }
 
 + (void)applyBaselineOffsetsInTextStorage:(NSTextStorage *)textStorage
@@ -41,42 +28,7 @@
     return;
   }
 
-  NSMutableArray<NSValue *> *ranges = [NSMutableArray array];
-  NSMutableArray *offsets = [NSMutableArray array];
-
-  [textStorage
-      enumerateAttributesInRange:range
-                         options:0
-                      usingBlock:^(NSDictionary<NSAttributedStringKey, id>
-                                       *_Nonnull attrs,
-                                   NSRange attrsRange, BOOL *_Nonnull stop) {
-                        NSParagraphStyle *paragraphStyle =
-                            attrs[NSParagraphStyleAttributeName];
-                        UIFont *font = attrs[NSFontAttributeName];
-                        CGFloat lineHeight =
-                            paragraphStyle != nil
-                                ? paragraphStyle.minimumLineHeight
-                                : 0;
-                        NSNumber *baselineOffset =
-                            [self baselineOffsetForLineHeight:lineHeight
-                                                         font:font];
-
-                        [ranges addObject:[NSValue valueWithRange:attrsRange]];
-                        [offsets addObject:baselineOffset ?: [NSNull null]];
-                      }];
-
-  for (NSUInteger i = 0; i < ranges.count; i++) {
-    NSRange attrsRange = [ranges[i] rangeValue];
-    id baselineOffset = offsets[i];
-    if (baselineOffset == [NSNull null]) {
-      [textStorage removeAttribute:NSBaselineOffsetAttributeName
-                             range:attrsRange];
-    } else {
-      [textStorage addAttribute:NSBaselineOffsetAttributeName
-                          value:baselineOffset
-                          range:attrsRange];
-    }
-  }
+  [textStorage removeAttribute:NSBaselineOffsetAttributeName range:range];
 }
 
 @end

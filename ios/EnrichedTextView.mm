@@ -4,6 +4,7 @@
 #import "EnrichedTextTextView.h"
 #import "EnrichedTextTouchHandler.h"
 #import "LayoutManagerExtension.h"
+#import "LineBoxLayoutDelegate.h"
 #import "LineHeightUtils.h"
 #import "LinkData.h"
 #import "MentionParams.h"
@@ -80,6 +81,7 @@ Class<RCTComponentViewProtocol> EnrichedTextViewCls(void) {
   textView.scrollEnabled = NO;
   textView.adjustsFontForContentSizeCategory = YES;
   textView.layoutManager.input = self;
+  textView.layoutManager.delegate = [LineBoxLayoutDelegate shared];
 }
 
 - (void)setupStyles {
