@@ -32,10 +32,21 @@ class TextStyles(
   fun setStyleValue(
     name: String,
     value: Any?,
+    collapsedSelectionMode: String = "typing",
   ) {
     val selection = view.selection ?: return
     val spannable = view.text as? Spannable ?: return
     val (start, end) = selection.getInlineSelection()
+
+    if (start == end && collapsedSelectionMode == "paragraph") {
+      val paragraphStart = spannable.lastIndexOf('\n', (start - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
+      val paragraphEnd = spannable.indexOf('\n', start).let { if (it < 0) spannable.length else it }
+      if (paragraphStart < paragraphEnd) {
+        applyValueSpan(spannable, name, paragraphStart, paragraphEnd, value)
+        selection.validateStyles()
+        return
+      }
+    }
 
     if (start == end) {
       // Cursor only - the style will be applied to the text typed next

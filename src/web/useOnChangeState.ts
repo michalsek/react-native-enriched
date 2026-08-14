@@ -65,7 +65,12 @@ function buildState(
   const textStyleAttributes = editor.getAttributes('textStyle');
 
   function textStyleFormat(
-    attribute: 'fontFamily' | 'fontSize' | 'letterSpacing' | 'lineHeight'
+    attribute:
+      | 'fontFamily'
+      | 'fontSize'
+      | 'letterSpacing'
+      | 'lineHeight'
+      | 'foregroundColor'
   ) {
     return {
       isActive:
@@ -114,11 +119,13 @@ function buildState(
     fontSize: textStyleFormat('fontSize'),
     letterSpacing: textStyleFormat('letterSpacing'),
     lineHeight: textStyleFormat('lineHeight'),
-    alignment: 'left',
+    foregroundColor: textStyleFormat('foregroundColor'),
+    alignment: editor.getAttributes('paragraph').textAlign ?? 'left',
     fontFamilyValue: textStyleAttributes.fontFamily ?? '',
     fontSizeValue: textStyleAttributes.fontSize ?? 0,
     letterSpacingValue: textStyleAttributes.letterSpacing ?? 0,
     lineHeightValue: textStyleAttributes.lineHeight ?? 0,
+    foregroundColorValue: textStyleAttributes.foregroundColor ?? '',
   };
 }
 

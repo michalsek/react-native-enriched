@@ -36,11 +36,13 @@ export const DEFAULT_STYLES: StylesState = {
   fontSize: DEFAULT_STYLE_STATE,
   letterSpacing: DEFAULT_STYLE_STATE,
   lineHeight: DEFAULT_STYLE_STATE,
+  foregroundColor: DEFAULT_STYLE_STATE,
   alignment: 'left',
   fontFamilyValue: '',
   fontSizeValue: 0,
   letterSpacingValue: 0,
   lineHeightValue: 0,
+  foregroundColorValue: '',
 };
 
 export const DEFAULT_LINK_STATE = {

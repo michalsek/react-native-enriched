@@ -276,28 +276,39 @@ export const EnrichedTextInput = ({
     ) => {
       Commands.setTextAlignment(nullthrows(nativeRef.current), alignment);
     },
-    setFontFamily: (fontFamily: string | null) => {
+    setFontFamily: (fontFamily, options) => {
       Commands.setSelectionFontFamily(
         nullthrows(nativeRef.current),
-        fontFamily ?? ''
+        fontFamily ?? '',
+        options?.collapsedSelectionMode ?? 'typing'
       );
     },
-    setFontSize: (fontSize: number | null) => {
+    setFontSize: (fontSize, options) => {
       Commands.setSelectionFontSize(
         nullthrows(nativeRef.current),
-        fontSize ?? 0
+        fontSize ?? 0,
+        options?.collapsedSelectionMode ?? 'typing'
       );
     },
-    setLetterSpacing: (letterSpacing: number | null) => {
+    setLetterSpacing: (letterSpacing, options) => {
       Commands.setSelectionLetterSpacing(
         nullthrows(nativeRef.current),
-        letterSpacing ?? 0
+        letterSpacing ?? 0,
+        options?.collapsedSelectionMode ?? 'typing'
       );
     },
-    setLineHeight: (lineHeight: number | null) => {
+    setLineHeight: (lineHeight, options) => {
       Commands.setSelectionLineHeight(
         nullthrows(nativeRef.current),
-        lineHeight ?? 0
+        lineHeight ?? 0,
+        options?.collapsedSelectionMode ?? 'typing'
+      );
+    },
+    setForegroundColor: (foregroundColor, options) => {
+      Commands.setSelectionForegroundColor(
+        nullthrows(nativeRef.current),
+        foregroundColor ?? '',
+        options?.collapsedSelectionMode ?? 'typing'
       );
     },
   }));

@@ -343,19 +343,51 @@ export const EnrichedTextInput = ({
       ) => setMention(editor, indicator, text, attributes),
       setImage: (src: string, width: number, height: number) =>
         runFocused(editor, (c) => c.setImage({ src, width, height })),
-      setFontFamily: (fontFamily: string | null) =>
-        setTextStyleAttribute(editor, 'fontFamily', fontFamily || null),
-      setFontSize: (fontSize: number | null) =>
-        setTextStyleAttribute(editor, 'fontSize', fontSize || null),
-      setLetterSpacing: (letterSpacing: number | null) =>
-        setTextStyleAttribute(editor, 'letterSpacing', letterSpacing || null),
-      setLineHeight: (lineHeight: number | null) =>
-        setTextStyleAttribute(editor, 'lineHeight', lineHeight || null),
+      setFontFamily: (fontFamily, options) =>
+        setTextStyleAttribute(
+          editor,
+          'fontFamily',
+          fontFamily || null,
+          options?.collapsedSelectionMode
+        ),
+      setFontSize: (fontSize, options) =>
+        setTextStyleAttribute(
+          editor,
+          'fontSize',
+          fontSize || null,
+          options?.collapsedSelectionMode
+        ),
+      setLetterSpacing: (letterSpacing, options) =>
+        setTextStyleAttribute(
+          editor,
+          'letterSpacing',
+          letterSpacing || null,
+          options?.collapsedSelectionMode
+        ),
+      setLineHeight: (lineHeight, options) =>
+        setTextStyleAttribute(
+          editor,
+          'lineHeight',
+          lineHeight || null,
+          options?.collapsedSelectionMode
+        ),
+      setForegroundColor: (foregroundColor, options) =>
+        setTextStyleAttribute(
+          editor,
+          'foregroundColor',
+          foregroundColor || null,
+          options?.collapsedSelectionMode
+        ),
       measure: () => {},
       measureInWindow: () => {},
       measureLayout: () => {},
       setNativeProps: () => {},
-      setTextAlignment: () => {},
+      setTextAlignment: (alignment) =>
+        runFocused(editor, (chain) =>
+          chain.updateAttributes('paragraph', {
+            textAlign: alignment === 'auto' ? null : alignment,
+          })
+        ),
     }),
     [editor]
   );

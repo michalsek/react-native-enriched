@@ -367,6 +367,11 @@ export interface OnChangeStateEvent {
     isConflicting: boolean;
     isBlocking: boolean;
   };
+  foregroundColor: {
+    isActive: boolean;
+    isConflicting: boolean;
+    isBlocking: boolean;
+  };
   alignment: string;
   /**
    * Values of the inline text styles at the current selection.
@@ -376,6 +381,11 @@ export interface OnChangeStateEvent {
   fontSizeValue: number;
   letterSpacingValue: number;
   lineHeightValue: number;
+  foregroundColorValue: string;
+}
+
+export interface TextStyleMutationOptions {
+  collapsedSelectionMode?: 'typing' | 'paragraph';
 }
 
 export interface OnLinkDetected {
@@ -461,26 +471,42 @@ export interface EnrichedTextInputInstance extends NativeMethods {
    * (or to the text typed next when the selection is empty).
    * Passing `null` (or an empty string) restores the default font family.
    */
-  setFontFamily: (fontFamily: string | null) => void;
+  setFontFamily: (
+    fontFamily: string | null,
+    options?: TextStyleMutationOptions
+  ) => void;
   /**
    * Applies the given font size to the current selection
    * (or to the text typed next when the selection is empty).
    * Passing `null` (or `0`) restores the default font size.
    */
-  setFontSize: (fontSize: number | null) => void;
+  setFontSize: (
+    fontSize: number | null,
+    options?: TextStyleMutationOptions
+  ) => void;
   /**
    * Applies the given letter spacing to the current selection
    * (or to the text typed next when the selection is empty).
    * Passing `null` (or `0`) restores the default letter spacing.
    */
-  setLetterSpacing: (letterSpacing: number | null) => void;
+  setLetterSpacing: (
+    letterSpacing: number | null,
+    options?: TextStyleMutationOptions
+  ) => void;
   /**
    * Applies the given line height to the current selection
    * (or to the text typed next when the selection is empty).
    * Affects the lines that the selected text spans.
    * Passing `null` (or `0`) restores the default line height.
    */
-  setLineHeight: (lineHeight: number | null) => void;
+  setLineHeight: (
+    lineHeight: number | null,
+    options?: TextStyleMutationOptions
+  ) => void;
+  setForegroundColor: (
+    foregroundColor: string | null,
+    options?: TextStyleMutationOptions
+  ) => void;
 }
 
 export interface ContextMenuItem {

@@ -6,6 +6,7 @@ export interface TextStyleAttributes {
   fontSize: number | null;
   letterSpacing: number | null;
   lineHeight: number | null;
+  foregroundColor: string | null;
 }
 
 export const TEXT_STYLE_ATTRIBUTES = [
@@ -13,6 +14,7 @@ export const TEXT_STYLE_ATTRIBUTES = [
   'fontSize',
   'letterSpacing',
   'lineHeight',
+  'foregroundColor',
 ] as const;
 
 function parseCssDimension(value: string): number | null {
@@ -68,6 +70,10 @@ export const EnrichedTextStyle = Mark.create({
             ? parseCssDimension(element.style.lineHeight)
             : null,
       },
+      foregroundColor: {
+        default: null,
+        parseHTML: (element) => element.style.color || null,
+      },
     };
   },
 
@@ -81,7 +87,8 @@ export const EnrichedTextStyle = Mark.create({
             style.fontFamily ||
             style.fontSize ||
             style.letterSpacing ||
-            style.lineHeight;
+            style.lineHeight ||
+            style.color;
           return hasAnyTextStyle ? {} : false;
         },
       },
@@ -89,7 +96,7 @@ export const EnrichedTextStyle = Mark.create({
   },
 
   renderHTML({ mark }) {
-    const { fontFamily, fontSize, letterSpacing, lineHeight } =
+    const { fontFamily, fontSize, letterSpacing, lineHeight, foregroundColor } =
       mark.attrs as TextStyleAttributes;
 
     const declarations: string[] = [];
@@ -105,6 +112,9 @@ export const EnrichedTextStyle = Mark.create({
     if (lineHeight != null) {
       declarations.push(`line-height: ${formatCssNumber(lineHeight)}px`);
     }
+    if (foregroundColor != null) {
+      declarations.push(`color: ${foregroundColor}`);
+    }
 
     return ['span', { style: declarations.join('; ') }, 0];
   },
@@ -118,7 +128,8 @@ export const EnrichedTextStyle = Mark.create({
 export function setTextStyleAttribute(
   editor: Editor,
   attribute: (typeof TEXT_STYLE_ATTRIBUTES)[number],
-  value: string | number | null
+  value: string | number | null,
+  collapsedSelectionMode: 'typing' | 'paragraph' = 'typing'
 ) {
   if (editor.isActive('codeBlock')) {
     return;
@@ -130,6 +141,7 @@ export function setTextStyleAttribute(
     fontSize: currentAttributes.fontSize ?? null,
     letterSpacing: currentAttributes.letterSpacing ?? null,
     lineHeight: currentAttributes.lineHeight ?? null,
+    foregroundColor: currentAttributes.foregroundColor ?? null,
     [attribute]: value,
   };
 
@@ -137,9 +149,14 @@ export function setTextStyleAttribute(
     (key) => mergedAttributes[key] == null
   );
 
-  if (isEmpty) {
-    editor.chain().focus().unsetMark('textStyle').run();
-  } else {
-    editor.chain().focus().setMark('textStyle', mergedAttributes).run();
+  const { from, to, empty, $from } = editor.state.selection;
+  const appliesToParagraph = empty && collapsedSelectionMode === 'paragraph';
+  const chain = editor.chain().focus();
+  if (appliesToParagraph && $from.start() !== $from.end()) {
+    chain.setTextSelection({ from: $from.start(), to: $from.end() });
   }
+  if (isEmpty) chain.unsetMark('textStyle');
+  else chain.setMark('textStyle', mergedAttributes);
+  if (appliesToParagraph) chain.setTextSelection({ from, to });
+  chain.run();
 }
