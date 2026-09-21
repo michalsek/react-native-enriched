@@ -15,6 +15,7 @@ import com.facebook.react.uimanager.annotations.ReactProp
 import com.facebook.react.viewmanagers.EnrichedTextInputViewManagerDelegate
 import com.facebook.react.viewmanagers.EnrichedTextInputViewManagerInterface
 import com.facebook.yoga.YogaMeasureMode
+import com.swmansion.enriched.textinput.events.OnChangeContentSizeEvent
 import com.swmansion.enriched.textinput.events.OnChangeHtmlEvent
 import com.swmansion.enriched.textinput.events.OnChangeSelectionEvent
 import com.swmansion.enriched.textinput.events.OnChangeStateEvent
@@ -67,6 +68,7 @@ class EnrichedTextInputViewManager :
     map.put(OnChangeTextEvent.EVENT_NAME, mapOf("registrationName" to OnChangeTextEvent.EVENT_NAME))
     map.put(OnChangeHtmlEvent.EVENT_NAME, mapOf("registrationName" to OnChangeHtmlEvent.EVENT_NAME))
     map.put(OnChangeStateEvent.EVENT_NAME, mapOf("registrationName" to OnChangeStateEvent.EVENT_NAME))
+    map.put(OnChangeContentSizeEvent.EVENT_NAME, mapOf("registrationName" to OnChangeContentSizeEvent.EVENT_NAME))
     map.put(OnLinkDetectedEvent.EVENT_NAME, mapOf("registrationName" to OnLinkDetectedEvent.EVENT_NAME))
     map.put(OnMentionDetectedEvent.EVENT_NAME, mapOf("registrationName" to OnMentionDetectedEvent.EVENT_NAME))
     map.put(OnMentionEvent.EVENT_NAME, mapOf("registrationName" to OnMentionEvent.EVENT_NAME))
@@ -272,6 +274,13 @@ class EnrichedTextInputViewManager :
     super.setPadding(view, left, top, right, bottom)
 
     view?.setPadding(left, top, right, bottom)
+  }
+
+  override fun setIsOnChangeContentSizeSet(
+    view: EnrichedTextInputView?,
+    value: Boolean,
+  ) {
+    view?.shouldEmitContentSize = value
   }
 
   override fun setIsOnChangeHtmlSet(

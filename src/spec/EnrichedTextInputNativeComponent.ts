@@ -27,6 +27,11 @@ export interface OnChangeHtmlEvent {
   value: string;
 }
 
+export interface OnChangeContentSizeEvent {
+  width: Float;
+  height: Float;
+}
+
 export interface OnChangeStateEvent {
   bold: {
     isActive: boolean;
@@ -441,6 +446,7 @@ export interface NativeProps extends ViewProps {
   onChangeText?: DirectEventHandler<OnChangeTextEvent>;
   onChangeHtml?: DirectEventHandler<OnChangeHtmlEvent>;
   onChangeState?: DirectEventHandler<OnChangeStateEvent>;
+  onChangeContentSize?: DirectEventHandler<OnChangeContentSizeEvent>;
   onLinkDetected?: DirectEventHandler<OnLinkDetected>;
   onMentionDetected?: DirectEventHandler<OnMentionDetectedInternal>;
   onMention?: DirectEventHandler<OnMentionEvent>;
@@ -464,6 +470,8 @@ export interface NativeProps extends ViewProps {
   isOnChangeHtmlSet: boolean;
   // Used for onChangeText event performance optimization
   isOnChangeTextSet: boolean;
+  // Used for onChangeContentSize event performance optimization
+  isOnChangeContentSizeSet: boolean;
 
   // Experimental
   androidExperimentalSynchronousEvents: boolean;

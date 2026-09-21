@@ -4,6 +4,7 @@ export type {
   EnrichedTextInputProps,
   OnChangeTextEvent,
   OnChangeHtmlEvent,
+  OnChangeContentSizeEvent,
   OnChangeStateEvent,
   OnLinkDetected,
   OnMentionDetected,

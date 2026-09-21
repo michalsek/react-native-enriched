@@ -57,6 +57,8 @@ using namespace facebook::react;
   UIColor *_placeholderColor;
   BOOL _emitFocusBlur;
   BOOL _emitTextChange;
+  BOOL _emitContentSize;
+  CGSize _recentlyEmittedContentSize;
   BOOL _isSettingValue;
   NSMutableDictionary<NSValue *, UIImageView *> *_attachmentViews;
   NSArray<NSDictionary *> *_contextMenuItems;
@@ -143,6 +145,8 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   blockEmitting = NO;
   _emitFocusBlur = YES;
   _emitTextChange = NO;
+  _emitContentSize = NO;
+  _recentlyEmittedContentSize = CGSizeMake(-1, -1);
   _isSettingValue = NO;
   _verticalAlign = @"top";
   dotReplacementRange = nullptr;
@@ -843,6 +847,12 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   // isOnChangeTextSet
   _emitTextChange = newViewProps.isOnChangeTextSet;
 
+  // isOnChangeContentSizeSet
+  if (_emitContentSize != newViewProps.isOnChangeContentSizeSet) {
+    _emitContentSize = newViewProps.isOnChangeContentSizeSet;
+    [self updateVerticalAlignment];
+  }
+
   // contextMenuItems
   bool contextMenuChanged = newViewProps.contextMenuItems.size() !=
                             oldViewProps.contextMenuItems.size();
@@ -1514,10 +1524,16 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       insets.top = 0;
       textView.textContainerInset = insets;
     }
+    if (_emitContentSize) {
+      [self tryEmittingContentSize:[self contentHeightForVerticalAlignment]];
+    }
     return;
   }
 
   CGFloat contentHeight = [self contentHeightForVerticalAlignment];
+  if (_emitContentSize) {
+    [self tryEmittingContentSize:contentHeight];
+  }
   CGFloat freeSpace = textView.bounds.size.height - contentHeight;
   CGFloat displayScale = textView.traitCollection.displayScale > 0
                              ? textView.traitCollection.displayScale
@@ -1530,6 +1546,24 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     insets.top = topInset;
     textView.textContainerInset = insets;
   }
+}
+
+- (void)tryEmittingContentSize:(CGFloat)contentHeight {
+  CGFloat contentWidth = textView.textContainer.size.width;
+
+  if (ABS(contentHeight - _recentlyEmittedContentSize.height) < 0.5 &&
+      ABS(contentWidth - _recentlyEmittedContentSize.width) < 0.5) {
+    return;
+  }
+
+  auto emitter = [self getEventEmitter];
+  if (emitter == nullptr) {
+    return;
+  }
+
+  _recentlyEmittedContentSize = CGSizeMake(contentWidth, contentHeight);
+  emitter->onChangeContentSize({.width = static_cast<float>(contentWidth),
+                                .height = static_cast<float>(contentHeight)});
 }
 
 - (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
