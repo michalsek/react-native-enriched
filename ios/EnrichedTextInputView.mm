@@ -1519,9 +1519,14 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
   CGFloat contentHeight = [self contentHeightForVerticalAlignment];
   CGFloat freeSpace = textView.bounds.size.height - contentHeight;
-  CGFloat topInset = MAX(0, isCenter ? freeSpace / 2 : freeSpace);
+  CGFloat displayScale = textView.traitCollection.displayScale > 0
+                             ? textView.traitCollection.displayScale
+                             : 1;
+  CGFloat alignedFreeSpace = isCenter ? freeSpace / 2 : freeSpace;
+  CGFloat topInset =
+      MAX(0, floor(alignedFreeSpace * displayScale) / displayScale);
 
-  if (ABS(insets.top - topInset) > 0.5) {
+  if (insets.top != topInset) {
     insets.top = topInset;
     textView.textContainerInset = insets;
   }
