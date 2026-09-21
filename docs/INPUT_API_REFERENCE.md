@@ -338,6 +338,25 @@ interface OnChangeStateEvent {
 |-------------------------------------------------------------|----------|
 | `(event: NativeSyntheticEvent<OnChangeStateEvent>) => void` | Both     |
 
+### `onChangeContentSize`
+
+Callback that gets called whenever the size the text content needs to be fully laid out changes. It is only measured when the callback is set.
+
+Payload interface:
+
+```ts
+interface OnChangeContentSizeEvent {
+  width: number;
+  height: number;
+}
+```
+
+`height` is the full height of the laid out text, even when the input has a fixed `height` smaller than that — compare it against the input's height to detect text that no longer fits.
+
+| Type                                                              | Platform |
+|-------------------------------------------------------------------|----------|
+| `(event: NativeSyntheticEvent<OnChangeContentSizeEvent>) => void` | Both     |
+
 ### `onChangeText`
 
 Callback called when any text changes occur in the input.

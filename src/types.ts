@@ -251,6 +251,11 @@ export interface OnChangeHtmlEvent {
   value: string;
 }
 
+export interface OnChangeContentSizeEvent {
+  width: number;
+  height: number;
+}
+
 export interface OnChangeStateEvent {
   bold: {
     isActive: boolean;
@@ -552,6 +557,9 @@ export interface EnrichedTextInputProps extends Omit<ViewProps, 'children'> {
   onChangeText?: (e: NativeSyntheticEvent<OnChangeTextEvent>) => void;
   onChangeHtml?: (e: NativeSyntheticEvent<OnChangeHtmlEvent>) => void;
   onChangeState?: (e: NativeSyntheticEvent<OnChangeStateEvent>) => void;
+  onChangeContentSize?: (
+    e: NativeSyntheticEvent<OnChangeContentSizeEvent>
+  ) => void;
   onLinkDetected?: (e: OnLinkDetected) => void;
   onMentionDetected?: (e: OnMentionDetected) => void;
   onStartMention?: (indicator: string) => void;

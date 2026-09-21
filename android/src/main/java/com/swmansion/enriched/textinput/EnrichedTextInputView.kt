@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.BlendMode
 import android.graphics.BlendModeColorFilter
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.text.LineBreaker
@@ -32,6 +33,7 @@ import com.facebook.react.bridge.ReactContext
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.common.ReactConstants
+import com.facebook.react.uimanager.PixelUtil
 import com.facebook.react.uimanager.StateWrapper
 import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.views.text.ReactTypefaceUtils.applyStyles
@@ -42,6 +44,7 @@ import com.swmansion.enriched.common.GumboNormalizer
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.textinput.events.MentionHandler
+import com.swmansion.enriched.textinput.events.OnChangeContentSizeEvent
 import com.swmansion.enriched.textinput.events.OnContextMenuItemPressEvent
 import com.swmansion.enriched.textinput.events.OnInputBlurEvent
 import com.swmansion.enriched.textinput.events.OnInputFocusEvent
@@ -124,6 +127,13 @@ class EnrichedTextInputView :
 
   var shouldEmitHtml: Boolean = false
   var shouldEmitOnChangeText: Boolean = false
+  var shouldEmitContentSize: Boolean = false
+    set(value) {
+      field = value
+      if (value) invalidate()
+    }
+  private var recentlyEmittedContentWidth: Int = -1
+  private var recentlyEmittedContentHeight: Int = -1
   var experimentalSynchronousEvents: Boolean = false
   var useHtmlNormalizer: Boolean = false
   var isNormalizingParagraphMarginSpacers: Boolean = false
@@ -1107,6 +1117,37 @@ class EnrichedTextInputView :
     } finally {
       isDuringTransaction = false
     }
+  }
+
+  override fun onDraw(canvas: Canvas) {
+    super.onDraw(canvas)
+    tryEmittingContentSize()
+  }
+
+  private fun tryEmittingContentSize() {
+    if (!shouldEmitContentSize) return
+
+    val textLayout = layout ?: return
+    val contentWidth = textLayout.width
+    val contentHeight = textLayout.height
+
+    if (contentWidth == recentlyEmittedContentWidth && contentHeight == recentlyEmittedContentHeight) return
+
+    val reactContext = context as? ReactContext ?: return
+    val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(reactContext, id) ?: return
+    val surfaceId = UIManagerHelper.getSurfaceId(reactContext)
+
+    recentlyEmittedContentWidth = contentWidth
+    recentlyEmittedContentHeight = contentHeight
+    dispatcher.dispatchEvent(
+      OnChangeContentSizeEvent(
+        surfaceId,
+        id,
+        PixelUtil.toDIPFromPixel(contentWidth.toFloat()).toDouble(),
+        PixelUtil.toDIPFromPixel(contentHeight.toFloat()).toDouble(),
+        experimentalSynchronousEvents,
+      ),
+    )
   }
 
   private fun forceScrollToSelection() {
