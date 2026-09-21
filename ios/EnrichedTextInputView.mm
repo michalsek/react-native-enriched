@@ -1469,6 +1469,36 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   _isSettingValue = NO;
 }
 
+- (CGFloat)contentHeightForVerticalAlignment {
+  NSLayoutManager *layoutManager = textView.layoutManager;
+  NSTextContainer *textContainer = textView.textContainer;
+
+  [layoutManager ensureLayoutForTextContainer:textContainer];
+
+  NSRange laidOutGlyphs =
+      [layoutManager glyphRangeForTextContainer:textContainer];
+
+  if (NSMaxRange(laidOutGlyphs) >= layoutManager.numberOfGlyphs) {
+    return [layoutManager usedRectForTextContainer:textContainer].size.height;
+  }
+
+  NSTextStorage *measurementStorage =
+      [[NSTextStorage alloc] initWithAttributedString:textView.textStorage];
+  NSLayoutManager *measurementLayoutManager = [[NSLayoutManager alloc] init];
+  NSTextContainer *measurementContainer = [[NSTextContainer alloc]
+      initWithSize:CGSizeMake(textContainer.size.width, CGFLOAT_MAX)];
+  measurementContainer.lineFragmentPadding = textContainer.lineFragmentPadding;
+  measurementContainer.lineBreakMode = textContainer.lineBreakMode;
+  measurementLayoutManager.delegate = [LineBoxLayoutDelegate shared];
+  [measurementLayoutManager addTextContainer:measurementContainer];
+  [measurementStorage addLayoutManager:measurementLayoutManager];
+  [measurementLayoutManager ensureLayoutForTextContainer:measurementContainer];
+
+  return
+      [measurementLayoutManager usedRectForTextContainer:measurementContainer]
+          .size.height;
+}
+
 // Vertically aligns the text content within the view's fixed bounds by
 // padding the text container from the top. Doing it natively keeps the text
 // position and the text layout in the same draw pass - consumers centering
@@ -1487,10 +1517,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     return;
   }
 
-  [textView.layoutManager ensureLayoutForTextContainer:textView.textContainer];
-  CGFloat contentHeight =
-      [textView.layoutManager usedRectForTextContainer:textView.textContainer]
-          .size.height;
+  CGFloat contentHeight = [self contentHeightForVerticalAlignment];
   CGFloat freeSpace = textView.bounds.size.height - contentHeight;
   CGFloat topInset = MAX(0, isCenter ? freeSpace / 2 : freeSpace);
 
