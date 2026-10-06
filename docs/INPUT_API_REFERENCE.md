@@ -338,6 +338,27 @@ interface OnChangeStateEvent {
 |-------------------------------------------------------------|----------|
 | `(event: NativeSyntheticEvent<OnChangeStateEvent>) => void` | Both     |
 
+### `onChangeCaretRect`
+
+Callback that gets called whenever the caret's rectangle changes - when the selection moves, the text changes, or the layout shifts the text (for example vertical alignment re-centering a growing paragraph). It is only measured when the callback is set.
+
+Payload interface:
+
+```ts
+interface OnChangeCaretRectEvent {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+```
+
+The rectangle is in the input's own coordinate space and covers the caret line at the end of the selection, so it can be used to keep the caret visible above the keyboard.
+
+| Type                                                            | Platform |
+|-----------------------------------------------------------------|----------|
+| `(event: NativeSyntheticEvent<OnChangeCaretRectEvent>) => void` | Both     |
+
 ### `onChangeContentSize`
 
 Callback that gets called whenever the size the text content needs to be fully laid out changes. It is only measured when the callback is set.

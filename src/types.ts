@@ -256,6 +256,13 @@ export interface OnChangeContentSizeEvent {
   height: number;
 }
 
+export interface OnChangeCaretRectEvent {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface OnChangeStateEvent {
   bold: {
     isActive: boolean;
@@ -560,6 +567,7 @@ export interface EnrichedTextInputProps extends Omit<ViewProps, 'children'> {
   onChangeContentSize?: (
     e: NativeSyntheticEvent<OnChangeContentSizeEvent>
   ) => void;
+  onChangeCaretRect?: (e: NativeSyntheticEvent<OnChangeCaretRectEvent>) => void;
   onLinkDetected?: (e: OnLinkDetected) => void;
   onMentionDetected?: (e: OnMentionDetected) => void;
   onStartMention?: (indicator: string) => void;
