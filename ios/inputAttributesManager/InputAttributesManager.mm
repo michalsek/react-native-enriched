@@ -200,6 +200,22 @@ static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
   // getEntryIfPresent properly returns nullptr for styles that we don't want to
   // extend this way. Attributes from _removedTypingAttributes aren't added
   // because they were just removed.
+  NSString *storageString = textView.textStorage.string;
+  NSCharacterSet *newlines = [NSCharacterSet newlineCharacterSet];
+  BOOL startsNonEmptyParagraph =
+      selectedRange.location < storageString.length &&
+      ![newlines
+          characterIsMember:[storageString
+                                characterAtIndex:selectedRange.location]] &&
+      (selectedRange.location == 0 ||
+       [newlines
+           characterIsMember:[storageString
+                                 characterAtIndex:selectedRange.location - 1]]);
+  BOOL hasSourceCharacter =
+      startsNonEmptyParagraph || selectedRange.location > 0;
+  NSUInteger sourceIndex = startsNonEmptyParagraph ? selectedRange.location
+                                                   : selectedRange.location - 1;
+
   for (StyleBase *style in _input->stylesDict.allValues) {
     if ([style isParagraph])
       continue;
@@ -208,9 +224,8 @@ static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
 
     AttributeEntry *entry = nullptr;
 
-    if (selectedRange.location > 0) {
-      entry =
-          [style getEntryIfPresent:NSMakeRange(selectedRange.location - 1, 1)];
+    if (hasSourceCharacter) {
+      entry = [style getEntryIfPresent:NSMakeRange(sourceIndex, 1)];
     }
 
     if (entry == nullptr)

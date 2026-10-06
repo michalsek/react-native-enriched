@@ -2173,6 +2173,11 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
   [self handleKeyPressInRange:text range:range];
 
+  if (text.length > 0 && range.length == 0 &&
+      textView.markedTextRange == nullptr) {
+    [attributesManager manageTypingAttributesWithOnlySelection:NO];
+  }
+
   UnorderedListStyle *uStyle = stylesDict[@([UnorderedListStyle getType])];
   OrderedListStyle *oStyle = stylesDict[@([OrderedListStyle getType])];
   CheckboxListStyle *cbLStyle =
