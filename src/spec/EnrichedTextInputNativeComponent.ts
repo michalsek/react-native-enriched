@@ -32,6 +32,13 @@ export interface OnChangeContentSizeEvent {
   height: Float;
 }
 
+export interface OnChangeCaretRectEvent {
+  x: Float;
+  y: Float;
+  width: Float;
+  height: Float;
+}
+
 export interface OnChangeStateEvent {
   bold: {
     isActive: boolean;
@@ -447,6 +454,7 @@ export interface NativeProps extends ViewProps {
   onChangeHtml?: DirectEventHandler<OnChangeHtmlEvent>;
   onChangeState?: DirectEventHandler<OnChangeStateEvent>;
   onChangeContentSize?: DirectEventHandler<OnChangeContentSizeEvent>;
+  onChangeCaretRect?: DirectEventHandler<OnChangeCaretRectEvent>;
   onLinkDetected?: DirectEventHandler<OnLinkDetected>;
   onMentionDetected?: DirectEventHandler<OnMentionDetectedInternal>;
   onMention?: DirectEventHandler<OnMentionEvent>;
@@ -472,6 +480,7 @@ export interface NativeProps extends ViewProps {
   isOnChangeTextSet: boolean;
   // Used for onChangeContentSize event performance optimization
   isOnChangeContentSizeSet: boolean;
+  isOnChangeCaretRectSet: boolean;
 
   // Experimental
   androidExperimentalSynchronousEvents: boolean;

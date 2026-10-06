@@ -6,6 +6,7 @@ export type {
   OnChangeTextEvent,
   OnChangeHtmlEvent,
   OnChangeContentSizeEvent,
+  OnChangeCaretRectEvent,
   OnChangeStateEvent,
   OnLinkDetected,
   OnMentionDetected,

@@ -65,6 +65,7 @@ export const EnrichedTextInput = ({
   onChangeText,
   onChangeHtml,
   onChangeContentSize,
+  onChangeCaretRect,
   onChangeState,
   onLinkDetected,
   onMentionDetected,
@@ -386,6 +387,8 @@ export const EnrichedTextInput = ({
       onChangeState={onChangeState}
       onChangeContentSize={onChangeContentSize}
       isOnChangeContentSizeSet={onChangeContentSize !== undefined}
+      onChangeCaretRect={onChangeCaretRect}
+      isOnChangeCaretRectSet={onChangeCaretRect !== undefined}
       onLinkDetected={handleLinkDetected}
       onMentionDetected={handleMentionDetected}
       onMention={handleMentionEvent}
