@@ -611,6 +611,15 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   if (newViewProps.scrollEnabled != oldViewProps.scrollEnabled ||
       textView.scrollEnabled != newViewProps.scrollEnabled) {
     [textView setScrollEnabled:newViewProps.scrollEnabled];
+#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
+    if (@available(iOS 26, *)) {
+      BOOL hideEdgeEffects = !newViewProps.scrollEnabled;
+      textView.topEdgeEffect.hidden = hideEdgeEffects;
+      textView.bottomEdgeEffect.hidden = hideEdgeEffects;
+      textView.leftEdgeEffect.hidden = hideEdgeEffects;
+      textView.rightEdgeEffect.hidden = hideEdgeEffects;
+    }
+#endif
   }
 
   if (newViewProps.allowFontScaling != oldViewProps.allowFontScaling) {
