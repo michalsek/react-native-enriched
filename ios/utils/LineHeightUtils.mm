@@ -1,5 +1,7 @@
 #import "LineHeightUtils.h"
 
+NSString *const LineBoxHeightAttributeName = @"EnrichedLineBoxHeight";
+
 @implementation LineHeightUtils
 
 + (void)applyLineHeight:(CGFloat)lineHeight

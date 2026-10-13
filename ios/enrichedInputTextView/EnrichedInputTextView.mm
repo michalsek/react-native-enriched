@@ -31,40 +31,44 @@
     paraRange = [text paragraphRangeForRange:NSMakeRange(idx, 0)];
   }
 
-  NSUInteger styleIndex = NSNotFound;
-  if (self.textStorage.length > 0) {
-    styleIndex =
-        idx < self.textStorage.length ? idx : self.textStorage.length - 1;
+  // The caret spans the whole line fragment, and a paragraph's spacing lies in
+  // its first and last fragments around the line box (the used rect).
+  CGRect lineRect = CGRectZero;
+  CGRect usedRect = CGRectZero;
+  NSLayoutManager *layoutManager = self.layoutManager;
+  UIEdgeInsets inset = self.textContainerInset;
+  CGPoint point = CGPointMake(CGRectGetMidX(rect) - inset.left,
+                              CGRectGetMidY(rect) - inset.top);
+
+  if (layoutManager.extraLineFragmentTextContainer != nil &&
+      point.y >= CGRectGetMinY(layoutManager.extraLineFragmentRect)) {
+    lineRect = layoutManager.extraLineFragmentRect;
+    usedRect = layoutManager.extraLineFragmentUsedRect;
+  } else if (layoutManager.numberOfGlyphs > 0) {
+    NSUInteger glyphIndex =
+        [layoutManager glyphIndexForPoint:point
+                          inTextContainer:self.textContainer];
+    lineRect = [layoutManager lineFragmentRectForGlyphAtIndex:glyphIndex
+                                               effectiveRange:nil];
+    usedRect = [layoutManager lineFragmentUsedRectForGlyphAtIndex:glyphIndex
+                                                   effectiveRange:nil];
   }
 
-  NSParagraphStyle *rectPStyle = nil;
-  UIFont *font = nil;
-  if (styleIndex != NSNotFound) {
-    NSDictionary *attributes = [self.textStorage attributesAtIndex:styleIndex
-                                                    effectiveRange:nil];
-    rectPStyle = attributes[NSParagraphStyleAttributeName];
-    font = attributes[NSFontAttributeName];
+  // A side of the caret is clamped to the used rect only where the fragment
+  // holds spacing there, so a caret already inside the line box stays put.
+  CGFloat top = CGRectGetMinY(rect);
+  CGFloat bottom = CGRectGetMaxY(rect);
+
+  if (CGRectGetMinY(usedRect) > CGRectGetMinY(lineRect)) {
+    top = MAX(top, CGRectGetMinY(usedRect) + inset.top);
   }
-  if (rectPStyle == nil) {
-    rectPStyle = self.typingAttributes[NSParagraphStyleAttributeName];
-  }
-  if (font == nil) {
-    font = self.typingAttributes[NSFontAttributeName];
+  if (CGRectGetMaxY(usedRect) < CGRectGetMaxY(lineRect)) {
+    bottom = MIN(bottom, CGRectGetMaxY(usedRect) + inset.top);
   }
 
-  CGFloat textHeight = font != nil ? font.lineHeight : 0;
-  if (rectPStyle.minimumLineHeight > textHeight) {
-    textHeight = rectPStyle.minimumLineHeight;
-  }
-
-  if (rectPStyle != nil && textHeight > 0 &&
-      rect.size.height > textHeight + 1) {
-    CGFloat extraHeight = rect.size.height - textHeight;
-    CGFloat removedTop = MIN(rectPStyle.paragraphSpacingBefore, extraHeight);
-    rect.origin.y += removedTop;
-    extraHeight -= removedTop;
-    rect.size.height -=
-        removedTop + MIN(rectPStyle.paragraphSpacing, extraHeight);
+  if (usedRect.size.height > 0 && bottom > top) {
+    rect.origin.y = top;
+    rect.size.height = bottom - top;
   }
 
   // Non-empty paragraph gets its caret drawn the usual way.

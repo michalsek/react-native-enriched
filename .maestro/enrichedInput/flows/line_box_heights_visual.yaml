@@ -1,0 +1,22 @@
+appId: swmansion.enriched.example
+tags:
+    - ios-only
+---
+# Each line takes its height from its tallest span (not the paragraph's
+# first), and the first paragraph keeps its top margin. A line without a line
+# height keeps the height its fallback fonts (emoji) need. The input
+# auto-sizes, so the crop also checks the measured height.
+- launchApp
+
+- tapOn:
+    id: "toggle-screen-button"
+
+- runFlow:
+    file: "../subflows/set_editor_value.yaml"
+    env:
+      VALUE: '<html><p style="text-align: center; margin-top: 16px; margin-bottom: 16px"><span style="font-size: 24px; line-height: 31.2px; color: #000000">Small words first</span><span style="font-size: 24px; line-height: 31.2px; color: #000000"> </span><span style="font-size: 36px; line-height: 43.2px; color: #000000">Then a big span</span></p><p style="text-align: center"><span style="font-size: 36px; line-height: 43.2px; color: #000000">Big first</span><span style="font-size: 24px; line-height: 31.2px; color: #000000"> then small words wrapping onto a line of their own</span></p><p>No line height, emoji 😀🎉 keep their own height</p></html>'
+
+- runFlow:
+    file: "../subflows/capture_or_assert_screenshot.yaml"
+    env:
+      SCREENSHOT_NAME: "line_box_heights"
