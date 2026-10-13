@@ -994,12 +994,21 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       [[NSMutableAttributedString alloc] initWithAttributedString:textStorage];
 
   // edge case: empty input should still be of a height of a single line, so we
-  // add a mock "I" character
+  // add a mock "I" character. The empty input draws the extra line fragment,
+  // which TextKit gives no spacing before, so the mock line gets none either.
   if ([currentStr length] == 0) {
-    [currentStr
-        appendAttributedString:[[NSAttributedString alloc]
-                                   initWithString:@"I"
-                                       attributes:textView.typingAttributes]];
+    NSMutableDictionary *attributes = [textView.typingAttributes mutableCopy];
+    NSMutableParagraphStyle *paragraphStyle =
+        [attributes[NSParagraphStyleAttributeName] mutableCopy];
+
+    if (paragraphStyle != nil) {
+      paragraphStyle.paragraphSpacingBefore = 0;
+      attributes[NSParagraphStyleAttributeName] = paragraphStyle;
+    }
+
+    [currentStr appendAttributedString:[[NSAttributedString alloc]
+                                           initWithString:@"I"
+                                               attributes:attributes]];
   }
 
   // edge case: input with only a zero width space should still be of a height
@@ -1552,7 +1561,8 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       [layoutManager glyphRangeForTextContainer:textContainer];
 
   if (NSMaxRange(laidOutGlyphs) >= layoutManager.numberOfGlyphs) {
-    return [layoutManager usedRectForTextContainer:textContainer].size.height;
+    return CGRectGetMaxY(
+        [layoutManager usedRectForTextContainer:textContainer]);
   }
 
   return [LineBoxLayoutDelegate

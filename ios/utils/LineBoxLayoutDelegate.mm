@@ -35,7 +35,8 @@ static const CGFloat kNonTextLineSlack = 1.0;
   [storage addLayoutManager:layoutManager];
   [layoutManager ensureLayoutForTextContainer:container];
 
-  return [layoutManager usedRectForTextContainer:container].size.height;
+  // The used rect starts below the first paragraph's top margin.
+  return CGRectGetMaxY([layoutManager usedRectForTextContainer:container]);
 }
 
 // The paragraph mark keeps the view's default font (14pt system) because the
@@ -182,10 +183,22 @@ static const CGFloat kNonTextLineSlack = 1.0;
 
   // TextKit puts a paragraph's spacing inside the fragment of its first and
   // last line, around the used rect.
-  CGFloat spacingBefore = MAX(0, CGRectGetMinY(*lineFragmentUsedRect) -
-                                     CGRectGetMinY(*lineFragmentRect));
+  CGFloat proposedSpacingBefore = MAX(0, CGRectGetMinY(*lineFragmentUsedRect) -
+                                             CGRectGetMinY(*lineFragmentRect));
   CGFloat spacingAfter = MAX(0, CGRectGetMaxY(*lineFragmentRect) -
                                     CGRectGetMaxY(*lineFragmentUsedRect));
+  CGFloat spacingBefore = proposedSpacingBefore;
+
+  // TextKit drops the spacing before the first paragraph, while CSS keeps the
+  // first block's top margin.
+  if (charRange.location == 0) {
+    NSParagraphStyle *paragraphStyle =
+        [textStorage attribute:NSParagraphStyleAttributeName
+                       atIndex:0
+                effectiveRange:NULL];
+    spacingBefore = MAX(spacingBefore, paragraphStyle.paragraphSpacingBefore);
+  }
+
   CGFloat height = above + below;
   CGFloat proposedHeight = lineFragmentUsedRect->size.height;
 
@@ -194,6 +207,10 @@ static const CGFloat kNonTextLineSlack = 1.0;
   // never makes it shorter.
   if (hasAttachment || !explicitLineHeight) {
     if (proposedHeight - height > kNonTextLineSlack) {
+      CGFloat addedSpacing = spacingBefore - proposedSpacingBefore;
+      lineFragmentRect->size.height += addedSpacing;
+      lineFragmentUsedRect->origin.y += addedSpacing;
+      *baselineOffset += addedSpacing;
       return YES;
     }
     height = MAX(height, proposedHeight);

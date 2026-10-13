@@ -64,6 +64,15 @@ rect. The delegate reads them back as the gaps between the proposed fragment
 and used rects and keeps them around the line box it computes, so lines with a
 margin get the same CSS baseline as every other line.
 
+TextKit drops `paragraphSpacingBefore` for the first paragraph of the text,
+while CSS keeps the first block's `margin-top`. The delegate adds it back to the
+text's first line fragment (above the used rect, with the baseline moved down by
+the same amount). The used rect of the container then starts below that margin,
+so heights are measured to its `maxY` rather than its height. The extra line
+fragment of an empty text never reaches the delegate, so an empty input draws
+no top margin, and the mock line its height is measured with carries none
+either.
+
 ### A span's line height is a run attribute
 
 `LineHeightStyle` writes a span's line height into the paragraph style of the
