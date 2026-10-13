@@ -1,0 +1,45 @@
+appId: swmansion.enriched.example
+---
+# A typed trailing empty line must be part of the emitted html.
+- launchApp
+
+- tapOn:
+    id: "toggle-screen-button"
+
+- tapOn:
+    id: "editor-input"
+- inputText: "A"
+- pressKey: Enter
+
+- tapOn:
+    id: "blur-button"
+
+- scrollUntilVisible:
+    element:
+      id: "html-output"
+    direction: DOWN
+
+- assertVisible:
+    id: "html-output"
+    text: "<html><p>A</p><br></html>"
+
+- scrollUntilVisible:
+    element:
+      id: "editor-input"
+    direction: UP
+
+- tapOn:
+    id: "focus-button"
+- pressKey: Enter
+
+- tapOn:
+    id: "blur-button"
+
+- scrollUntilVisible:
+    element:
+      id: "html-output"
+    direction: DOWN
+
+- assertVisible:
+    id: "html-output"
+    text: "<html><p>A</p><br><br></html>"

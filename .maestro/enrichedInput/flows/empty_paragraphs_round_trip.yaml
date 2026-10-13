@@ -1,0 +1,100 @@
+appId: swmansion.enriched.example
+---
+# Empty paragraphs must survive a setValue -> onChangeHtml round trip:
+# no lost lines (iOS <br><br> collapse, trailing empty lines) and no lost
+# paragraph / text styles on an empty paragraph.
+- launchApp
+
+- tapOn:
+    id: "toggle-screen-button"
+
+# 1 interior empty line(s)
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><p>A</p><br><p>B</p></html>'
+      EXPECTED: '<html><p>A</p><br><p>B</p></html>'
+
+# 2 interior empty line(s)
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><p>A</p><br><br><p>B</p></html>'
+      EXPECTED: '<html><p>A</p><br><br><p>B</p></html>'
+
+# 3 interior empty line(s)
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><p>A</p><br><br><br><p>B</p></html>'
+      EXPECTED: '<html><p>A</p><br><br><br><p>B</p></html>'
+
+# 1 leading empty line(s)
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><br><p>A</p></html>'
+      EXPECTED: '<html><br><p>A</p></html>'
+
+# 2 leading empty line(s)
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><br><br><p>A</p></html>'
+      EXPECTED: '<html><br><br><p>A</p></html>'
+
+# 1 trailing empty line(s)
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><p>A</p><br></html>'
+      EXPECTED: '<html><p>A</p><br></html>'
+
+# 2 trailing empty line(s)
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><p>A</p><br><br></html>'
+      EXPECTED: '<html><p>A</p><br><br></html>'
+
+# document made only of empty lines
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><br><br><br></html>'
+      EXPECTED: '<html><br><br><br></html>'
+
+# interior empty lines between styled paragraphs
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><p style="text-align: center">A</p><br><br><p style="text-align: center">B</p></html>'
+      EXPECTED: '<html><p style="text-align: center">A</p><br><br><p style="text-align: center">B</p></html>'
+
+# styled interior empty paragraph
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><p>A</p><p style="text-align: right; margin-top: 8px"><span style="font-size: 30px; color: #FF0000"><br></span></p><p>B</p></html>'
+      EXPECTED: '<html><p>A</p><p style="text-align: right; margin-top: 8px"><span style="font-size: 30px; color: #FF0000"><br></span></p><p>B</p></html>'
+
+# styled trailing empty paragraph
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><p>A</p><p style="text-align: right"><span style="font-size: 30px; color: #FF0000"><br></span></p></html>'
+      EXPECTED: '<html><p>A</p><p style="text-align: right"><span style="font-size: 30px; color: #FF0000"><br></span></p></html>'
+
+# text-styled trailing empty paragraph
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><p>A</p><p><span style="font-size: 30px"><br></span></p></html>'
+      EXPECTED: '<html><p>A</p><p><span style="font-size: 30px"><br></span></p></html>'
+
+# document made only of a styled empty paragraph
+- runFlow:
+    file: "../subflows/assert_html_round_trip.yaml"
+    env:
+      VALUE: '<html><p style="text-align: center"><span style="font-size: 30px"><br></span></p></html>'
+      EXPECTED: '<html><p style="text-align: center"><span style="font-size: 30px"><br></span></p></html>'

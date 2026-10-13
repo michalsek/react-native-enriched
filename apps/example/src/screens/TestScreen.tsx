@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, Text } from 'react-native';
 import { EnrichedTextInput } from 'react-native-enriched';
 import { Button } from '../components/Button';
 import { Toolbar } from '../components/Toolbar';
@@ -128,6 +128,14 @@ export function TestScreen({
             testID="toggle-enriched-text-screen-button"
           />
         </View>
+        <Text style={styles.debugOutput} testID="html-output">
+          {editor.currentHtml.replace(/\n/g, '')}
+        </Text>
+        <Text style={styles.debugOutput} testID="selection-output">
+          {editor.selection
+            ? `${editor.selection.start}:${editor.selection.end}`
+            : ''}
+        </Text>
       </ScrollView>
       <LinkModal
         avoidKeyboard
@@ -212,5 +220,10 @@ const styles = StyleSheet.create({
   },
   editorInputMax: {
     maxHeight: 400,
+  },
+  debugOutput: {
+    width: '100%',
+    fontSize: 10,
+    color: 'dimgray',
   },
 });
