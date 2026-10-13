@@ -52,6 +52,8 @@ static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
         typedInput->textView.typingAttributes[NSParagraphStyleAttributeName];
     NSTextAlignment savedAlignment =
         currentParaStyle ? currentParaStyle.alignment : NSTextAlignmentNatural;
+    NSDictionary *savedTextStyles =
+        [typedInput->attributesManager textStyleValuesAt:range.location];
 
     // for styles that need ZWS (lists, quotes, etc.) we do the following:
     // - manually do the removing
@@ -93,10 +95,54 @@ static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
                                host:typedInput
                       withSelection:YES];
     [self resetTypingAttributes:typedInput preservingAlignment:savedAlignment];
+    [self restoreTextStyles:savedTextStyles
+         onEmptyParagraphAt:range.location
+                      input:typedInput];
     return YES;
   }
 
   return NO;
+}
+
+// The emptied paragraph keeps the text styles of its removed content: they go
+// to its newline (or the stored trailing paragraph) and the typing attributes.
++ (void)restoreTextStyles:(NSDictionary *)textStyles
+       onEmptyParagraphAt:(NSUInteger)location
+                    input:(EnrichedTextInputView *)input {
+  if (textStyles.count == 0) {
+    return;
+  }
+
+  NSString *string = input->textView.textStorage.string;
+  NSCharacterSet *newlines = [NSCharacterSet newlineCharacterSet];
+  BOOL hasNewline = location < string.length &&
+                    [newlines
+                        characterIsMember:[string characterAtIndex:location]];
+  BOOL isEmptyParagraph =
+      (hasNewline || location == string.length) &&
+      (location == 0 ||
+       [newlines characterIsMember:[string characterAtIndex:location - 1]]);
+  if (!isEmptyParagraph) {
+    return;
+  }
+
+  for (NSNumber *type in input->stylesDict) {
+    StyleBase *style = input->stylesDict[type];
+    NSString *value = textStyles[[style getKey]];
+    if (value == nullptr) {
+      continue;
+    }
+    if (hasNewline) {
+      [style add:NSMakeRange(location, 1)
+               withValue:value
+              withTyping:YES
+          withDirtyRange:YES];
+    } else {
+      [style addTypingWithValue:value];
+    }
+  }
+
+  [input->attributesManager storeTrailingParagraphAttributesIfNeeded];
 }
 
 /**

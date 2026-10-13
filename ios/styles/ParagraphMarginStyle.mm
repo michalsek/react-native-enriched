@@ -4,8 +4,6 @@ static NSString *const ParagraphMarginTopKey = @"top";
 static NSString *const ParagraphMarginBottomKey = @"bottom";
 
 @interface ParagraphMarginStyle ()
-+ (NSString *)valueWithMarginTop:(NSNumber *)marginTop
-                    marginBottom:(NSNumber *)marginBottom;
 + (NSDictionary<NSString *, NSNumber *> *)marginsFromValue:(NSString *)value;
 @end
 

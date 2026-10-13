@@ -22,6 +22,9 @@ class EnrichedTextWatcher(
     after: Int,
   ) {
     previousTextLength = s?.length ?: 0
+    if (s != null && !view.isDuringTransaction) {
+      view.textStyles?.beforeTextChanged(s, start, count, after)
+    }
   }
 
   override fun onTextChanged(

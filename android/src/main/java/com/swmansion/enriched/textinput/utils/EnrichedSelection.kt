@@ -14,6 +14,7 @@ import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputLinkSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputMentionSpan
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
+import com.swmansion.enriched.textinput.spans.interfaces.EnrichedInputValueSpan
 import org.json.JSONObject
 
 class EnrichedSelection(
@@ -104,7 +105,11 @@ class EnrichedSelection(
       }
 
       for ((style, config) in EnrichedSpans.textStyleSpans) {
-        state.setStart(style, getInlineStyleStart(config.clazz))
+        val styleStart =
+          getInlineStyleStart(config.clazz)
+            ?: getEmptyParagraphStyleStart(style, config.clazz)
+            ?: view.textStyles?.getPendingStart(style)
+        state.setStart(style, styleStart)
       }
     } else {
       view.isRemovingMany = false
@@ -164,6 +169,27 @@ class EnrichedSelection(
     }
 
     return styleStart
+  }
+
+  // An empty paragraph keeps its text styles on its newline, right after the
+  // caret, so the caret position is not inside of their spans.
+  private fun <T> getEmptyParagraphStyleStart(
+    name: String,
+    type: Class<T>,
+  ): Int? {
+    val (start, end) = getInlineSelection()
+    val text = view.text ?: return null
+    if (start != end || start >= text.length || text[start] != '\n') return null
+    if (start > 0 && text[start - 1] != '\n') return null
+
+    for (span in text.getSpans(start, start + 1, type)) {
+      if (text.getSpanStart(span) > start || text.getSpanEnd(span) <= start) continue
+      val valueSpan = span as? EnrichedInputValueSpan ?: continue
+      view.textStyles?.setPendingValue(name, valueSpan.styleValue, start)
+      return start
+    }
+
+    return null
   }
 
   fun getParagraphSelection(): Pair<Int, Int> {
