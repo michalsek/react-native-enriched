@@ -49,8 +49,41 @@ the one hook that can place a baseline inside a fragment, and
 attribute, since a per-run offset would stack on top of the delegate's baseline
 and shift runs against each other rather than moving the line's shared one.
 
-A line that is taller than its text (an inline attachment) keeps TextKit's
-geometry: the delegate only ever grows a fragment, never shrinks one.
+A line holding an inline attachment that is taller than its text keeps
+TextKit's geometry; on such a line the delegate only ever grows a fragment. So
+does a line where no run has an explicit line height (neither
+`LineBoxHeightAttributeName` nor a minimum/maximum line height): its box comes
+from the attributed font alone, while TextKit's proposal also covers the
+fallback fonts (emoji, CJK, Thai, Devanagari) the line draws with. A text-only
+line with an explicit line height is set to exactly its line box, growing or
+shrinking.
+
+Paragraph margins (`paragraphSpacingBefore` / `paragraphSpacing`) are folded by
+TextKit into the fragment of a paragraph's first and last line, around the used
+rect. The delegate reads them back as the gaps between the proposed fragment
+and used rects and keeps them around the line box it computes, so lines with a
+margin get the same CSS baseline as every other line.
+
+### A span's line height is a run attribute
+
+`LineHeightStyle` writes a span's line height into the paragraph style of the
+span's range, but TextKit keeps one paragraph style per paragraph — the first
+character's (`fixAttributesInRange:` → `fixParagraphStyleAttributeInRange:`, run
+lazily before layout). Every later span of the paragraph loses its own value, so
+a 24px span at `line-height: 31.2px` followed by a 36px span at `43.2px` laid
+every line out at 31.2.
+
+The style therefore also stores the resolved (font-scaled) value per run under
+`LineBoxHeightAttributeName` (`EnrichedLineBoxHeight`), on text and in the
+typing attributes, and the delegate prefers it over the paragraph style. The
+paragraph style keeps its min/max line height: it is what TextKit proposes, what
+the extra line fragment of a trailing empty paragraph is sized from, and the
+fallback for runs without a span line height (the paragraph's first span's value,
+or the view's `lineHeight`).
+
+The views measure their content with the same delegate
+(`usedHeightOfAttributedString:` in `LineBoxLayoutDelegate`), so the reported
+height matches the drawn line boxes.
 
 ### The paragraph mark is not a span
 
@@ -116,11 +149,3 @@ sub-dp residual on fonts that fit their line box, deliberately preserved so
 those renders do not move. Switching the delegate to
 `font.ascender - font.descender` would remove it — one line, but it moves every
 render, so it wants its own parity run.
-
-A paragraph with a bottom margin sets `paragraphSpacing`, which TextKit folds
-into the line fragment rect of that paragraph's last line. The delegate reads
-the taller proposal as an attachment-driven line and returns early, so that one
-line keeps TextKit's placement — right while `F <= L`, `(F - L)/2` too high
-otherwise. Subtracting `paragraphSpacing` and `paragraphSpacingBefore` from
-`proposedHeight` before the attachment check fixes it; it moves margin-offset
-renders, so it also wants its own parity run.

@@ -967,10 +967,31 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
 // MARK: - Measuring and states
 
+// Empty text, a lone zero width space and a trailing break leave the last line
+// without a glyph of the input's font, so they are measured with a mock "I".
+- (BOOL)needsMockLineToMeasure:(NSString *)string {
+  if (string.length == 0 || [string isEqualToString:@"\u200B"]) {
+    return YES;
+  }
+
+  unichar lastChar = [string characterAtIndex:string.length - 1];
+
+  return [[NSCharacterSet newlineCharacterSet] characterIsMember:lastChar];
+}
+
 - (CGSize)measureSize:(CGFloat)maxWidth {
+  NSTextStorage *textStorage = textView.textStorage;
+
+  // The text view's own layout already holds the line boxes at this width.
+  if (maxWidth == textView.textContainer.size.width &&
+      textStorage.editedMask == 0 &&
+      ![self needsMockLineToMeasure:textStorage.string]) {
+    return CGSizeMake(maxWidth, ceil([self laidOutContentHeight]));
+  }
+
   // copy the the whole attributed string
-  NSMutableAttributedString *currentStr = [[NSMutableAttributedString alloc]
-      initWithAttributedString:textView.textStorage];
+  NSMutableAttributedString *currentStr =
+      [[NSMutableAttributedString alloc] initWithAttributedString:textStorage];
 
   // edge case: empty input should still be of a height of a single line, so we
   // add a mock "I" character
@@ -1005,13 +1026,14 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     }
   }
 
-  CGRect boundingBox =
-      [currentStr boundingRectWithSize:CGSizeMake(maxWidth, CGFLOAT_MAX)
-                               options:NSStringDrawingUsesLineFragmentOrigin |
-                                       NSStringDrawingUsesFontLeading
-                               context:nullptr];
+  // Laid out like the text view, so the line boxes drawn are the ones measured.
+  CGFloat height = [LineBoxLayoutDelegate
+      usedHeightOfAttributedString:currentStr
+                             width:maxWidth
+              maximumNumberOfLines:0
+                     lineBreakMode:textView.textContainer.lineBreakMode];
 
-  return CGSizeMake(maxWidth, ceil(boundingBox.size.height));
+  return CGSizeMake(maxWidth, ceil(height));
 }
 
 // make sure the newest state is kept in _state property
@@ -1520,7 +1542,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   _isSettingValue = NO;
 }
 
-- (CGFloat)contentHeightForVerticalAlignment {
+- (CGFloat)laidOutContentHeight {
   NSLayoutManager *layoutManager = textView.layoutManager;
   NSTextContainer *textContainer = textView.textContainer;
 
@@ -1533,21 +1555,11 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     return [layoutManager usedRectForTextContainer:textContainer].size.height;
   }
 
-  NSTextStorage *measurementStorage =
-      [[NSTextStorage alloc] initWithAttributedString:textView.textStorage];
-  NSLayoutManager *measurementLayoutManager = [[NSLayoutManager alloc] init];
-  NSTextContainer *measurementContainer = [[NSTextContainer alloc]
-      initWithSize:CGSizeMake(textContainer.size.width, CGFLOAT_MAX)];
-  measurementContainer.lineFragmentPadding = textContainer.lineFragmentPadding;
-  measurementContainer.lineBreakMode = textContainer.lineBreakMode;
-  measurementLayoutManager.delegate = [LineBoxLayoutDelegate shared];
-  [measurementLayoutManager addTextContainer:measurementContainer];
-  [measurementStorage addLayoutManager:measurementLayoutManager];
-  [measurementLayoutManager ensureLayoutForTextContainer:measurementContainer];
-
-  return
-      [measurementLayoutManager usedRectForTextContainer:measurementContainer]
-          .size.height;
+  return [LineBoxLayoutDelegate
+      usedHeightOfAttributedString:textView.textStorage
+                             width:textContainer.size.width
+              maximumNumberOfLines:0
+                     lineBreakMode:textContainer.lineBreakMode];
 }
 
 // Vertically aligns the text content within the view's fixed bounds by
@@ -1566,12 +1578,12 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       textView.textContainerInset = insets;
     }
     if (_emitContentSize) {
-      [self tryEmittingContentSize:[self contentHeightForVerticalAlignment]];
+      [self tryEmittingContentSize:[self laidOutContentHeight]];
     }
     return;
   }
 
-  CGFloat contentHeight = [self contentHeightForVerticalAlignment];
+  CGFloat contentHeight = [self laidOutContentHeight];
   if (_emitContentSize) {
     [self tryEmittingContentSize:contentHeight];
   }

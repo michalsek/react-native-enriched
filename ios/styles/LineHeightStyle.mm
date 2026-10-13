@@ -40,6 +40,9 @@
                            value:pStyle
                            range:subRange];
               }];
+  [self.host.textView.textStorage addAttribute:LineBoxHeightAttributeName
+                                         value:@(lineHeight)
+                                         range:range];
   [LineHeightUtils
       applyBaselineOffsetsInTextStorage:self.host.textView.textStorage
                                   range:range];
@@ -62,6 +65,7 @@
   }
   [LineHeightUtils applyLineHeight:lineHeight toParagraphStyle:pStyle];
   attributes[NSParagraphStyleAttributeName] = pStyle;
+  attributes[LineBoxHeightAttributeName] = @(lineHeight);
   [LineHeightUtils applyBaselineOffsetToAttributes:attributes];
 }
 

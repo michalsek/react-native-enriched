@@ -7,4 +7,11 @@
 
 + (instancetype)shared;
 
+// Height of the string laid out the way the text views lay it out, so a
+// measurement matches what they draw.
++ (CGFloat)usedHeightOfAttributedString:(NSAttributedString *)string
+                                  width:(CGFloat)width
+                   maximumNumberOfLines:(NSUInteger)maximumNumberOfLines
+                          lineBreakMode:(NSLineBreakMode)lineBreakMode;
+
 @end
