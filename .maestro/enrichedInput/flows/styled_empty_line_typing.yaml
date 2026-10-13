@@ -1,0 +1,62 @@
+appId: swmansion.enriched.example
+---
+# Text typed on a styled empty line (interior or last) gets the line's own
+# styles, without any styles being set at the caret first.
+- launchApp
+
+- tapOn:
+    id: "toggle-screen-button"
+
+- tapOn:
+    id: "editor-input"
+- inputText: "A"
+- pressKey: Enter
+
+# the caret (2) stays on the empty interior line through setValue
+- runFlow:
+    file: "../subflows/set_editor_value.yaml"
+    env:
+      VALUE: '<html><p>A</p><p><span style="font-size: 30px"><br></span></p><p>C</p></html>'
+
+- tapOn:
+    id: "focus-button"
+- inputText: "B"
+
+- tapOn:
+    id: "blur-button"
+
+- scrollUntilVisible:
+    element:
+      id: "html-output"
+    direction: DOWN
+
+- assertVisible:
+    id: "html-output"
+    text: '<html><p>A</p><p><span style="font-size: 30px">B</span></p><p>C</p></html>'
+
+# the caret (3) is clamped to the end, onto the empty last line
+- scrollUntilVisible:
+    element:
+      id: "set-value-button"
+    direction: UP
+
+- runFlow:
+    file: "../subflows/set_editor_value.yaml"
+    env:
+      VALUE: '<html><p>A</p><p><span style="font-size: 30px"><br></span></p></html>'
+
+- tapOn:
+    id: "focus-button"
+- inputText: "D"
+
+- tapOn:
+    id: "blur-button"
+
+- scrollUntilVisible:
+    element:
+      id: "html-output"
+    direction: DOWN
+
+- assertVisible:
+    id: "html-output"
+    text: '<html><p>A</p><p><span style="font-size: 30px">D</span></p></html>'

@@ -1,0 +1,25 @@
+appId: swmansion.enriched.example
+---
+# Sets VALUE (single-line html) and asserts the html emitted back by the
+# editor (newlines stripped, see TestScreen "html-output") equals EXPECTED.
+- scrollUntilVisible:
+    element:
+      id: "set-value-button"
+    direction: UP
+
+- runFlow:
+    file: "set_editor_value.yaml"
+    env:
+      VALUE: ${VALUE}
+
+- tapOn:
+    id: "blur-button"
+
+- scrollUntilVisible:
+    element:
+      id: "html-output"
+    direction: DOWN
+
+- assertVisible:
+    id: "html-output"
+    text: ${EXPECTED}

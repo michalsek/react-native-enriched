@@ -4,6 +4,19 @@
 
 @implementation TextStyleBase
 
++ (NSArray<NSNumber *> *)textStyleTypes {
+  static NSArray<NSNumber *> *types;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    types = @[
+      @([FontFamilyStyle getType]), @([FontSizeStyle getType]),
+      @([LetterSpacingStyle getType]), @([LineHeightStyle getType]),
+      @([ForegroundColorStyle getType])
+    ];
+  });
+  return types;
+}
+
 - (BOOL)isParagraph {
   return NO;
 }

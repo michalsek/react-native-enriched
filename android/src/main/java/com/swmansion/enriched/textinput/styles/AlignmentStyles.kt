@@ -23,6 +23,9 @@ class AlignmentStyles(
     var redrawStart = 0
     var redrawEnd = 0
 
+    // The values the caret is typing with, for an empty paragraph without own text styles.
+    val typingValues = if (selection.start == selection.end) view.textStyles?.getActiveValues().orEmpty() else emptyMap()
+
     view.runAsATransaction {
       val (selectionStart, selectionEnd) = selection.getParagraphSelection()
       // Mirrors iOS: when the selection touches a list, the alignment is
@@ -49,6 +52,7 @@ class AlignmentStyles(
           spanEnd = pStart + 1
           end += 1
           redrawEnd = end
+          view.textStyles?.extendValuesOverAnchor(spannable, pStart, typingValues)
         }
 
         setAlignmentSpan(spannable, pStart, spanEnd, EnrichedInputAlignmentSpan(alignment, view.htmlStyle))

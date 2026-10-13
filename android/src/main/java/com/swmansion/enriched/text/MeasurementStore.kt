@@ -20,6 +20,7 @@ import com.facebook.yoga.YogaMeasureMode
 import com.facebook.yoga.YogaMeasureOutput
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.allowFontScalingFromProps
+import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.text.spans.EnrichedTextDefaultLineHeightSpan
@@ -118,7 +119,7 @@ object MeasurementStore {
         EnrichedTextStyle.fromReadableMap(context as ReactContext, fontSize, style, allowFontScaling)
       val factory = EnrichedTextSpanFactory()
       val parsed = EnrichedParser.fromHtml(text, enrichedStyle, factory)
-      return parsed.trimEnd('\n')
+      return dropFinalParagraphTerminator(parsed)
     } catch (e: Exception) {
       Log.w("MeasurementStore", "Error parsing initial HTML text: ${e.message}")
       return text

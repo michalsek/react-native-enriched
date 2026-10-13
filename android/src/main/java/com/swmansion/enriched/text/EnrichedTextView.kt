@@ -24,6 +24,7 @@ import com.facebook.react.views.text.ReactTypefaceUtils.parseFontStyle
 import com.facebook.react.views.text.ReactTypefaceUtils.parseFontWeight
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.GumboNormalizer
+import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.text.spans.EnrichedTextDefaultLineHeightSpan
@@ -215,7 +216,7 @@ class EnrichedTextView : AppCompatTextView {
     if (isInternalHtml) {
       try {
         val parsed = EnrichedParser.fromHtml(text, style, spannableFactory)
-        return parsed.trimEnd('\n')
+        return dropFinalParagraphTerminator(parsed)
       } catch (e: Exception) {
         Log.e(TAG, "Error parsing HTML: ${e.message}")
         return normalizeHtmlIfNeeded(text, style)

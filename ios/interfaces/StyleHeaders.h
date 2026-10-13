@@ -99,6 +99,8 @@
 @end
 
 @interface ParagraphMarginStyle : StyleBase
++ (NSString *)valueWithMarginTop:(NSNumber *)marginTop
+                    marginBottom:(NSNumber *)marginBottom;
 - (void)addMarginTop:(NSNumber *)marginTop
         marginBottom:(NSNumber *)marginBottom
                range:(NSRange)range
@@ -125,6 +127,9 @@
 // spacing, line height). The style value (always kept as a string) is stored
 // as the custom attribute's value.
 @interface TextStyleBase : StyleBase
+// Style types of all inline text styles, in their canonical (typing styling
+// and html output) order.
++ (NSArray<NSNumber *> *)textStyleTypes;
 // Applies the value to the range (or to the typing attributes when the range
 // is empty). Passing nullptr removes the style.
 - (void)setValue:(NSString *)value range:(NSRange)range;

@@ -1,0 +1,42 @@
+appId: swmansion.enriched.example
+---
+# onChangeSelection reports indexes in the zero-width-space-free text that
+# onChangeText emits, so an empty list item (backed by a ZWS) is not counted.
+- launchApp
+
+- tapOn:
+    id: "toggle-screen-button"
+
+- tapOn:
+    id: "editor-input"
+- inputText: "AB"
+- pressKey: Enter
+- tapOn:
+    id: "toolbar-unordered-list"
+
+- scrollUntilVisible:
+    element:
+      id: "selection-output"
+    direction: DOWN
+
+- assertVisible:
+    id: "selection-output"
+    text: "3:3"
+
+- scrollUntilVisible:
+    element:
+      id: "editor-input"
+    direction: UP
+
+- tapOn:
+    id: "focus-button"
+- inputText: "C"
+
+- scrollUntilVisible:
+    element:
+      id: "selection-output"
+    direction: DOWN
+
+- assertVisible:
+    id: "selection-output"
+    text: "4:4"

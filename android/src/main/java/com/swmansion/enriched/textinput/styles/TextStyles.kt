@@ -2,6 +2,7 @@ package com.swmansion.enriched.textinput.styles
 
 import android.text.Editable
 import android.text.Spannable
+import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.spans.EnrichedInputFontFamilySpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputFontSizeSpan
@@ -10,6 +11,7 @@ import com.swmansion.enriched.textinput.spans.EnrichedInputLetterSpacingSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputLineHeightSpan
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
 import com.swmansion.enriched.textinput.spans.interfaces.EnrichedInputValueSpan
+import com.swmansion.enriched.textinput.utils.getParagraphBounds
 import com.swmansion.enriched.textinput.utils.getSafeSpanBoundaries
 
 /**
@@ -29,6 +31,9 @@ class TextStyles(
   private val pendingValues = mutableMapOf<String, Any>()
   private var pendingPosition: Int? = null
 
+  // Text styles of a paragraph's whole content that is being deleted.
+  private var deletedParagraphValues: Map<String, Any>? = null
+
   fun setStyleValue(
     name: String,
     value: Any?,
@@ -38,10 +43,16 @@ class TextStyles(
     val spannable = view.text as? Spannable ?: return
     val (start, end) = selection.getInlineSelection()
 
-    if (start == end && collapsedSelectionMode == "paragraph") {
-      val paragraphStart = spannable.lastIndexOf('\n', (start - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
-      val paragraphEnd = spannable.indexOf('\n', start).let { if (it < 0) spannable.length else it }
-      if (paragraphStart < paragraphEnd) {
+    if (start == end) {
+      val (paragraphStart, paragraphEnd) = spannable.getParagraphBounds(start)
+      // Text typed into an empty paragraph is its whole content, so the style
+      // goes to the paragraph itself in either mode.
+      if (isEmptyParagraph(spannable, paragraphStart, paragraphEnd)) {
+        if (setEmptyParagraphValue(spannable, name, value, paragraphStart, paragraphEnd)) {
+          selection.validateStyles()
+          return
+        }
+      } else if (collapsedSelectionMode == "paragraph") {
         applyValueSpan(spannable, name, paragraphStart, paragraphEnd, value)
         selection.validateStyles()
         return
@@ -63,6 +74,129 @@ class TextStyles(
 
     applyValueSpan(spannable, name, start, end, value)
     selection.validateStyles()
+  }
+
+  /**
+   * Stores the value on an empty paragraph. The paragraph gets a zero-width
+   * space to anchor its spans on, which also cover its newline. A paragraph
+   * without text styles of its own first takes the ones it is typing with
+   * (e.g. inherited after Enter), so the styles accumulate.
+   * Returns false when there is nothing to store (removing from an unanchored
+   * paragraph).
+   */
+  private fun setEmptyParagraphValue(
+    spannable: Spannable,
+    name: String,
+    value: Any?,
+    paragraphStart: Int,
+    paragraphEnd: Int,
+  ): Boolean {
+    var contentEnd = paragraphEnd
+    val ownValues = getParagraphValues(spannable, paragraphStart, includeNewline(spannable, paragraphEnd))
+    val seedValues = if (ownValues.isEmpty()) getActiveValues() else ownValues
+
+    if (paragraphStart == paragraphEnd) {
+      if (value == null) {
+        if (paragraphEnd < spannable.length) {
+          applyValueSpan(spannable, name, paragraphStart, paragraphStart + 1, null)
+        }
+        return false
+      }
+
+      val editable = spannable as? Editable ?: return false
+      editable.insert(paragraphStart, EnrichedConstants.ZWS_STRING)
+      contentEnd = paragraphStart + 1
+      if (view.selectionStart == paragraphStart && view.selectionEnd == paragraphStart) {
+        view.setSelection(contentEnd)
+      }
+    }
+
+    val styledEnd = includeNewline(spannable, contentEnd)
+    for ((style, seedValue) in seedValues) {
+      if (style != name) {
+        applyValueSpan(spannable, style, paragraphStart, styledEnd, seedValue)
+      }
+    }
+    applyValueSpan(spannable, name, paragraphStart, styledEnd, value)
+    return true
+  }
+
+  private fun isEmptyParagraph(
+    text: CharSequence,
+    paragraphStart: Int,
+    paragraphEnd: Int,
+  ): Boolean = (paragraphStart until paragraphEnd).all { text[it] == EnrichedConstants.ZWS }
+
+  private fun includeNewline(
+    text: CharSequence,
+    position: Int,
+  ): Int = if (position < text.length && text[position] == '\n') position + 1 else position
+
+  private fun getParagraphValues(
+    spannable: Spannable,
+    start: Int,
+    end: Int,
+  ): Map<String, Any> {
+    val values = mutableMapOf<String, Any>()
+    if (start >= end) return values
+
+    for ((style, config) in EnrichedSpans.textStyleSpans) {
+      for (span in spannable.getSpans(start, end, config.clazz)) {
+        val valueSpan = span as? EnrichedInputValueSpan ?: continue
+        values[style] = valueSpan.styleValue
+        break
+      }
+    }
+    return values
+  }
+
+  /**
+   * A zero-width space was inserted at the position to anchor an empty
+   * paragraph. The paragraph's text styles kept on its newline (or the given
+   * ones, when it has none) cover the anchor too.
+   */
+  fun extendValuesOverAnchor(
+    spannable: Spannable,
+    anchor: Int,
+    fallbackValues: Map<String, Any>,
+  ) {
+    val styledEnd = includeNewline(spannable, anchor + 1)
+    val ownValues = getParagraphValues(spannable, anchor, styledEnd)
+    for ((style, value) in ownValues.ifEmpty { fallbackValues }) {
+      applyValueSpan(spannable, style, anchor, styledEnd, value)
+    }
+  }
+
+  fun getActiveValues(): Map<String, Any> {
+    val values = mutableMapOf<String, Any>()
+    for (style in EnrichedSpans.textStyleSpans.keys) {
+      getActiveValue(style)?.let { values[style] = it }
+    }
+    return values
+  }
+
+  /**
+   * Makes the value active at the caret position, so the text typed next gets
+   * it. Used for an empty paragraph whose styles are kept on its newline.
+   */
+  fun setPendingValue(
+    name: String,
+    value: Any,
+    position: Int,
+  ) {
+    if (pendingPosition != position) {
+      pendingValues.clear()
+    }
+    pendingValues[name] = value
+    pendingPosition = position
+  }
+
+  // The style start of a value started at the caret, kept until the caret moves.
+  fun getPendingStart(name: String): Int? {
+    val position = pendingPosition ?: return null
+    val selection = view.selection ?: return null
+    if (selection.start != position || selection.end != position || !pendingValues.containsKey(name)) return null
+    return position
   }
 
   /**
@@ -122,11 +256,48 @@ class TextStyles(
     }
   }
 
+  fun beforeTextChanged(
+    s: CharSequence,
+    start: Int,
+    count: Int,
+    after: Int,
+  ) {
+    deletedParagraphValues = null
+    val spanned = s as? Spannable ?: return
+    val end = start + count
+    if (count == 0 || after != 0 || end > s.length) return
+
+    val isWholeParagraph = (start == 0 || s[start - 1] == '\n') && (end == s.length || s[end] == '\n')
+    val isVisibleContent = (start until end).none { s[it] == '\n' } && !isEmptyParagraph(s, start, end)
+    if (isWholeParagraph && isVisibleContent) {
+      deletedParagraphValues = getParagraphValues(spanned, start, start + 1)
+    }
+  }
+
+  // The emptied paragraph keeps the text styles of its removed content: on its
+  // newline (if it has one) and for the text typed next.
+  private fun restoreParagraphValues(
+    s: Editable,
+    position: Int,
+    values: Map<String, Any>,
+  ) {
+    for ((style, value) in values) {
+      if (position < s.length && s[position] == '\n') {
+        applyValueSpan(s, style, position, position + 1, value)
+      }
+      view.spanState?.setStart(style, position)
+      setPendingValue(style, value, position)
+    }
+  }
+
   fun afterTextChanged(
     s: Editable,
     startCursorPosition: Int,
     endCursorPosition: Int,
   ) {
+    val deletedValues = deletedParagraphValues
+    deletedParagraphValues = null
+
     if (endCursorPosition > startCursorPosition) {
       // Split spans that are not actively extended when text is inserted
       // inside of them (e.g. after the style was removed at the cursor)
@@ -151,6 +322,10 @@ class TextStyles(
 
     val isBackspace = endCursorPosition == startCursorPosition
     if (!isBackspace) return
+
+    if (!deletedValues.isNullOrEmpty()) {
+      restoreParagraphValues(s, startCursorPosition, deletedValues)
+    }
 
     // Merge same-value spans that ended up adjacent to each other after
     // deletion, so the HTML output doesn't contain sibling spans.
