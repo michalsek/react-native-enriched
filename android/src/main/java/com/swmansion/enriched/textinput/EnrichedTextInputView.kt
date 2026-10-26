@@ -226,6 +226,9 @@ class EnrichedTextInputView :
 
     breakStrategy = Layout.BREAK_STRATEGY_SIMPLE
     hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+      useBoundsForWidth = false
+    }
 
     setPadding(0, 0, 0, 0)
     setBackgroundColor(Color.TRANSPARENT)

@@ -60,6 +60,10 @@ object MeasurementStore {
       builder.setUseLineSpacingFromFallbacks(true)
     }
 
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+      builder.setUseBoundsForWidth(false)
+    }
+
     if (numberOfLines > 0) {
       val ellipsize =
         when (ellipsizeMode) {

@@ -100,6 +100,10 @@ object MeasurementStore {
       builder.setUseLineSpacingFromFallbacks(true)
     }
 
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+      builder.setUseBoundsForWidth(false)
+    }
+
     val staticLayout = builder.build()
     val heightInSP = PixelUtil.toDIPFromPixel(staticLayout.height.toFloat())
     val widthInSP = PixelUtil.toDIPFromPixel(maxWidth)
