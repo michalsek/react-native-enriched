@@ -46,7 +46,10 @@ class EnrichedTextWatcher(
     if (!view.isDuringTransaction) {
       applyStyles(s)
       view.normalizeParagraphMarginSpacers()
+      updateSpaceKerning()
       view.layoutManager.invalidateLayout()
+    } else {
+      updateSpaceKerning()
     }
 
     emitEvents(view.text ?: s)
@@ -59,6 +62,15 @@ class EnrichedTextWatcher(
     view.parametrizedStyles?.afterTextChanged(s, startCursorPosition, endCursorPosition)
     view.textStyles?.afterTextChanged(s, startCursorPosition, endCursorPosition)
     view.alignmentStyles?.afterTextChanged(s, endCursorPosition, previousTextLength)
+  }
+
+  private fun updateSpaceKerning() {
+    if (view.isSettingValue) return
+
+    view.updateSpaceKerning(
+      startCursorPosition - SPACER_INDEX_SLACK,
+      endCursorPosition + SPACER_INDEX_SLACK,
+    )
   }
 
   private fun emitChangeText(editable: Editable) {
@@ -81,5 +93,9 @@ class EnrichedTextWatcher(
   private fun emitEvents(s: Editable) {
     emitChangeText(s)
     view.spanWatcher?.emitEvent(s, null)
+  }
+
+  companion object {
+    private const val SPACER_INDEX_SLACK = 4
   }
 }

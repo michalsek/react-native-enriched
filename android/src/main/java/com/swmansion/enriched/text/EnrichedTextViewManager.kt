@@ -135,6 +135,13 @@ class EnrichedTextViewManager :
     view?.allowFontScaling = value
   }
 
+  override fun setSpaceKerning(
+    view: EnrichedTextView?,
+    value: String?,
+  ) {
+    view?.setSpaceKerning(value)
+  }
+
   override fun setUseHtmlNormalizer(
     view: EnrichedTextView?,
     value: Boolean,

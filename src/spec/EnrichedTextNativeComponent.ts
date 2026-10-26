@@ -85,6 +85,7 @@ export interface NativeProps extends ViewProps {
   htmlStyle?: EnrichedTextHtmlStyleInternal;
   useHtmlNormalizer: boolean;
   allowFontScaling?: boolean;
+  spaceKerning?: string;
 
   // ReactNative TextProps
   ellipsizeMode: string;

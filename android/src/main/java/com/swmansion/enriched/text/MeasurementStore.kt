@@ -19,6 +19,8 @@ import com.facebook.react.views.text.ReactTypefaceUtils.parseFontWeight
 import com.facebook.yoga.YogaMeasureMode
 import com.facebook.yoga.YogaMeasureOutput
 import com.swmansion.enriched.common.EnrichedConstants
+import com.swmansion.enriched.common.SpaceKerning
+import com.swmansion.enriched.common.SpaceKerningTable
 import com.swmansion.enriched.common.allowFontScalingFromProps
 import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
@@ -150,18 +152,25 @@ object MeasurementStore {
     props: ReadableMap?,
   ): Long {
     val fontSize = getInitialFontSize(props)
-    val text =
-      applyDefaultLineHeight(
-        getInitialText(context, fontSize.toInt(), props),
-        props,
-      )
-
     val fontFamily = props?.getString("fontFamily")
     val numberOfLines = props.getDoubleOrNull("numberOfLines")?.toInt() ?: 0
     val ellipsizeMode = props?.getString("ellipsizeMode")
     val fontStyle = parseFontStyle(props?.getString("fontStyle"))
     val fontWeight = parseFontWeight(props?.getString("fontWeight"))
     val typeface = applyStyles(null, fontStyle, fontWeight, fontFamily, context.assets)
+    val text =
+      applySpaceKerning(
+        applyDefaultLineHeight(
+          getInitialText(context, fontSize.toInt(), props),
+          props,
+        ),
+        props,
+        fontFamily,
+        TextPaint().apply {
+          this.typeface = typeface
+          textSize = fontSize
+        },
+      )
     val size = measure(width, text, typeface, fontSize, numberOfLines, ellipsizeMode)
 
     return size
@@ -181,6 +190,18 @@ object MeasurementStore {
       spannable.length,
       Spannable.SPAN_INCLUSIVE_INCLUSIVE,
     )
+    return spannable
+  }
+
+  private fun applySpaceKerning(
+    text: CharSequence,
+    props: ReadableMap?,
+    fontFamily: String?,
+    paint: TextPaint,
+  ): CharSequence {
+    val table = SpaceKerningTable.fromJson(props?.getString("spaceKerning")) ?: return text
+    val spannable = text as? Spannable ?: SpannableString(text)
+    SpaceKerning.update(spannable, table, fontFamily, paint)
     return spannable
   }
 

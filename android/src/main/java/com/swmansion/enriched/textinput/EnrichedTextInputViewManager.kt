@@ -334,6 +334,13 @@ class EnrichedTextInputViewManager :
     view?.setContextMenuItems(value)
   }
 
+  override fun setSpaceKerning(
+    view: EnrichedTextInputView?,
+    value: String?,
+  ) {
+    view?.setSpaceKerning(value)
+  }
+
   override fun setUseHtmlNormalizer(
     view: EnrichedTextInputView?,
     value: Boolean,

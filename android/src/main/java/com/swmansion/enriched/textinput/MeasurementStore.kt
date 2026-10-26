@@ -16,6 +16,8 @@ import com.facebook.react.views.text.ReactTypefaceUtils.parseFontStyle
 import com.facebook.react.views.text.ReactTypefaceUtils.parseFontWeight
 import com.facebook.yoga.YogaMeasureMode
 import com.facebook.yoga.YogaMeasureOutput
+import com.swmansion.enriched.common.SpaceKerning
+import com.swmansion.enriched.common.SpaceKerningTable
 import com.swmansion.enriched.common.allowFontScalingFromProps
 import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
@@ -165,21 +167,33 @@ object MeasurementStore {
     val fontStyle = parseFontStyle(props?.getString("fontStyle"))
     val fontWeight = parseFontWeight(props?.getString("fontWeight"))
 
+    val typeface = applyStyles(defaultView.typeface, fontStyle, fontWeight, fontFamily, context.assets)
+    val spaceKerning = SpaceKerningTable.fromJson(props?.getString("spaceKerning"))
+
     val text: CharSequence =
-      if (lineHeight > 0f) {
+      if (lineHeight > 0f || spaceKerning != null) {
         val spannable = SpannableString(rawText)
-        spannable.setSpan(
-          EnrichedLineHeightSpan(lineHeight, allowFontScaling),
-          0,
-          spannable.length,
-          Spannable.SPAN_INCLUSIVE_INCLUSIVE,
-        )
+        if (lineHeight > 0f) {
+          spannable.setSpan(
+            EnrichedLineHeightSpan(lineHeight, allowFontScaling),
+            0,
+            spannable.length,
+            Spannable.SPAN_INCLUSIVE_INCLUSIVE,
+          )
+        }
+        if (spaceKerning != null) {
+          val paint =
+            TextPaint().apply {
+              this.typeface = typeface
+              textSize = fontSize
+            }
+          SpaceKerning.update(spannable, spaceKerning, fontFamily, paint)
+        }
         spannable
       } else {
         rawText
       }
 
-    val typeface = applyStyles(defaultView.typeface, fontStyle, fontWeight, fontFamily, context.assets)
     val paintParams = PaintParams(typeface, fontSize)
     val size = measure(width, text, paintParams)
 
