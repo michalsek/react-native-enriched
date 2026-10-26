@@ -10,11 +10,18 @@ import com.swmansion.enriched.textinput.spans.EnrichedParagraphMarginSpacerSpan
 object ParagraphMarginSpacers {
   private const val MARKER = '\uE000'
   private val MARKER_STRING = MARKER.toString()
+  private const val SPACER_LENGTH = 2
 
   private data class SpacerRange(
     val start: Int,
     val end: Int,
     val kind: EnrichedParagraphMarginSpacerSpan.Kind,
+    val span: EnrichedParagraphMarginSpacerSpan? = null,
+  )
+
+  private data class Spacer(
+    val kind: EnrichedParagraphMarginSpacerSpan.Kind,
+    val heightPx: Int,
   )
 
   private data class MarginRange(
@@ -31,8 +38,28 @@ object ParagraphMarginSpacers {
   }
 
   fun normalize(text: Editable) {
-    removeSpacers(text)
-    insertSpacers(text)
+    val existing = spacerRanges(text)
+    if (existing.zipWithNext().any { (previous, next) -> previous.end > next.start }) {
+      removeSpacers(text)
+      insertSpacers(text)
+      return
+    }
+
+    val existingByIndex = existing.groupBy { publicIndex(existing, it.start) }
+    val targetByIndex = targetSpacers(text, existing)
+
+    for (index in (existingByIndex.keys + targetByIndex.keys).sortedDescending()) {
+      val current = existingByIndex[index].orEmpty()
+      val target = targetByIndex[index].orEmpty()
+
+      if (current.map { it.kind } == target.map { it.kind } && current.all { it.end - it.start == SPACER_LENGTH }) {
+        current.zip(target).forEach { (range, spacer) -> updateHeight(text, range, spacer.heightPx) }
+        continue
+      }
+
+      current.asReversed().forEach { text.delete(it.start, it.end) }
+      insertSpacers(text, actualIndex(existing, index), target)
+    }
   }
 
   fun publicText(text: CharSequence): SpannableStringBuilder {
@@ -129,6 +156,120 @@ object ParagraphMarginSpacers {
     return text.length
   }
 
+  private fun publicIndex(
+    existing: List<SpacerRange>,
+    index: Int,
+  ): Int {
+    var removed = 0
+    for (range in existing) {
+      if (index >= range.end) {
+        removed += range.end - range.start
+      } else {
+        if (index > range.start) removed += index - range.start
+        break
+      }
+    }
+    return index - removed
+  }
+
+  private fun actualIndex(
+    existing: List<SpacerRange>,
+    publicIndex: Int,
+  ): Int {
+    var removed = 0
+    for (range in existing) {
+      if (range.start - removed >= publicIndex) break
+      removed += range.end - range.start
+    }
+    return publicIndex + removed
+  }
+
+  private fun targetSpacers(
+    text: Editable,
+    existing: List<SpacerRange>,
+  ): Map<Int, List<Spacer>> {
+    val ranges =
+      text
+        .getSpans(0, text.length, EnrichedInputParagraphMarginSpan::class.java)
+        .mapNotNull { span ->
+          val start = text.getSpanStart(span)
+          val end = text.getSpanEnd(span)
+          if (start < 0 || end < 0 || start >= end) return@mapNotNull null
+
+          val publicStart = publicIndex(existing, start)
+          val publicEnd = publicIndex(existing, end)
+          if (publicStart >= publicEnd) {
+            text.removeSpan(span)
+            return@mapNotNull null
+          }
+
+          MarginRange(
+            start = publicStart,
+            end = publicEnd,
+            topPx = span.marginTopPx().toInt(),
+            bottomPx = span.marginBottomPx().toInt(),
+          )
+        }.sortedWith(compareByDescending<MarginRange> { it.start }.thenByDescending { it.end })
+
+    val target = HashMap<Int, MutableList<Spacer>>()
+    for (range in ranges) {
+      if (range.bottomPx > 0) {
+        target.getOrPut(range.end) { mutableListOf() }.add(0, Spacer(EnrichedParagraphMarginSpacerSpan.Kind.BOTTOM, range.bottomPx))
+      }
+      if (range.topPx > 0) {
+        target.getOrPut(range.start) { mutableListOf() }.add(0, Spacer(EnrichedParagraphMarginSpacerSpan.Kind.TOP, range.topPx))
+      }
+    }
+    return target
+  }
+
+  private fun updateHeight(
+    text: Editable,
+    range: SpacerRange,
+    heightPx: Int,
+  ) {
+    val span = range.span ?: return
+    if (span.heightPx == heightPx) return
+
+    val spanStart = text.getSpanStart(span)
+    val spanEnd = text.getSpanEnd(span)
+    val flags = text.getSpanFlags(span)
+    text.removeSpan(span)
+    text.setSpan(EnrichedParagraphMarginSpacerSpan(span.kind, heightPx), spanStart, spanEnd, flags)
+  }
+
+  private fun insertSpacers(
+    text: Editable,
+    index: Int,
+    spacers: List<Spacer>,
+  ) {
+    var insertAt = index
+    for (spacer in spacers) {
+      when (spacer.kind) {
+        EnrichedParagraphMarginSpacerSpan.Kind.TOP -> {
+          text.insert(insertAt, "$MARKER_STRING\n")
+          text.setSpan(
+            EnrichedParagraphMarginSpacerSpan(spacer.kind, spacer.heightPx),
+            insertAt,
+            insertAt + 1,
+            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
+          )
+        }
+
+        EnrichedParagraphMarginSpacerSpan.Kind.BOTTOM -> {
+          text.insert(insertAt, "\n$MARKER")
+          text.setSpan(
+            EnrichedParagraphMarginSpacerSpan(spacer.kind, spacer.heightPx),
+            insertAt + 1,
+            insertAt + 2,
+            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
+          )
+        }
+      }
+      insertAt += SPACER_LENGTH
+    }
+  }
+
   private fun removeSpacers(text: Editable) {
     for (range in spacerRanges(text).asReversed()) {
       text.delete(range.start, range.end)
@@ -207,7 +348,7 @@ object ParagraphMarginSpacers {
               } else {
                 spanEnd
               }
-            SpacerRange(spanStart, end, span.kind)
+            SpacerRange(spanStart, end, span.kind, span)
           }
 
           EnrichedParagraphMarginSpacerSpan.Kind.BOTTOM -> {
@@ -217,7 +358,7 @@ object ParagraphMarginSpacers {
               } else {
                 spanStart
               }
-            SpacerRange(start, spanEnd, span.kind)
+            SpacerRange(start, spanEnd, span.kind, span)
           }
         }
       }.filter { it.start < it.end }
