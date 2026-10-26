@@ -4,8 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
-import android.graphics.text.LineBreaker
-import android.os.Build
+import android.text.Layout
 import android.text.Spannable
 import android.text.SpannableString
 import android.text.Spanned
@@ -79,9 +78,8 @@ class EnrichedTextView : AppCompatTextView {
   }
 
   private fun prepareComponent() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      breakStrategy = LineBreaker.BREAK_STRATEGY_HIGH_QUALITY
-    }
+    breakStrategy = Layout.BREAK_STRATEGY_SIMPLE
+    hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
 
     setPadding(0, 0, 0, 0)
     setFontSize(EnrichedConstants.TEXT_DEFAULT_FONT_SIZE)

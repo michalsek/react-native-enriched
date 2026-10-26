@@ -38,6 +38,8 @@ open class EnrichedInlineLineHeightSpan(
     v: Int,
     fm: Paint.FontMetricsInt,
   ) {
+    if (text.isSpacerLine(start, end)) return
+
     // Fallback for layouts that don't provide the paint. Without it the
     // line's natural metrics cannot be recomputed (see the WithDensity
     // overload), so only grow the incoming metrics.
@@ -59,6 +61,8 @@ open class EnrichedInlineLineHeightSpan(
     fm: Paint.FontMetricsInt,
     paint: TextPaint?,
   ) {
+    if (text.isSpacerLine(start, end)) return
+
     val spanned = text as? Spanned
     if (spanned == null || paint == null) {
       chooseHeight(text, start, end, spanstartv, v, fm)

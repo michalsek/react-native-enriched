@@ -43,6 +43,8 @@ open class EnrichedCheckboxListSpan(
     v: Int,
     fm: Paint.FontMetricsInt,
   ) {
+    if (text.isSpacerLine(start, end)) return
+
     val checkboxSize = enrichedStyle.ulCheckboxBoxSize
     val currentLineHeight = fm.descent - fm.ascent
 

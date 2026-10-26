@@ -131,6 +131,32 @@ overflow. `EnrichedInlineLineHeightSpan.chooseHeight` already rebuilds the
 line's natural metrics and applies the tallest covering span's line height, so
 the tallest span already wins a mixed row.
 
+### Android paragraph margins and line breaking
+
+The input draws a paragraph's `margin-top` / `margin-bottom` as a spacer line of
+its own (`ParagraphMarginSpacers`): a hidden marker carrying
+`EnrichedParagraphMarginSpacerSpan`, plus a newline. The newline run brings the
+paint's font metrics, and the line height spans centred every line they
+covered, spacer lines included, so each margin rendered as one full text line
+whatever its size (8px and 24px both put the next paragraph ~31dp lower). The
+spacer span is now a `LineHeightSpan` that sets its line to exactly the margin
+(`ascent = top = -margin`, `descent = bottom = 0`). Every other line height
+span skips a line that holds a spacer (`isSpacerLine`, keyed on
+`EnrichedSpacerLineSpan`), so call order doesn't matter.
+
+A paragraph's bottom margin and the next paragraph's top margin add up, as
+`paragraphSpacing` and `paragraphSpacingBefore` do in TextKit. CSS collapses
+adjacent vertical margins to the larger one, so a bottom and a top margin on
+neighbouring paragraphs still differ from the web on both platforms.
+
+Android lays text out with `BREAK_STRATEGY_SIMPLE` and
+`HYPHENATION_FREQUENCY_NONE` in both views and both measurement stores. The
+high-quality breaker balances lines ("Please join / us for a" where CSS and
+CoreText fill greedily: "Please join us / for a"); hyphenation is set
+explicitly because its default differs between Android versions. The views and
+the measurement stores must use the same settings, or the measured height won't
+match the drawn text.
+
 ## Invariance
 
 A line whose runs all fit their line boxes (`F <= L`) lands in exactly the same
