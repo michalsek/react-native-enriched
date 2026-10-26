@@ -413,7 +413,8 @@ class EnrichedTextInputView :
   fun requestFocusProgrammatically() {
     requestFocus()
     inputMethodManager?.showSoftInput(this, 0)
-    setSelection(selection?.start ?: text?.length ?: 0)
+    val start = selection?.start ?: text?.length ?: 0
+    setSelection(start, selection?.end ?: start)
   }
 
   private fun normalizeHtmlIfNeeded(text: CharSequence): CharSequence {
