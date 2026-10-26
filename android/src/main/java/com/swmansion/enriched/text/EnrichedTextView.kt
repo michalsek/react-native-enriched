@@ -26,6 +26,7 @@ import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.GumboNormalizer
 import com.swmansion.enriched.common.SpaceKerning
 import com.swmansion.enriched.common.SpaceKerningTable
+import com.swmansion.enriched.common.TrailingLetterSpacing
 import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
@@ -66,6 +67,8 @@ class EnrichedTextView : AppCompatTextView {
 
   var useHtmlNormalizer = false
 
+  private var trailingLetterSpacingInset: Int = 0
+
   constructor(context: Context) : super(context) {
     prepareComponent()
   }
@@ -93,6 +96,16 @@ class EnrichedTextView : AppCompatTextView {
     setPadding(0, 0, 0, 0)
     setFontSize(EnrichedConstants.TEXT_DEFAULT_FONT_SIZE)
   }
+
+  override fun setText(
+    text: CharSequence?,
+    type: BufferType?,
+  ) {
+    trailingLetterSpacingInset = TrailingLetterSpacing.insetPx(text)
+    super.setText(text, type)
+  }
+
+  override fun getCompoundPaddingRight(): Int = super.getCompoundPaddingRight() + trailingLetterSpacingInset
 
   override fun onTouchEvent(event: MotionEvent): Boolean {
     val spanned = text as? Spanned

@@ -44,6 +44,7 @@ import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.GumboNormalizer
 import com.swmansion.enriched.common.SpaceKerning
 import com.swmansion.enriched.common.SpaceKerningTable
+import com.swmansion.enriched.common.TrailingLetterSpacing
 import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
@@ -153,6 +154,7 @@ class EnrichedTextInputView :
   var useHtmlNormalizer: Boolean = false
   var isNormalizingParagraphMarginSpacers: Boolean = false
   var isInsertingParagraphAnchor: Boolean = false
+  private var trailingLetterSpacingInset: Int = 0
 
   private var fontSizeRaw: Float? = null
   var fontSize: Float? = null
@@ -829,10 +831,21 @@ class EnrichedTextInputView :
   // immediately.
   override fun isLayoutRequested(): Boolean = false
 
+  override fun getCompoundPaddingRight(): Int = super.getCompoundPaddingRight() + trailingLetterSpacingInset
+
+  fun updateTrailingLetterSpacingInset() {
+    val inset = TrailingLetterSpacing.insetPx(text)
+    if (inset == trailingLetterSpacingInset) return
+
+    trailingLetterSpacingInset = inset
+    breakStrategy = breakStrategy
+  }
+
   fun afterUpdateTransaction() {
     updateTypeface()
     updateDefaultValue()
     updateSpaceKerningIfDirty()
+    updateTrailingLetterSpacingInset()
   }
 
   private fun updateSpaceKerningIfDirty() {
@@ -1137,6 +1150,7 @@ class EnrichedTextInputView :
     }
 
     updateSpaceKerning(selectionStart, selectionEnd)
+    updateTrailingLetterSpacingInset()
     layoutManager.invalidateLayout()
   }
 
