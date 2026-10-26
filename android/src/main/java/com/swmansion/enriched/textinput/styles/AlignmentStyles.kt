@@ -106,6 +106,7 @@ class AlignmentStyles(
       var cursor = spanStart
       while (cursor <= spanEnd && cursor <= s.length) {
         var (paragraphStart, paragraphEnd) = s.getParagraphBounds(cursor)
+        if (cursor == spanEnd && cursor > spanStart && paragraphEnd > paragraphStart) break
         if (paragraphStart == paragraphEnd && isTypedParagraph(s, paragraphStart, endCursorPosition, isBackspace)) {
           s.insert(paragraphStart, EnrichedConstants.ZWS_STRING)
           paragraphEnd += 1
