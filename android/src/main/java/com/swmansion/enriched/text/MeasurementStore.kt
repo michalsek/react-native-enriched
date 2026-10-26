@@ -27,6 +27,11 @@ import com.swmansion.enriched.text.spans.EnrichedTextDefaultLineHeightSpan
 import kotlin.math.ceil
 
 object MeasurementStore {
+  private fun ReadableMap?.getDoubleOrNull(key: String): Double? {
+    if (this == null || !hasKey(key) || isNull(key)) return null
+    return getDouble(key)
+  }
+
   private fun measure(
     maxWidth: Float,
     spannable: CharSequence?,
@@ -127,7 +132,7 @@ object MeasurementStore {
   }
 
   private fun getInitialFontSize(props: ReadableMap?): Float {
-    val propsFontSize = props?.getDouble("fontSize")?.toFloat() ?: EnrichedConstants.TEXT_DEFAULT_FONT_SIZE
+    val propsFontSize = props.getDoubleOrNull("fontSize")?.toFloat() ?: EnrichedConstants.TEXT_DEFAULT_FONT_SIZE
     val fontSize =
       when {
         propsFontSize > 0f -> propsFontSize
@@ -150,7 +155,7 @@ object MeasurementStore {
       )
 
     val fontFamily = props?.getString("fontFamily")
-    val numberOfLines = props?.getInt("numberOfLines") ?: 0
+    val numberOfLines = props.getDoubleOrNull("numberOfLines")?.toInt() ?: 0
     val ellipsizeMode = props?.getString("ellipsizeMode")
     val fontStyle = parseFontStyle(props?.getString("fontStyle"))
     val fontWeight = parseFontWeight(props?.getString("fontWeight"))
@@ -164,7 +169,7 @@ object MeasurementStore {
     text: CharSequence,
     props: ReadableMap?,
   ): CharSequence {
-    val lineHeight = props?.getDouble("lineHeight")?.toFloat() ?: 0f
+    val lineHeight = props.getDoubleOrNull("lineHeight")?.toFloat() ?: 0f
     if (lineHeight == 0f || text.isEmpty()) return text
 
     val spannable = if (text is Spannable) text else SpannableString(text)
