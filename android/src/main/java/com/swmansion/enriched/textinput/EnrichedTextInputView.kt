@@ -152,6 +152,7 @@ class EnrichedTextInputView :
   var experimentalSynchronousEvents: Boolean = false
   var useHtmlNormalizer: Boolean = false
   var isNormalizingParagraphMarginSpacers: Boolean = false
+  var isInsertingParagraphAnchor: Boolean = false
 
   private var fontSizeRaw: Float? = null
   var fontSize: Float? = null
@@ -1161,8 +1162,20 @@ class EnrichedTextInputView :
     dispatcher?.dispatchEvent(OnRequestHtmlResultEvent(surfaceId, id, requestId, html, experimentalSynchronousEvents))
   }
 
+  fun mergeParagraphsJoinedAtMarginSpacers(index: Int): Int {
+    if (isNormalizingParagraphMarginSpacers) return index
+    val editable = text ?: return index
+
+    isNormalizingParagraphMarginSpacers = true
+    try {
+      return ParagraphMarginSpacers.mergeParagraphsJoinedAt(editable, index)
+    } finally {
+      isNormalizingParagraphMarginSpacers = false
+    }
+  }
+
   fun normalizeParagraphMarginSpacers() {
-    if (isNormalizingParagraphMarginSpacers) return
+    if (isNormalizingParagraphMarginSpacers || isInsertingParagraphAnchor) return
     val editable = text ?: return
 
     isNormalizingParagraphMarginSpacers = true
