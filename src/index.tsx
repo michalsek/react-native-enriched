@@ -2,6 +2,7 @@ export { EnrichedTextInput } from './web/EnrichedTextInput';
 export type {
   EnrichedInputStyle,
   EnrichedTextInputProps,
+  SpaceKerning,
   OnChangeTextEvent,
   OnChangeHtmlEvent,
   OnChangeContentSizeEvent,

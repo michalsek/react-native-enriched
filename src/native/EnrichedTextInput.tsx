@@ -83,6 +83,7 @@ export const EnrichedTextInput = ({
   useHtmlNormalizer = ENRICHED_TEXT_INPUT_DEFAULT_PROPS.useHtmlNormalizer,
   scrollEnabled = ENRICHED_TEXT_INPUT_DEFAULT_PROPS.scrollEnabled,
   allowFontScaling = ENRICHED_TEXT_INPUT_DEFAULT_PROPS.allowFontScaling,
+  spaceKerning: _spaceKerning,
   ...rest
 }: EnrichedTextInputProps) => {
   const nativeRef = useRef<ComponentType | null>(null);
@@ -104,6 +105,11 @@ export const EnrichedTextInput = ({
     }
     contextMenuCallbacksRef.current = callbacksMap;
   }, [contextMenuItems]);
+
+  const spaceKerning = useMemo(
+    () => (_spaceKerning ? JSON.stringify(_spaceKerning) : undefined),
+    [_spaceKerning]
+  );
 
   const nativeContextMenuItems = useMemo(
     () =>
@@ -407,6 +413,7 @@ export const EnrichedTextInput = ({
       useHtmlNormalizer={useHtmlNormalizer}
       scrollEnabled={scrollEnabled}
       allowFontScaling={allowFontScaling}
+      spaceKerning={spaceKerning}
       {...rest}
     />
   );

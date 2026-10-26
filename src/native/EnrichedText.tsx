@@ -35,6 +35,7 @@ export const EnrichedText = ({
   selectable = false,
   selectionColor,
   allowFontScaling = true,
+  spaceKerning: _spaceKerning,
   onLinkPress: _onLinkPress,
   onMentionPress: _onMentionPress,
   ...rest
@@ -44,6 +45,11 @@ export const EnrichedText = ({
   const htmlStyle = useMemo(
     () => normalizeEnrichedTextHtmlStyle(_htmlStyle),
     [_htmlStyle]
+  );
+
+  const spaceKerning = useMemo(
+    () => (_spaceKerning ? JSON.stringify(_spaceKerning) : undefined),
+    [_spaceKerning]
   );
 
   const onLinkPress: DirectEventHandler<OnLinkPressEvent> = useCallback(
@@ -107,6 +113,7 @@ export const EnrichedText = ({
       selectable={selectable}
       selectionColor={selectionColor}
       allowFontScaling={allowFontScaling}
+      spaceKerning={spaceKerning}
       onLinkPress={onLinkPress}
       onMentionPress={onMentionPress}
       {...rest}

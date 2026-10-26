@@ -540,6 +540,11 @@ export interface OnChangeMentionEvent {
   text: string;
 }
 
+export type SpaceKerning = Record<
+  string,
+  { before: Record<string, number>; after: Record<string, number> }
+>;
+
 export interface EnrichedTextInputProps extends Omit<ViewProps, 'children'> {
   ref?: RefObject<EnrichedTextInputInstance | null>;
   autoFocus?: boolean;
@@ -599,6 +604,15 @@ export interface EnrichedTextInputProps extends Omit<ViewProps, 'children'> {
    * Enabled by default.
    */
   allowFontScaling?: boolean;
+  /**
+   * Android only: kerning (in em) between U+0020 and its neighbours, per font
+   * family. Android lays text out word by word, so font kerning pairs that
+   * cross a space are never applied; this table adds them back. `before[c]` is
+   * the kerning for `c` followed by a space, `after[c]` for a space followed by
+   * `c`. Keys are font family names as passed in `fontFamily`. Ignored on iOS
+   * and web, which shape whole runs.
+   */
+  spaceKerning?: SpaceKerning;
 }
 
 export interface EnrichedTextInstance extends NativeMethods {}
@@ -618,6 +632,15 @@ export interface EnrichedTextProps extends ViewProps {
    * Enabled by default.
    */
   allowFontScaling?: boolean;
+  /**
+   * Android only: kerning (in em) between U+0020 and its neighbours, per font
+   * family. Android lays text out word by word, so font kerning pairs that
+   * cross a space are never applied; this table adds them back. `before[c]` is
+   * the kerning for `c` followed by a space, `after[c]` for a space followed by
+   * `c`. Keys are font family names as passed in `fontFamily`. Ignored on iOS
+   * and web, which shape whole runs.
+   */
+  spaceKerning?: SpaceKerning;
   onLinkPress?: (event: OnLinkPressEvent) => void;
   onMentionPress?: (event: OnMentionPressEvent) => void;
 }
