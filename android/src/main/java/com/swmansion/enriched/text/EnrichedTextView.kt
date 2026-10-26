@@ -81,6 +81,7 @@ class EnrichedTextView : AppCompatTextView {
   private fun prepareComponent() {
     breakStrategy = Layout.BREAK_STRATEGY_SIMPLE
     hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
+    includeFontPadding = false
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
       useBoundsForWidth = false
     }
