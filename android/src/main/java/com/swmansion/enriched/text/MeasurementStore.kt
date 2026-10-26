@@ -21,6 +21,7 @@ import com.facebook.yoga.YogaMeasureOutput
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.SpaceKerning
 import com.swmansion.enriched.common.SpaceKerningTable
+import com.swmansion.enriched.common.TrailingLetterSpacing
 import com.swmansion.enriched.common.allowFontScalingFromProps
 import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
@@ -50,9 +51,10 @@ object MeasurementStore {
         textSize = fontSize
       }
 
+    val trailingInset = TrailingLetterSpacing.insetPx(text)
     val builder =
       StaticLayout.Builder
-        .obtain(text, 0, textLength, paint, maxWidth.toInt())
+        .obtain(text, 0, textLength, paint, (maxWidth.toInt() - trailingInset).coerceAtLeast(1))
         .setIncludePad(false)
         .setLineSpacing(0f, 1f)
         .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
@@ -94,9 +96,9 @@ object MeasurementStore {
     // For multi line, use all available width
     val finalWidth =
       if (staticLayout.lineCount <= 1) {
-        staticLayout.getLineWidth(0)
+        staticLayout.getLineWidth(0) + trailingInset
       } else {
-        staticLayout.width.toFloat()
+        staticLayout.width.toFloat() + trailingInset
       }
 
     val finalHeight =

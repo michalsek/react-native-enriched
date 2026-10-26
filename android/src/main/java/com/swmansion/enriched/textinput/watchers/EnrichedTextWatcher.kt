@@ -52,6 +52,7 @@ class EnrichedTextWatcher(
     } else {
       updateSpaceKerning()
     }
+    view.updateTrailingLetterSpacingInset()
 
     emitEvents(view.text ?: s)
   }

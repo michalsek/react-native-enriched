@@ -10,6 +10,9 @@ open class EnrichedLetterSpacingSpan(
   private val allowFontScaling: Boolean,
 ) : MetricAffectingSpan(),
   EnrichedInlineSpan {
+  val letterSpacingPx: Float
+    get() = pixelFromSpOrDp(letterSpacing, allowFontScaling)
+
   override fun updateDrawState(paint: TextPaint) {
     apply(paint)
   }
@@ -22,6 +25,6 @@ open class EnrichedLetterSpacingSpan(
     // TextPaint.letterSpacing is in EMs, the JS value is in logical units.
     // This mirrors how React Native applies the letterSpacing style prop.
     if (paint.textSize == 0f) return
-    paint.letterSpacing = pixelFromSpOrDp(letterSpacing, allowFontScaling) / paint.textSize
+    paint.letterSpacing = letterSpacingPx / paint.textSize
   }
 }
