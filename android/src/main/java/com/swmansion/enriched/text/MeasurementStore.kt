@@ -51,7 +51,7 @@ object MeasurementStore {
     val builder =
       StaticLayout.Builder
         .obtain(text, 0, textLength, paint, maxWidth.toInt())
-        .setIncludePad(true)
+        .setIncludePad(false)
         .setLineSpacing(0f, 1f)
         .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
         .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)

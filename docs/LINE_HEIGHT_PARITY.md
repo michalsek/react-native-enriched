@@ -157,6 +157,14 @@ explicitly because its default differs between Android versions. The views and
 the measurement stores must use the same settings, or the measured height won't
 match the drawn text.
 
+Both views set `includeFontPadding = false` and both measurement stores build
+with `setIncludePad(false)`. With padding on, the first line started at the
+font's bounding-box top instead of its ascent (and the last line ended at its
+bottom), and `centerInLineHeight` keeps `top = min(top, ascent)` when it grows a
+line, so the whole block sat lower than CSS and CoreText by the font's
+`yMax - ascender` (9.8dp for Archivo at 48pt). Without it every line box,
+first and last included, is exactly its `ascent`/`descent`.
+
 ## Invariance
 
 A line whose runs all fit their line boxes (`F <= L`) lands in exactly the same
