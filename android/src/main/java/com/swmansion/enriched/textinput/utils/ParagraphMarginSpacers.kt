@@ -38,6 +38,9 @@ object ParagraphMarginSpacers {
   }
 
   fun normalize(text: Editable) {
+    mergeLinesJoinedToBottomSpacers(text)
+    fitMarginSpansToLines(text)
+
     val existing = spacerRanges(text)
     if (existing.zipWithNext().any { (previous, next) -> previous.end > next.start }) {
       removeSpacers(text)
@@ -87,16 +90,31 @@ object ParagraphMarginSpacers {
     val spanned = text as? Spannable ?: return safeIndex
 
     for (range in spacerRanges(spanned)) {
-      if (safeIndex <= range.start || safeIndex >= range.end) continue
+      when (range.kind) {
+        EnrichedParagraphMarginSpacerSpan.Kind.TOP -> {
+          val firstIndex = if (isLineStart(text, range.start)) range.start else range.start + 1
+          if (safeIndex in firstIndex until range.end) return range.end
+        }
 
-      return when (range.kind) {
-        EnrichedParagraphMarginSpacerSpan.Kind.TOP -> range.end
-        EnrichedParagraphMarginSpacerSpan.Kind.BOTTOM -> range.start
+        EnrichedParagraphMarginSpacerSpan.Kind.BOTTOM -> {
+          val lastIndex = if (isLineEnd(text, range.end)) range.end else range.end - 1
+          if (safeIndex in range.start + 1..lastIndex) return range.start
+        }
       }
     }
 
     return safeIndex
   }
+
+  private fun isLineStart(
+    text: CharSequence,
+    index: Int,
+  ): Boolean = index == 0 || text[index - 1] == '\n'
+
+  private fun isLineEnd(
+    text: CharSequence,
+    index: Int,
+  ): Boolean = index == text.length || text[index] == '\n'
 
   fun publicIndexBefore(
     text: CharSequence,
@@ -154,6 +172,37 @@ object ParagraphMarginSpacers {
     }
 
     return text.length
+  }
+
+  private fun mergeLinesJoinedToBottomSpacers(text: Editable) {
+    for (range in spacerRanges(text).asReversed()) {
+      if (range.kind != EnrichedParagraphMarginSpacerSpan.Kind.BOTTOM || range.end >= text.length) continue
+      if (text[range.end] == '\n' || text[range.end] == MARKER) continue
+      if (text.getSpans(range.end, range.end + 1, EnrichedInputParagraphMarginSpan::class.java).isNotEmpty()) continue
+
+      text.delete(range.start, range.end)
+    }
+  }
+
+  private fun fitMarginSpansToLines(text: Editable) {
+    val spans = text.getSpans(0, text.length, EnrichedInputParagraphMarginSpan::class.java)
+    for (span in spans) {
+      val start = text.getSpanStart(span)
+      val end = text.getSpanEnd(span)
+      if (start < 0 || end <= start) continue
+
+      val isNested =
+        spans.any { other ->
+          other !== span && text.getSpanStart(other) < end && text.getSpanEnd(other) > start
+        }
+      if (isNested) continue
+
+      val lineStart = text.getParagraphBounds(start).first
+      val lineEnd = text.getParagraphBounds(end - 1).second
+      if (lineStart != start || lineEnd != end) {
+        text.setSpan(span, lineStart, lineEnd, text.getSpanFlags(span))
+      }
+    }
   }
 
   private fun publicIndex(
