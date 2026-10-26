@@ -44,6 +44,7 @@ class EnrichedTextWatcher(
     if (view.isNormalizingParagraphMarginSpacers) return
 
     if (!view.isDuringTransaction) {
+      if (s.length < previousTextLength) mergeParagraphsJoinedAtMarginSpacers()
       applyStyles(s)
       view.normalizeParagraphMarginSpacers()
       updateSpaceKerning()
@@ -53,6 +54,18 @@ class EnrichedTextWatcher(
     }
 
     emitEvents(view.text ?: s)
+  }
+
+  private fun mergeParagraphsJoinedAtMarginSpacers() {
+    val textLength = previousTextLength
+    val isRemovingMany = view.isRemovingMany
+    val join = view.mergeParagraphsJoinedAtMarginSpacers(endCursorPosition)
+    if (join == endCursorPosition) return
+
+    previousTextLength = textLength
+    view.isRemovingMany = isRemovingMany
+    startCursorPosition = join
+    endCursorPosition = join
   }
 
   private fun applyStyles(s: Editable) {

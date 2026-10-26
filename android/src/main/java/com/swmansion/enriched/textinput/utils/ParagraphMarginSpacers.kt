@@ -4,6 +4,7 @@ import android.text.Editable
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import com.swmansion.enriched.common.EnrichedConstants
+import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputParagraphMarginSpan
 import com.swmansion.enriched.textinput.spans.EnrichedParagraphMarginSpacerSpan
 
@@ -38,13 +39,14 @@ object ParagraphMarginSpacers {
   }
 
   fun normalize(text: Editable) {
-    mergeLinesJoinedToBottomSpacers(text)
+    var hasDeletedSpacers = mergeLinesJoinedToBottomSpacers(text)
     fitMarginSpansToLines(text)
 
     val existing = spacerRanges(text)
     if (existing.zipWithNext().any { (previous, next) -> previous.end > next.start }) {
       removeSpacers(text)
       insertSpacers(text)
+      removeEmptyAlignmentSpans(text)
       return
     }
 
@@ -61,7 +63,16 @@ object ParagraphMarginSpacers {
       }
 
       current.asReversed().forEach { text.delete(it.start, it.end) }
+      hasDeletedSpacers = hasDeletedSpacers || current.isNotEmpty()
       insertSpacers(text, actualIndex(existing, index), target)
+    }
+
+    if (hasDeletedSpacers) removeEmptyAlignmentSpans(text)
+  }
+
+  private fun removeEmptyAlignmentSpans(text: Editable) {
+    for (span in text.getSpans(0, text.length, EnrichedInputAlignmentSpan::class.java)) {
+      if (text.getSpanStart(span) == text.getSpanEnd(span)) text.removeSpan(span)
     }
   }
 
@@ -174,14 +185,45 @@ object ParagraphMarginSpacers {
     return text.length
   }
 
-  private fun mergeLinesJoinedToBottomSpacers(text: Editable) {
+  fun mergeParagraphsJoinedAt(
+    text: Editable,
+    index: Int,
+  ): Int {
+    var join = index.coerceIn(0, text.length)
+    while (join >= SPACER_LENGTH && text[join - 1] == MARKER && (join == text.length || text[join] != '\n')) {
+      val kind = spacerKindAt(text, join - 1) ?: break
+      if (text[join - SPACER_LENGTH] != '\n') break
+
+      for (span in text.getSpans(join, join, EnrichedInputParagraphMarginSpan::class.java)) {
+        if (text.getSpanStart(span) == join) text.removeSpan(span)
+      }
+      text.delete(join - SPACER_LENGTH, join)
+      join -= SPACER_LENGTH
+      if (kind == EnrichedParagraphMarginSpacerSpan.Kind.BOTTOM) break
+    }
+    return join
+  }
+
+  private fun spacerKindAt(
+    text: Spannable,
+    index: Int,
+  ): EnrichedParagraphMarginSpacerSpan.Kind? =
+    text
+      .getSpans(index, index + 1, EnrichedParagraphMarginSpacerSpan::class.java)
+      .firstOrNull { text.getSpanStart(it) == index }
+      ?.kind
+
+  private fun mergeLinesJoinedToBottomSpacers(text: Editable): Boolean {
+    var hasMerged = false
     for (range in spacerRanges(text).asReversed()) {
       if (range.kind != EnrichedParagraphMarginSpacerSpan.Kind.BOTTOM || range.end >= text.length) continue
       if (text[range.end] == '\n' || text[range.end] == MARKER) continue
       if (text.getSpans(range.end, range.end + 1, EnrichedInputParagraphMarginSpan::class.java).isNotEmpty()) continue
 
       text.delete(range.start, range.end)
+      hasMerged = true
     }
+    return hasMerged
   }
 
   private fun fitMarginSpansToLines(text: Editable) {

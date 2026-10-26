@@ -1,6 +1,7 @@
 package com.swmansion.enriched.textinput.styles
 
 import android.text.Editable
+import android.text.Layout
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -72,9 +73,11 @@ class AlignmentStyles(
   ) {
     val isBackspace = s.length < previousTextLength
     val (pStart, pEnd) = s.getParagraphBounds(endCursorPosition)
-    val spans = s.getSpans(pStart, pEnd, EnrichedInputAlignmentSpan::class.java)
+    val spans =
+      s.getSpans(pStart, pEnd, EnrichedInputAlignmentSpan::class.java).filter { s.getSpanStart(it) < s.getSpanEnd(it) }
 
     if (spans.isEmpty()) {
+      removeEmptyAlignmentSpans(s, pStart, pEnd)
       if (!isBackspace) {
         continueAlignmentOnNewParagraph(s, endCursorPosition, pStart, pEnd)
       }
@@ -90,6 +93,7 @@ class AlignmentStyles(
       for (span in sortedSpans) {
         s.removeSpan(span)
       }
+      removeEmptyAlignmentSpans(s, pStart, pEnd)
       return
     }
 
@@ -97,10 +101,10 @@ class AlignmentStyles(
     // within an aligned paragraph and splits a span that grew across a newly
     // typed newline into per-paragraph spans.
     val coveredParagraphs = mutableSetOf<Int>()
+    var lastParagraphEnd = pEnd
     for (span in sortedSpans) {
       val spanStart = s.getSpanStart(span)
       var spanEnd = s.getSpanEnd(span)
-      s.removeSpan(span)
       if (spanStart < 0 || spanEnd < 0) continue
 
       var cursor = spanStart
@@ -108,30 +112,70 @@ class AlignmentStyles(
         var (paragraphStart, paragraphEnd) = s.getParagraphBounds(cursor)
         if (cursor == spanEnd && cursor > spanStart && paragraphEnd > paragraphStart) break
         if (paragraphStart == paragraphEnd && isTypedParagraph(s, paragraphStart, endCursorPosition, isBackspace)) {
-          s.insert(paragraphStart, EnrichedConstants.ZWS_STRING)
+          insertParagraphAnchor(s, paragraphStart)
           paragraphEnd += 1
           spanEnd += 1
-          clearAlignmentSpans(s, paragraphStart, paragraphEnd)
         }
         if (paragraphEnd > paragraphStart && coveredParagraphs.add(paragraphStart)) {
-          setAlignmentSpan(s, paragraphStart, paragraphEnd, EnrichedInputAlignmentSpan(span.alignment, view.htmlStyle))
+          anchorAlignment(s, paragraphStart, paragraphEnd, span.alignment)
         }
+        lastParagraphEnd = maxOf(lastParagraphEnd, paragraphEnd)
         cursor = paragraphEnd + 1
       }
     }
+    removeEmptyAlignmentSpans(s, pStart, lastParagraphEnd)
   }
 
-  private fun clearAlignmentSpans(
+  private fun anchorAlignment(
     s: Editable,
     paragraphStart: Int,
     paragraphEnd: Int,
+    alignment: Layout.Alignment,
   ) {
-    for (span in s.getSpans(paragraphStart, paragraphEnd, EnrichedInputAlignmentSpan::class.java)) {
+    var end = paragraphEnd
+    if (end < s.length && s[end] == '\n') {
+      end += 1
+    }
+    val (safeStart, safeEnd) = s.getSafeSpanBoundaries(paragraphStart, end)
+
+    val spans = s.getSpans(paragraphStart, paragraphEnd, EnrichedInputAlignmentSpan::class.java)
+    val current = spans.singleOrNull()
+    if (current != null && current.alignment == alignment && s.getSpanStart(current) == safeStart && s.getSpanEnd(current) == safeEnd) {
+      return
+    }
+
+    for (span in spans) {
       val spanStart = s.getSpanStart(span)
       if (spanStart >= paragraphStart) {
         s.removeSpan(span)
       } else {
         s.setSpan(span, spanStart, paragraphStart, s.getSpanFlags(span))
+      }
+    }
+    s.setSpan(EnrichedInputAlignmentSpan(alignment, view.htmlStyle), safeStart, safeEnd, Spanned.SPAN_PARAGRAPH)
+  }
+
+  private fun insertParagraphAnchor(
+    s: Editable,
+    index: Int,
+  ) {
+    view.isInsertingParagraphAnchor = true
+    try {
+      s.insert(index, EnrichedConstants.ZWS_STRING)
+    } finally {
+      view.isInsertingParagraphAnchor = false
+    }
+  }
+
+  private fun removeEmptyAlignmentSpans(
+    s: Editable,
+    start: Int,
+    end: Int,
+  ) {
+    val safeEnd = (end + 1).coerceAtMost(s.length)
+    for (span in s.getSpans(start.coerceIn(0, safeEnd), safeEnd, EnrichedInputAlignmentSpan::class.java)) {
+      if (s.getSpanStart(span) == s.getSpanEnd(span)) {
+        s.removeSpan(span)
       }
     }
   }
@@ -163,7 +207,7 @@ class AlignmentStyles(
 
     var spanEnd = pEnd
     if (pStart == pEnd) {
-      s.insert(pStart, EnrichedConstants.ZWS_STRING)
+      insertParagraphAnchor(s, pStart)
       spanEnd = pStart + 1
     }
 
