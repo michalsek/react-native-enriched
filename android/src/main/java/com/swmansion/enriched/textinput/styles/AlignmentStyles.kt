@@ -99,13 +99,19 @@ class AlignmentStyles(
     val coveredParagraphs = mutableSetOf<Int>()
     for (span in sortedSpans) {
       val spanStart = s.getSpanStart(span)
-      val spanEnd = s.getSpanEnd(span)
+      var spanEnd = s.getSpanEnd(span)
       s.removeSpan(span)
       if (spanStart < 0 || spanEnd < 0) continue
 
       var cursor = spanStart
       while (cursor <= spanEnd && cursor <= s.length) {
-        val (paragraphStart, paragraphEnd) = s.getParagraphBounds(cursor)
+        var (paragraphStart, paragraphEnd) = s.getParagraphBounds(cursor)
+        if (paragraphStart == paragraphEnd && isTypedParagraph(s, paragraphStart, endCursorPosition, isBackspace)) {
+          s.insert(paragraphStart, EnrichedConstants.ZWS_STRING)
+          paragraphEnd += 1
+          spanEnd += 1
+          clearAlignmentSpans(s, paragraphStart, paragraphEnd)
+        }
         if (paragraphEnd > paragraphStart && coveredParagraphs.add(paragraphStart)) {
           setAlignmentSpan(s, paragraphStart, paragraphEnd, EnrichedInputAlignmentSpan(span.alignment, view.htmlStyle))
         }
@@ -113,6 +119,28 @@ class AlignmentStyles(
       }
     }
   }
+
+  private fun clearAlignmentSpans(
+    s: Editable,
+    paragraphStart: Int,
+    paragraphEnd: Int,
+  ) {
+    for (span in s.getSpans(paragraphStart, paragraphEnd, EnrichedInputAlignmentSpan::class.java)) {
+      val spanStart = s.getSpanStart(span)
+      if (spanStart >= paragraphStart) {
+        s.removeSpan(span)
+      } else {
+        s.setSpan(span, spanStart, paragraphStart, s.getSpanFlags(span))
+      }
+    }
+  }
+
+  private fun isTypedParagraph(
+    s: Editable,
+    paragraphStart: Int,
+    endCursorPosition: Int,
+    isBackspace: Boolean,
+  ): Boolean = !isBackspace && paragraphStart == endCursorPosition && paragraphStart > 0 && s[paragraphStart - 1] == '\n'
 
   // Mirrors the iOS typing attributes behaviour: pressing enter at the end of
   // an aligned paragraph carries the alignment over to the new paragraph.
