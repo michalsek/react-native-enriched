@@ -2,8 +2,8 @@ package com.swmansion.enriched.textinput
 
 import android.content.Context
 import android.graphics.Typeface
-import android.graphics.text.LineBreaker
 import android.os.Build
+import android.text.Layout
 import android.text.Spannable
 import android.text.SpannableString
 import android.text.StaticLayout
@@ -93,10 +93,8 @@ object MeasurementStore {
         .obtain(text, 0, textLength, paint, maxWidth.toInt())
         .setIncludePad(true)
         .setLineSpacing(0f, 1f)
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      builder.setBreakStrategy(LineBreaker.BREAK_STRATEGY_HIGH_QUALITY)
-    }
+        .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
+        .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
       builder.setUseLineSpacingFromFallbacks(true)

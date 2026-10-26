@@ -8,9 +8,9 @@ import android.graphics.BlendModeColorFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
-import android.graphics.text.LineBreaker
 import android.os.Build
 import android.text.InputType
+import android.text.Layout
 import android.text.Spannable
 import android.text.SpannableString
 import android.util.AttributeSet
@@ -224,9 +224,8 @@ class EnrichedTextInputView :
     gravity = Gravity.TOP or Gravity.START
     inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      breakStrategy = LineBreaker.BREAK_STRATEGY_HIGH_QUALITY
-    }
+    breakStrategy = Layout.BREAK_STRATEGY_SIMPLE
+    hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
 
     setPadding(0, 0, 0, 0)
     setBackgroundColor(Color.TRANSPARENT)

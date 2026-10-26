@@ -9,6 +9,7 @@ import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan
 import com.swmansion.enriched.common.spans.centerInLineHeight
 import com.swmansion.enriched.common.spans.interfaces.EnrichedHeadingSpan
+import com.swmansion.enriched.common.spans.isSpacerLine
 
 class EnrichedLineHeightSpan(
   val lineHeight: Float,
@@ -32,6 +33,7 @@ class EnrichedLineHeightSpan(
     fm: Paint.FontMetricsInt,
   ) {
     val spannable = text as? Spannable ?: return
+    if (spannable.isSpacerLine(start, end)) return
     // Do not modify line height for headings
     // In the future we may consider adding custom lineHeight support for each paragraph style
     if (spannable.getSpans(start, end, EnrichedHeadingSpan::class.java).isNotEmpty()) return

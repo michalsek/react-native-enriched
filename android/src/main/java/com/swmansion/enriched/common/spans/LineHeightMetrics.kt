@@ -1,8 +1,21 @@
 package com.swmansion.enriched.common.spans
 
 import android.graphics.Paint
+import android.text.Spanned
+import com.swmansion.enriched.common.spans.interfaces.EnrichedSpacerLineSpan
 import kotlin.math.ceil
 import kotlin.math.floor
+
+fun CharSequence.isSpacerLine(
+  start: Int,
+  end: Int,
+): Boolean {
+  val spanned = this as? Spanned ?: return false
+  return spanned.getSpans(start, end, EnrichedSpacerLineSpan::class.java).any { span ->
+    val spanStart = spanned.getSpanStart(span)
+    spanStart >= start && spanStart < end
+  }
+}
 
 fun Paint.FontMetricsInt.centerInLineHeight(lineHeightPx: Float) {
   if (lineHeightPx <= 0f) return
