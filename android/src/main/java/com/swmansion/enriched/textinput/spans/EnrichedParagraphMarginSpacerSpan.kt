@@ -10,7 +10,7 @@ import com.swmansion.enriched.common.spans.interfaces.EnrichedSpacerLineSpan
 
 class EnrichedParagraphMarginSpacerSpan(
   val kind: Kind,
-  private val heightPx: Int,
+  val heightPx: Int,
 ) : ReplacementSpan(),
   LineHeightSpan,
   EnrichedSpacerLineSpan,
