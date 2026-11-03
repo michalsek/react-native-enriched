@@ -82,6 +82,7 @@ class EnrichedTextWatcher(
 
     if (view.isDuringTransaction) {
       updateSpaceKerning()
+      view.updateTrailingLetterSpacingInset()
       return
     }
     isApplyingStyles = true
@@ -94,6 +95,7 @@ class EnrichedTextWatcher(
       view.normalizeParagraphMarginSpacers()
       updateSpaceKerning()
     }
+    view.updateTrailingLetterSpacingInset()
     view.layoutManager.invalidateLayout()
   }
 

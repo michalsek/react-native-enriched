@@ -46,6 +46,7 @@ import com.swmansion.enriched.common.EnrichedSpanFlags
 import com.swmansion.enriched.common.GumboNormalizer
 import com.swmansion.enriched.common.SpaceKerning
 import com.swmansion.enriched.common.SpaceKerningTable
+import com.swmansion.enriched.common.TrailingLetterSpacing
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.common.spans.EnrichedSpaceKerningSpan
@@ -105,6 +106,7 @@ class EnrichedTextInputView :
   var isRemovingMany: Boolean = false
   var isSettingValue: Boolean = false
   var isNormalizingParagraphMarginSpacers: Boolean = false
+  private var trailingLetterSpacingInset: Int = 0
   var scrollEnabled: Boolean = true
   var allowFontScaling: Boolean = EnrichedConstants.ALLOW_FONT_SCALING_DEFAULT
     set(value) {
@@ -870,10 +872,21 @@ class EnrichedTextInputView :
   // immediately.
   override fun isLayoutRequested(): Boolean = false
 
+  override fun getCompoundPaddingRight(): Int = super.getCompoundPaddingRight() + trailingLetterSpacingInset
+
+  fun updateTrailingLetterSpacingInset() {
+    val inset = TrailingLetterSpacing.insetPx(text)
+    if (inset == trailingLetterSpacingInset) return
+
+    trailingLetterSpacingInset = inset
+    breakStrategy = breakStrategy
+  }
+
   fun afterUpdateTransaction() {
     updateTypeface()
     updateDefaultValue()
     updateSpaceKerningIfDirty()
+    updateTrailingLetterSpacingInset()
   }
 
   private fun updateSpaceKerningIfDirty() {
@@ -1135,6 +1148,7 @@ class EnrichedTextInputView :
       customStyles?.setStyle(styleJSON, collapsedSelectionMode)
     }
     updateSpaceKerning(selectionStart, selectionEnd)
+    updateTrailingLetterSpacingInset()
     layoutManager.invalidateLayout()
   }
 

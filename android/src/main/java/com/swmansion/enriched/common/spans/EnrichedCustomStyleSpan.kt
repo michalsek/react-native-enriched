@@ -88,12 +88,14 @@ open class EnrichedCustomStyleSpan(
     fontSizeSp?.takeIf { it > 0f }?.let { size ->
       textPaint.textSize = pixelFromSpOrDp(size, allowFontScaling)
     }
-    letterSpacing?.let { spacing ->
+    letterSpacingPx()?.let { spacingPx ->
       if (textPaint.textSize > 0f) {
-        textPaint.letterSpacing = pixelFromSpOrDp(spacing, allowFontScaling) / textPaint.textSize
+        textPaint.letterSpacing = spacingPx / textPaint.textSize
       }
     }
   }
+
+  internal fun letterSpacingPx(): Float? = letterSpacing?.let { pixelFromSpOrDp(it, allowFontScaling) }
 
   internal fun lineHeightPx(): Float? = lineHeight?.takeIf { it > 0f }?.let { pixelFromSpOrDp(it, allowFontScaling) }
 

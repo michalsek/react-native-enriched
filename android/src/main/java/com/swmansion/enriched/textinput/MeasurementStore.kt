@@ -18,6 +18,7 @@ import com.facebook.yoga.YogaMeasureMode
 import com.facebook.yoga.YogaMeasureOutput
 import com.swmansion.enriched.common.SpaceKerning
 import com.swmansion.enriched.common.SpaceKerningTable
+import com.swmansion.enriched.common.TrailingLetterSpacing
 import com.swmansion.enriched.common.allowFontScalingFromProps
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
@@ -84,9 +85,10 @@ object MeasurementStore {
   ): Long {
     val text = spannable ?: ""
     val textLength = text.length
+    val layoutWidth = (maxWidth.toInt() - TrailingLetterSpacing.insetPx(text)).coerceAtLeast(1)
     val builder =
       StaticLayout.Builder
-        .obtain(text, 0, textLength, paint, maxWidth.toInt())
+        .obtain(text, 0, textLength, paint, layoutWidth)
         .setIncludePad(false)
         .setLineSpacing(0f, 1f)
         .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
