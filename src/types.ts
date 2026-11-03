@@ -399,6 +399,10 @@ export interface OnChangeStateEvent {
   };
 }
 
+export interface TextStyleMutationOptions {
+  collapsedSelectionMode?: 'typing' | 'paragraph';
+}
+
 export interface OnLinkDetected {
   text: string;
   url: string;
@@ -600,14 +604,17 @@ export interface EnrichedTextInputInstance {
    * the text highlight color, `fontSize` to change the font size, and `fontFamily`
    * to change the font family. Passing `null` for a property will remove that specific style.
    */
-  setStyle: (customStyle: {
-    foregroundColor?: ColorValue | null;
-    backgroundColor?: ColorValue | null;
-    fontSize?: number | null;
-    fontFamily?: string | null;
-    letterSpacing?: number | null;
-    lineHeight?: number | null;
-  }) => void;
+  setStyle: (
+    customStyle: {
+      foregroundColor?: ColorValue | null;
+      backgroundColor?: ColorValue | null;
+      fontSize?: number | null;
+      fontFamily?: string | null;
+      letterSpacing?: number | null;
+      lineHeight?: number | null;
+    },
+    options?: TextStyleMutationOptions
+  ) => void;
 }
 
 export interface ContextMenuItem {

@@ -26,4 +26,5 @@ export type {
   OnLinkPressEvent,
   TextShortcut,
   OnImagePressEvent,
+  TextStyleMutationOptions,
 } from './types';

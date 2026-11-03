@@ -6,14 +6,24 @@ import com.swmansion.enriched.common.CustomStyle
 import com.swmansion.enriched.common.EnrichedSpanFlags
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.spans.EnrichedInputCustomStyleSpan
+import com.swmansion.enriched.textinput.utils.getParagraphBounds
 import org.json.JSONObject
 
 class CustomStyles(
   private val view: EnrichedTextInputView,
 ) {
-  fun setStyle(styleJSON: String) {
+  fun setStyle(
+    styleJSON: String,
+    collapsedSelectionMode: String,
+  ) {
     val selection = view.selection ?: return
-    val (start, end) = selection.getInlineSelection()
+    val (selectionStart, selectionEnd) = selection.getInlineSelection()
+    val (start, end) =
+      if (selectionStart == selectionEnd && collapsedSelectionMode == "paragraph") {
+        (view.text as Spannable).getParagraphBounds(selectionStart)
+      } else {
+        Pair(selectionStart, selectionEnd)
+      }
 
     val json = runCatching { JSONObject(styleJSON) }.getOrNull() ?: return
 

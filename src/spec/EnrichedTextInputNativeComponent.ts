@@ -500,7 +500,8 @@ interface NativeCommands {
   ) => void;
   setStyle: (
     viewRef: React.ElementRef<ComponentType>,
-    styleJSON: string
+    styleJSON: string,
+    collapsedSelectionMode: string
   ) => void;
 }
 

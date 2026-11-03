@@ -33,6 +33,7 @@ import type {
   EnrichedTextInputProps,
   OnLinkDetected,
   OnMentionDetected,
+  TextStyleMutationOptions,
 } from '../types';
 
 const warnMentionIndicators = (indicator: string) => {
@@ -294,14 +295,17 @@ export const EnrichedTextInput = ({
     ) => {
       Commands.setTextAlignment(nullthrows(nativeRef.current), alignment);
     },
-    setStyle: (customStyle: {
-      foregroundColor?: ColorValue | null;
-      backgroundColor?: ColorValue | null;
-      fontSize?: number | null;
-      fontFamily?: string | null;
-      letterSpacing?: number | null;
-      lineHeight?: number | null;
-    }) => {
+    setStyle: (
+      customStyle: {
+        foregroundColor?: ColorValue | null;
+        backgroundColor?: ColorValue | null;
+        fontSize?: number | null;
+        fontFamily?: string | null;
+        letterSpacing?: number | null;
+        lineHeight?: number | null;
+      },
+      options?: TextStyleMutationOptions
+    ) => {
       const payload: {
         foregroundColor?: number | null;
         backgroundColor?: number | null;
@@ -328,7 +332,11 @@ export const EnrichedTextInput = ({
       if (customStyle.lineHeight !== undefined) {
         payload.lineHeight = customStyle.lineHeight;
       }
-      Commands.setStyle(nullthrows(nativeRef.current), JSON.stringify(payload));
+      Commands.setStyle(
+        nullthrows(nativeRef.current),
+        JSON.stringify(payload),
+        options?.collapsedSelectionMode ?? 'typing'
+      );
     },
   }));
 

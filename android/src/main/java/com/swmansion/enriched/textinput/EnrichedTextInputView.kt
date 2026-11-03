@@ -1059,12 +1059,15 @@ class EnrichedTextInputView :
     selection?.validateStyles()
   }
 
-  fun setStyle(styleJSON: String) {
+  fun setStyle(
+    styleJSON: String,
+    collapsedSelectionMode: String,
+  ) {
     val isValid = verifyStyle(EnrichedSpans.CUSTOM_STYLE)
     if (!isValid) return
 
     runAsATransaction {
-      customStyles?.setStyle(styleJSON)
+      customStyles?.setStyle(styleJSON, collapsedSelectionMode)
     }
     layoutManager.invalidateLayout()
   }

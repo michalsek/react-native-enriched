@@ -1375,7 +1375,8 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     }
   } else if ([commandName isEqualToString:@"setStyle"]) {
     NSString *styleJSON = (NSString *)args[0];
-    [self setStyle:styleJSON];
+    NSString *collapsedSelectionMode = (NSString *)args[1];
+    [self setStyle:styleJSON collapsedSelectionMode:collapsedSelectionMode];
   }
 }
 
@@ -1591,7 +1592,8 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   }
 }
 
-- (void)setStyle:(NSString *)styleJSON {
+- (void)setStyle:(NSString *)styleJSON
+    collapsedSelectionMode:(NSString *)collapsedSelectionMode {
   NSData *jsonData = [styleJSON dataUsingEncoding:NSUTF8StringEncoding];
   if (jsonData == nil)
     return;
@@ -1603,6 +1605,11 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   NSDictionary *dict = (NSDictionary *)parsed;
 
   NSRange selectedRange = textView.selectedRange;
+  if (selectedRange.length == 0 &&
+      [collapsedSelectionMode isEqualToString:@"paragraph"]) {
+    selectedRange =
+        [textView.textStorage.string paragraphRangeForRange:selectedRange];
+  }
   CustomStyle *customStyleClass =
       (CustomStyle *)stylesDict[@([CustomStyle getType])];
   if (customStyleClass == nil)

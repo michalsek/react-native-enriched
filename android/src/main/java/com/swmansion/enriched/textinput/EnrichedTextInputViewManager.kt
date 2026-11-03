@@ -498,8 +498,9 @@ class EnrichedTextInputViewManager :
   override fun setStyle(
     view: EnrichedTextInputView?,
     styleJSON: String,
+    collapsedSelectionMode: String,
   ) {
-    view?.setStyle(styleJSON)
+    view?.setStyle(styleJSON, collapsedSelectionMode)
   }
 
   override fun measure(

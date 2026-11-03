@@ -21,6 +21,7 @@ export type {
   OnChangeMentionEvent,
   TextShortcut,
   TextShortcutStyle,
+  TextStyleMutationOptions,
 } from './types';
 
 // EnrichedText
