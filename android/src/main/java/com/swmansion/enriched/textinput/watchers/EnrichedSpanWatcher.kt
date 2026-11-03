@@ -19,6 +19,7 @@ class EnrichedSpanWatcher(
   private val view: EnrichedTextInputView,
 ) : SpanWatcher {
   private var previousHtml: String? = null
+  private val nextLineLayoutSpan = NextLineLayoutSpan()
 
   override fun onSpanAdded(
     text: Spannable,
@@ -70,13 +71,11 @@ class EnrichedSpanWatcher(
     text: Spannable,
     end: Int,
   ) {
-    class EmptySpan : ParagraphStyle
-
     if (what is EnrichedHeadingSpan || (what is EnrichedInlineSpan && what is MetricAffectingSpan)) {
       val finalStart = (end + 1)
       val finalEnd = text.length
       val (safeStart, safeEnd) = text.getSafeSpanBoundaries(finalStart, finalEnd)
-      text.setSpan(EmptySpan(), safeStart, safeEnd, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+      text.setSpan(nextLineLayoutSpan, safeStart, safeEnd, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
     }
   }
 
@@ -107,3 +106,5 @@ class EnrichedSpanWatcher(
     )
   }
 }
+
+private class NextLineLayoutSpan : ParagraphStyle
