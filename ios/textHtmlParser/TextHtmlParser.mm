@@ -5,6 +5,7 @@
 #import "interfaces/AlignmentEntry.h"
 #import "interfaces/LinkData.h"
 #import "interfaces/MentionParams.h"
+#import "interfaces/ParagraphMarginEntry.h"
 #import "interfaces/StyleHeaders.h"
 #import "utils/StyleUtils.h"
 #import "utils/ZeroWidthSpaceUtils.h"
@@ -37,6 +38,7 @@
     NSString *plainText = result[0];
     NSArray *processedStyles = result[1];
     NSArray *alignments = result[2];
+    NSArray *paragraphMargins = result[3];
 
     NSMutableAttributedString *body = [[NSMutableAttributedString alloc]
         initWithString:plainText
@@ -44,6 +46,7 @@
     [_view->textView.textStorage setAttributedString:body];
     [self applyProcessedStyles:processedStyles];
     [self applyProcessedAlignments:alignments];
+    [self applyProcessedParagraphMargins:paragraphMargins];
   } @catch (NSException *exception) {
     RCTLogWarn(@"[EnrichedTextView]: Failed to parse HTML: (%@), falling back "
                @"to raw input.",
@@ -189,6 +192,33 @@
                       withTyping:NO
                   withDirtyRange:NO];
     [alignmentStyle applyStyling:finalRange];
+  }
+}
+
+- (void)applyProcessedParagraphMargins:
+    (NSArray<ParagraphMarginEntry *> *)paragraphMargins {
+  ParagraphMarginStyle *paragraphMarginStyle =
+      _view.stylesDict[@([ParagraphMarginStyle getType])];
+
+  if (paragraphMarginStyle == nil) {
+    return;
+  }
+
+  for (ParagraphMarginEntry *entry in paragraphMargins) {
+    NSString *string = _view->textView.textStorage.string;
+    NSUInteger start = MIN(entry.range.location, string.length);
+    NSUInteger end = MIN(start + entry.range.length, string.length);
+    if (end <= start) {
+      continue;
+    }
+    NSRange finalRange =
+        [string paragraphRangeForRange:NSMakeRange(start, end - start)];
+
+    [paragraphMarginStyle addMarginTop:entry.marginTop
+                          marginBottom:entry.marginBottom
+                                 range:finalRange
+                            withTyping:NO
+                        withDirtyRange:NO];
   }
 }
 

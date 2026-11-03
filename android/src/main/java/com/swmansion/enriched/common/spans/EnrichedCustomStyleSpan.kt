@@ -14,6 +14,7 @@ import com.facebook.react.views.text.ReactTypefaceUtils.applyStyles
 import com.swmansion.enriched.common.CustomStyle
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.common.spans.interfaces.EnrichedInlineSpan
+import com.swmansion.enriched.common.spans.interfaces.isSpacerLine
 import com.swmansion.enriched.common.withOpacity
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -135,6 +136,7 @@ interface EnrichedCustomStyleLineHeightSpan : LineHeightSpan.WithDensity {
     paint: TextPaint?,
   ) {
     val spanned = text as? Spanned ?: return
+    if (spanned.isSpacerLine(start, end)) return
     if (!spanned.coversLine(this, start, end)) return
     if (paint != null) spanned.resetToNaturalMetrics(start, end, fm, paint)
     fm.centerInLineHeight(spanned.tallestCustomLineHeightPx(start, end))

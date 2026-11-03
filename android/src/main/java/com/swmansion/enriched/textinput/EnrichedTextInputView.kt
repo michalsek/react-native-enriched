@@ -69,11 +69,11 @@ import com.swmansion.enriched.textinput.styles.ParametrizedStyles
 import com.swmansion.enriched.textinput.utils.EnrichedEditableFactory
 import com.swmansion.enriched.textinput.utils.EnrichedSelection
 import com.swmansion.enriched.textinput.utils.EnrichedSpanState
+import com.swmansion.enriched.textinput.utils.ParagraphMarginSpacers
 import com.swmansion.enriched.textinput.utils.RichContentReceiver
 import com.swmansion.enriched.textinput.utils.ShortcutsHandler
 import com.swmansion.enriched.textinput.utils.mergeSpannables
 import com.swmansion.enriched.textinput.utils.setCheckboxClickListener
-import com.swmansion.enriched.textinput.utils.zwsCountBefore
 import com.swmansion.enriched.textinput.watchers.EnrichedSpanWatcher
 import com.swmansion.enriched.textinput.watchers.EnrichedTextWatcher
 import java.util.regex.Pattern
@@ -96,6 +96,7 @@ class EnrichedTextInputView :
   var isDuringTransaction: Boolean = false
   var isRemovingMany: Boolean = false
   var isSettingValue: Boolean = false
+  var isNormalizingParagraphMarginSpacers: Boolean = false
   var scrollEnabled: Boolean = true
   var allowFontScaling: Boolean = EnrichedConstants.ALLOW_FONT_SCALING_DEFAULT
     set(value) {
@@ -291,7 +292,7 @@ class EnrichedTextInputView :
       OnSubmitEditingEvent(
         surfaceId,
         id,
-        text,
+        text?.let { ParagraphMarginSpacers.publicText(it) },
         experimentalSynchronousEvents,
       ),
     )
@@ -392,7 +393,7 @@ class EnrichedTextInputView :
     val spannable = text as Spannable
 
     if (start < end) {
-      val selectedText = spannable.subSequence(start, end) as Spannable
+      val selectedText = ParagraphMarginSpacers.publicText(spannable, start, end)
       val selectedHtml = EnrichedParser.toHtml(selectedText)
 
       val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -429,7 +430,7 @@ class EnrichedTextInputView :
     // replacement-safe: oldLength - removed + inserted
     val insertedLength = finalText.length - (lengthBefore - (end - start))
     val pasteEnd = (start + insertedLength).coerceIn(0, finalText.length)
-    setSelection(pasteEnd)
+    setSelection(ParagraphMarginSpacers.coerceIndex(text ?: finalText, pasteEnd))
 
     // Update links and mentions in the newly pasted range
     val editable = text as? Editable ?: return
@@ -449,7 +450,7 @@ class EnrichedTextInputView :
 
     return try {
       val parsed = EnrichedParser.fromHtml(normalized, htmlStyle, spannableFactory, linkRegex)
-      parsed.trimEnd('\n')
+      ParagraphMarginSpacers.normalized(parsed.trimEnd('\n'))
     } catch (e: Exception) {
       Log.e(TAG, "Error parsing normalized HTML: ${e.message}")
       text
@@ -462,7 +463,7 @@ class EnrichedTextInputView :
     if (isInternalHtml) {
       try {
         val parsed = EnrichedParser.fromHtml(text.toString(), htmlStyle, spannableFactory, linkRegex)
-        return parsed.trimEnd('\n')
+        return ParagraphMarginSpacers.normalized(parsed.trimEnd('\n'))
       } catch (e: Exception) {
         Log.e(TAG, "Error parsing HTML: ${e.message}")
         return normalizeHtmlIfNeeded(text)
@@ -486,13 +487,14 @@ class EnrichedTextInputView :
       runAsATransaction {
         val newText = if (shouldParseHtml) parseText(value) else value
         setText(newText)
+        normalizeParagraphMarginSpacers()
         applyLineSpacing()
 
         observeAsyncImages()
 
         val textLength = text?.length ?: 0
-        val start = previousStart.coerceIn(0, textLength)
-        val end = previousEnd.coerceIn(start, textLength)
+        val start = ParagraphMarginSpacers.coerceIndex(text ?: "", previousStart.coerceIn(0, textLength))
+        val end = ParagraphMarginSpacers.coerceIndex(text ?: "", previousEnd.coerceIn(start, textLength))
         setSelection(start, end)
       }
     } finally {
@@ -514,22 +516,7 @@ class EnrichedTextInputView :
   // Helper: Walks through the string skipping ZWSPs to find the Nth visible character
   private fun getActualIndex(visibleIndex: Int): Int {
     val currentText = text as Spannable
-    var currentVisibleCount = 0
-    var actualIndex = 0
-
-    while (actualIndex < currentText.length) {
-      if (currentVisibleCount == visibleIndex) {
-        return actualIndex
-      }
-
-      // If the current char is not a hidden space, it counts towards our visible index
-      if (currentText[actualIndex] != EnrichedConstants.ZWS) {
-        currentVisibleCount++
-      }
-      actualIndex++
-    }
-
-    return actualIndex
+    return ParagraphMarginSpacers.actualIndexForPublicIndex(currentText, visibleIndex)
   }
 
   /**
@@ -794,10 +781,14 @@ class EnrichedTextInputView :
     val end = selection.end
     val styleState = spanState?.getStyleStatePayload() ?: return
     val currentText = text ?: return
-    val selectedText = currentText.subSequence(start, end).toString().replace(EnrichedConstants.ZWS_STRING, "")
+    val selectedText =
+      ParagraphMarginSpacers
+        .publicText(currentText, start, end)
+        .toString()
+        .replace(EnrichedConstants.ZWS_STRING, "")
 
-    val visibleStart = start - currentText.zwsCountBefore(start)
-    val visibleEnd = end - currentText.zwsCountBefore(end)
+    val visibleStart = ParagraphMarginSpacers.publicIndexBefore(currentText, start)
+    val visibleEnd = ParagraphMarginSpacers.publicIndexBefore(currentText, end)
 
     val reactContext = context as ReactContext
     val surfaceId = UIManagerHelper.getSurfaceId(reactContext)
@@ -1075,7 +1066,7 @@ class EnrichedTextInputView :
   fun requestHTML(requestId: Int) {
     val html =
       try {
-        EnrichedParser.toHtmlWithDefault(text)
+        EnrichedParser.toHtmlWithDefault(text?.let { ParagraphMarginSpacers.publicText(it) })
       } catch (_: Exception) {
         null
       }
@@ -1084,6 +1075,33 @@ class EnrichedTextInputView :
     val surfaceId = UIManagerHelper.getSurfaceId(reactContext)
     val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(reactContext, id)
     dispatcher?.dispatchEvent(OnRequestHtmlResultEvent(surfaceId, id, requestId, html, experimentalSynchronousEvents))
+  }
+
+  fun mergeParagraphsJoinedAtMarginSpacers(
+    index: Int,
+    removesParagraphBreak: Boolean,
+  ): Int {
+    if (isNormalizingParagraphMarginSpacers) return index
+    val editable = text ?: return index
+
+    isNormalizingParagraphMarginSpacers = true
+    try {
+      return ParagraphMarginSpacers.mergeParagraphsJoinedAt(editable, index, removesParagraphBreak)
+    } finally {
+      isNormalizingParagraphMarginSpacers = false
+    }
+  }
+
+  fun normalizeParagraphMarginSpacers() {
+    if (isNormalizingParagraphMarginSpacers) return
+    val editable = text ?: return
+
+    isNormalizingParagraphMarginSpacers = true
+    try {
+      ParagraphMarginSpacers.normalize(editable)
+    } finally {
+      isNormalizingParagraphMarginSpacers = false
+    }
   }
 
   // Sometimes setting up style triggers many changes in sequence
@@ -1185,6 +1203,7 @@ class EnrichedTextInputView :
         selection?.validateStyles()
       }
     }
+    normalizeParagraphMarginSpacers()
     layoutManager.invalidateLayout()
     forceScrollToSelection()
   }

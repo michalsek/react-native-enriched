@@ -18,6 +18,7 @@ import com.swmansion.enriched.common.spans.EnrichedItalicSpan
 import com.swmansion.enriched.common.spans.EnrichedLinkSpan
 import com.swmansion.enriched.common.spans.EnrichedMentionSpan
 import com.swmansion.enriched.common.spans.EnrichedOrderedListSpan
+import com.swmansion.enriched.common.spans.EnrichedParagraphMarginSpan
 import com.swmansion.enriched.common.spans.EnrichedStrikeThroughSpan
 import com.swmansion.enriched.common.spans.EnrichedUnderlineSpan
 import com.swmansion.enriched.common.spans.EnrichedUnorderedListSpan
@@ -81,6 +82,12 @@ interface EnrichedSpanFactory<T> {
   fun createBlockQuoteSpan(style: T): EnrichedBlockQuoteSpan
 
   fun createCodeBlockSpan(style: T): EnrichedCodeBlockSpan
+
+  fun createParagraphMarginSpan(
+    marginTop: Float?,
+    marginBottom: Float?,
+    style: T,
+  ): EnrichedParagraphMarginSpan
 
   fun createCustomStyleSpan(
     foregroundColor: Int?,

@@ -3,6 +3,7 @@
 #import "extensions/StringExtension.h"
 #import "htmlParser/HtmlParser.h"
 #import "interfaces/AlignmentEntry.h"
+#import "interfaces/ParagraphMarginEntry.h"
 #import "interfaces/StyleHeaders.h"
 #import "utils/StyleUtils.h"
 #import "utils/TextInsertionUtils.h"
@@ -29,6 +30,7 @@
     NSString *plainText = (NSString *)processingResult[0];
     NSArray *stylesInfo = (NSArray *)processingResult[1];
     NSArray *alignments = (NSArray *)processingResult[2];
+    NSArray *paragraphMargins = (NSArray *)processingResult[3];
 
     // set new text
     _input->textView.text = plainText;
@@ -38,6 +40,7 @@
            offsetFromBeginning:0
                plainTextLength:plainText.length];
     [self applyProcessedAlignments:alignments offset:0];
+    [self applyProcessedParagraphMargins:paragraphMargins offset:0];
     [_input anyTextMayHaveBeenModified];
   } @catch (NSException *exception) {
     RCTLogWarn(@"[EnrichedTextInput]: Failed to parse HTML: (%@), falling back "
@@ -56,6 +59,7 @@
     NSString *plainText = (NSString *)processingResult[0];
     NSArray *stylesInfo = (NSArray *)processingResult[1];
     NSArray *alignments = (NSArray *)processingResult[2];
+    NSArray *paragraphMargins = (NSArray *)processingResult[3];
 
     // we can use ready replace util
     [TextInsertionUtils replaceText:plainText
@@ -68,6 +72,8 @@
            offsetFromBeginning:range.location
                plainTextLength:plainText.length];
     [self applyProcessedAlignments:alignments offset:range.location];
+    [self applyProcessedParagraphMargins:paragraphMargins
+                                  offset:range.location];
     [_input anyTextMayHaveBeenModified];
   } @catch (NSException *exception) {
     RCTLogWarn(@"[EnrichedTextInput]: Failed to parse HTML: (%@), falling back "
@@ -88,6 +94,7 @@
     NSString *plainText = (NSString *)processingResult[0];
     NSArray *stylesInfo = (NSArray *)processingResult[1];
     NSArray *alignments = (NSArray *)processingResult[2];
+    NSArray *paragraphMargins = (NSArray *)processingResult[3];
 
     // same here, insertion utils got our back
     [TextInsertionUtils insertText:plainText
@@ -100,6 +107,7 @@
            offsetFromBeginning:location
                plainTextLength:plainText.length];
     [self applyProcessedAlignments:alignments offset:location];
+    [self applyProcessedParagraphMargins:paragraphMargins offset:location];
     [_input anyTextMayHaveBeenModified];
   } @catch (NSException *exception) {
     RCTLogWarn(@"[EnrichedTextInput]: Failed to parse HTML: (%@), falling back "
@@ -223,6 +231,34 @@
                            range:finalRange
                       withTyping:NO
                   withDirtyRange:NO];
+  }
+}
+
+- (void)applyProcessedParagraphMargins:
+            (NSArray<ParagraphMarginEntry *> *)paragraphMargins
+                                offset:(NSInteger)offset {
+  ParagraphMarginStyle *paragraphMarginStyle =
+      _input.stylesDict[@([ParagraphMarginStyle getType])];
+
+  if (paragraphMarginStyle == nil) {
+    return;
+  }
+
+  for (ParagraphMarginEntry *entry in paragraphMargins) {
+    NSString *string = _input->textView.textStorage.string;
+    NSUInteger start = MIN(offset + entry.range.location, string.length);
+    NSUInteger end = MIN(start + entry.range.length, string.length);
+    if (end <= start) {
+      continue;
+    }
+    NSRange finalRange =
+        [string paragraphRangeForRange:NSMakeRange(start, end - start)];
+
+    [paragraphMarginStyle addMarginTop:entry.marginTop
+                          marginBottom:entry.marginBottom
+                                 range:finalRange
+                            withTyping:NO
+                        withDirtyRange:NO];
   }
 }
 

@@ -5,6 +5,7 @@ import android.text.Spannable
 import android.text.SpannableStringBuilder
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.EnrichedSpanFlags
+import com.swmansion.enriched.common.spans.interfaces.isSpacerLine
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputCheckboxListSpan
@@ -221,6 +222,12 @@ class AlignmentStyles(
 
     while (cursor <= shiftedEnd) {
       val (paraStart, paraEnd) = spannable.getParagraphBounds(cursor)
+
+      if (spannable.isSpacerLine(paraStart, paraEnd)) {
+        if (paraEnd >= shiftedEnd || paraEnd == spannable.length) break
+        cursor = paraEnd + 1
+        continue
+      }
 
       cleanUpExistingSpans(spannable, paraStart, paraEnd)
 

@@ -324,7 +324,8 @@ typedef struct {
                                           input:(EnrichedTextInputView *)input {
   for (NSNumber *typeKey in input->stylesDict) {
     StyleBase *style = input->stylesDict[typeKey];
-    if (![style isParagraph] || [[style class] getType] == Alignment) {
+    if (![style isParagraph] || [[style class] getType] == Alignment ||
+        [[style class] getType] == ParagraphMargin) {
       continue;
     }
     if ([style detect:paragraphRange]) {

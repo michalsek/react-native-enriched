@@ -74,6 +74,7 @@
       @([BlockQuoteStyle getType]), @([CodeBlockStyle getType])
     ],
     @([AlignmentStyle getType]) : @[],
+    @([ParagraphMarginStyle getType]) : @[],
     @([BlockQuoteStyle getType]) : @[
       @([H1Style getType]), @([H2Style getType]), @([H3Style getType]),
       @([H4Style getType]), @([H5Style getType]), @([H6Style getType]),
@@ -122,6 +123,7 @@
     @([OrderedListStyle getType]) : @[],
     @([CheckboxListStyle getType]) : @[],
     @([AlignmentStyle getType]) : @[],
+    @([ParagraphMarginStyle getType]) : @[],
     @([BlockQuoteStyle getType]) : @[],
     @([CodeBlockStyle getType]) : @[],
     @([ImageStyle getType]) : @[ @([InlineCodeStyle getType]) ],
@@ -150,6 +152,7 @@
     [OrderedListStyle class],
     [CheckboxListStyle class],
     [AlignmentStyle class],
+    [ParagraphMarginStyle class],
     [BlockQuoteStyle class],
     [CodeBlockStyle class],
     [ImageStyle class]
@@ -174,6 +177,7 @@
     [EnrichedTextOrderedListStyle class],
     [EnrichedTextCheckboxListStyle class],
     [EnrichedTextAlignmentStyle class],
+    [EnrichedTextParagraphMarginStyle class],
     [EnrichedTextBlockQuoteStyle class],
     [EnrichedTextCodeBlockStyle class],
     [EnrichedTextImageStyle class]

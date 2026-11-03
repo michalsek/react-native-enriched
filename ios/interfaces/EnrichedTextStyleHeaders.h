@@ -63,3 +63,6 @@
 
 @interface EnrichedTextAlignmentStyle : AlignmentStyle
 @end
+
+@interface EnrichedTextParagraphMarginStyle : ParagraphMarginStyle
+@end

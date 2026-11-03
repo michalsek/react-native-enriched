@@ -21,6 +21,7 @@ import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.textinput.spans.EnrichedLineHeightSpan
 import com.swmansion.enriched.textinput.styles.HtmlStyle
+import com.swmansion.enriched.textinput.utils.ParagraphMarginSpacers
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.ceil
 
@@ -124,7 +125,7 @@ object MeasurementStore {
           allowFontScalingFromProps(props),
         )
       val parsed = EnrichedParser.fromHtml(defaultValue, htmlStyle, factory)
-      return parsed.trimEnd('\n')
+      return ParagraphMarginSpacers.normalized(parsed.trimEnd('\n'))
     } catch (e: Exception) {
       Log.w("MeasurementStore", "Error parsing initial HTML text: ${e.message}")
       return defaultValue

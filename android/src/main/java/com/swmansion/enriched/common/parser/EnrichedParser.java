@@ -26,6 +26,7 @@ import com.swmansion.enriched.common.spans.EnrichedItalicSpan;
 import com.swmansion.enriched.common.spans.EnrichedLinkSpan;
 import com.swmansion.enriched.common.spans.EnrichedMentionSpan;
 import com.swmansion.enriched.common.spans.EnrichedOrderedListSpan;
+import com.swmansion.enriched.common.spans.EnrichedParagraphMarginSpan;
 import com.swmansion.enriched.common.spans.EnrichedStrikeThroughSpan;
 import com.swmansion.enriched.common.spans.EnrichedUnderlineSpan;
 import com.swmansion.enriched.common.spans.EnrichedUnorderedListSpan;
@@ -36,7 +37,9 @@ import com.swmansion.enriched.common.spans.interfaces.EnrichedSpan;
 import com.swmansion.enriched.common.spans.interfaces.EnrichedZeroWidthSpaceSpan;
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -155,6 +158,31 @@ public class EnrichedParser {
     return " style=\"text-align: " + cssValue + "\"";
   }
 
+  private static String getParagraphStyleAttr(Spanned text, int start, int end) {
+    ArrayList<String> declarations = new ArrayList<>();
+
+    EnrichedAlignmentSpan[] alignmentSpans = text.getSpans(start, end, EnrichedAlignmentSpan.class);
+    if (alignmentSpans.length > 0 && !alignmentSpans[0].getCssValue().equals("auto")) {
+      declarations.add("text-align: " + alignmentSpans[0].getCssValue());
+    }
+
+    EnrichedParagraphMarginSpan[] marginSpans =
+        text.getSpans(start, end, EnrichedParagraphMarginSpan.class);
+    if (marginSpans.length > 0) {
+      Float marginTop = marginSpans[0].getMarginTop();
+      Float marginBottom = marginSpans[0].getMarginBottom();
+      if (marginTop != null && marginTop > 0) {
+        declarations.add("margin-top: " + formatCssFontSizeValue(marginTop) + "px");
+      }
+      if (marginBottom != null && marginBottom > 0) {
+        declarations.add("margin-bottom: " + formatCssFontSizeValue(marginBottom) + "px");
+      }
+    }
+
+    if (declarations.isEmpty()) return "";
+    return " style=\"" + TextUtils.join("; ", declarations) + "\"";
+  }
+
   private static String getBlockTag(EnrichedParagraphSpan[] spans) {
     for (EnrichedParagraphSpan span : spans) {
       if (span instanceof EnrichedUnorderedListSpan) {
@@ -253,7 +281,7 @@ public class EnrichedParser {
 
         // Add alignment style to non-list paragraph/heading tags
         if (!isList) {
-          out.append(getAlignmentStyleAttr(text, i, next));
+          out.append(getParagraphStyleAttr(text, i, next));
         }
 
         if (isCheckboxListItem) {
@@ -534,6 +562,82 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     }
   }
 
+  private static void pushParagraphMarginMark(Editable text, Attributes attributes) {
+    ParagraphMargin margin = parseParagraphMargin(attributes);
+    if (margin != null) {
+      start(text, margin);
+    }
+  }
+
+  private static ParagraphMargin parseParagraphMargin(Attributes attributes) {
+    String cssStyle = attributes.getValue("", "style");
+    if (cssStyle == null) {
+      return null;
+    }
+
+    Float marginTop = null;
+    Float marginBottom = null;
+
+    for (String declaration : cssStyle.split(";")) {
+      int colonIndex = declaration.indexOf(':');
+      if (colonIndex < 0) {
+        continue;
+      }
+      String property = declaration.substring(0, colonIndex).trim().toLowerCase(Locale.US);
+      String value = declaration.substring(colonIndex + 1).trim();
+      if (value.isEmpty()) {
+        continue;
+      }
+
+      switch (property) {
+        case "margin-top":
+          marginTop = parseCssDimension(value);
+          break;
+        case "margin-bottom":
+          marginBottom = parseCssDimension(value);
+          break;
+        case "margin":
+          String[] parts = value.trim().split("\\s+");
+          if (parts.length > 0) {
+            Float shorthandTop = parseCssDimension(parts[0]);
+            Float shorthandBottom = parseCssDimension(parts.length >= 3 ? parts[2] : parts[0]);
+            if (marginTop == null) {
+              marginTop = shorthandTop;
+            }
+            if (marginBottom == null) {
+              marginBottom = shorthandBottom;
+            }
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    return marginTop != null || marginBottom != null
+        ? new ParagraphMargin(marginTop, marginBottom)
+        : null;
+  }
+
+  private static Float parseCssDimension(String value) {
+    String numeric = value.trim();
+    int end = 0;
+    while (end < numeric.length()
+        && (Character.isDigit(numeric.charAt(end))
+            || numeric.charAt(end) == '.'
+            || numeric.charAt(end) == '-')) {
+      end++;
+    }
+    if (end == 0) {
+      return null;
+    }
+    try {
+      return Float.parseFloat(numeric.substring(0, end));
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
   public HtmlToSpannedConverter(
       String source,
       T style,
@@ -624,6 +728,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
       isEmptyTag = true;
       startBlockElement(mSpannableStringBuilder);
       pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
     } else if (tag.equalsIgnoreCase("ul")) {
       isInOrderedList = false;
       String dataType = attributes.getValue("", "data-type");
@@ -659,21 +764,27 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     } else if (tag.equalsIgnoreCase("h1")) {
       startHeading(mSpannableStringBuilder, 1);
       pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
     } else if (tag.equalsIgnoreCase("h2")) {
       startHeading(mSpannableStringBuilder, 2);
       pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
     } else if (tag.equalsIgnoreCase("h3")) {
       startHeading(mSpannableStringBuilder, 3);
       pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
     } else if (tag.equalsIgnoreCase("h4")) {
       startHeading(mSpannableStringBuilder, 4);
       pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
     } else if (tag.equalsIgnoreCase("h5")) {
       startHeading(mSpannableStringBuilder, 5);
       pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
     } else if (tag.equalsIgnoreCase("h6")) {
       startHeading(mSpannableStringBuilder, 6);
       pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
     } else if (tag.equalsIgnoreCase("img")) {
       // Image content means the current tag is not empty (e.g. <li><img .../></li>).
       isEmptyTag = false;
@@ -694,6 +805,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
       boolean empty = isEmptyTag;
       Alignment pendingAlignment = empty ? getLast(mSpannableStringBuilder, Alignment.class) : null;
       endBlockElement(mSpannableStringBuilder, mSpanFactory);
+      endParagraphMargin(mSpannableStringBuilder, mStyle, mSpanFactory);
       // Plain empty paragraphs never reach setParagraphSpanFromMark (no ZWS).
       // Represent them as a blank line so they round-trip as <br>.
       if (empty && pendingAlignment == null) {
@@ -773,6 +885,27 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     Alignment a = getLast(text, Alignment.class);
     if (a != null) {
       setParagraphSpanFromMark(text, a, spanFactory.createAlignmentSpan(a.mCssValue));
+    }
+  }
+
+  private static <T> void endParagraphMargin(
+      Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
+    ParagraphMargin margin = getLast(text, ParagraphMargin.class);
+    if (margin == null) {
+      return;
+    }
+
+    int where = text.getSpanStart(margin);
+    text.removeSpan(margin);
+    int len = text.length();
+
+    if (len > 0 && text.charAt(len - 1) == '\n') {
+      len--;
+    }
+
+    if (where >= 0 && where < len) {
+      Object span = spanFactory.createParagraphMarginSpan(margin.mTop, margin.mBottom, style);
+      text.setSpan(span, where, len, EnrichedSpanFlags.forSpan(span));
     }
   }
 
@@ -868,6 +1001,7 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
   private static <T> void endHeading(
       Editable text, T style, EnrichedSpanFactory<T> spanFactory, int level) {
     endBlockElement(text, spanFactory);
+    endParagraphMargin(text, style, spanFactory);
 
     switch (level) {
       case 1:
@@ -1263,6 +1397,16 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
       mFontFamily = fontFamily;
       mLetterSpacing = letterSpacing;
       mLineHeight = lineHeight;
+    }
+  }
+
+  private static class ParagraphMargin {
+    private final Float mTop;
+    private final Float mBottom;
+
+    public ParagraphMargin(Float top, Float bottom) {
+      mTop = top;
+      mBottom = bottom;
     }
   }
 

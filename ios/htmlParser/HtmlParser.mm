@@ -7,6 +7,7 @@
 #import "interfaces/ImageData.h"
 #import "interfaces/LinkData.h"
 #import "interfaces/MentionParams.h"
+#import "interfaces/ParagraphMarginEntry.h"
 #import "interfaces/StyleHeaders.h"
 #import "interfaces/StylePair.h"
 #import "utils/AlignmentUtils.h"
@@ -427,6 +428,8 @@
   NSMutableDictionary *checkboxStates = [[NSMutableDictionary alloc] init];
   NSMutableArray<AlignmentEntry *> *foundAlignments =
       [[NSMutableArray alloc] init];
+  NSMutableArray<ParagraphMarginEntry *> *foundParagraphMargins =
+      [[NSMutableArray alloc] init];
   BOOL insideCheckboxList = NO;
   NSInteger precedingImageCount = 0;
   BOOL insideTag = NO;
@@ -602,6 +605,10 @@
                        plainText:plainText
                  foundAlignments:foundAlignments
              precedingImageCount:precedingImageCount];
+        [self checkForParagraphMargins:ongoingTags[currentTagName]
+                             plainText:plainText
+                 foundParagraphMargins:foundParagraphMargins
+                   precedingImageCount:precedingImageCount];
         [self finalizeTagEntry:currentTagName
                        ongoingTags:ongoingTags
             initiallyProcessedTags:initiallyProcessedTags
@@ -859,7 +866,8 @@
     [processedStyles addObject:styleArr];
   }
 
-  return @[ plainText, processedStyles, foundAlignments ];
+  return
+      @[ plainText, processedStyles, foundAlignments, foundParagraphMargins ];
 }
 
 + (NSString *)parseToHtmlFromRange:(NSRange)range
@@ -893,7 +901,8 @@
     for (NSNumber *type in host.stylesDict) {
       StyleBase *style = host.stylesDict[type];
       // we do not want to add <></> tags for alignment
-      if ([style isKindOfClass:[AlignmentStyle class]]) {
+      if ([style isKindOfClass:[AlignmentStyle class]] ||
+          [style isKindOfClass:[ParagraphMarginStyle class]]) {
         continue;
       }
       if ([style detect:currentRange]) {
@@ -1577,12 +1586,119 @@
                                    atIndex:location
                             effectiveRange:nil];
   NSString *alignStr = [AlignmentUtils cssValueForAlignment:pStyle.alignment];
+  NSMutableArray<NSString *> *declarations = [[NSMutableArray alloc] init];
 
   if (alignStr) {
-    return [NSString stringWithFormat:@" style=\"text-align: %@\"", alignStr];
+    [declarations
+        addObject:[NSString stringWithFormat:@"text-align: %@", alignStr]];
+  }
+
+  if (pStyle.paragraphSpacingBefore > 0) {
+    [declarations
+        addObject:[NSString stringWithFormat:@"margin-top: %gpx",
+                                             pStyle.paragraphSpacingBefore]];
+  }
+
+  if (pStyle.paragraphSpacing > 0) {
+    [declarations
+        addObject:[NSString stringWithFormat:@"margin-bottom: %gpx",
+                                             pStyle.paragraphSpacing]];
+  }
+
+  if (declarations.count > 0) {
+    return [NSString
+        stringWithFormat:@" style=\"%@\"",
+                         [declarations componentsJoinedByString:@"; "]];
   }
 
   return @"";
+}
+
++ (NSString *)parseCssDimension:(NSString *)value {
+  NSScanner *scanner = [NSScanner scannerWithString:value];
+  double number = 0;
+  if (![scanner scanDouble:&number]) {
+    return nullptr;
+  }
+  return [NSString stringWithFormat:@"%g", number];
+}
+
++ (NSDictionary<NSString *, NSNumber *> *)paragraphMarginsFromStyleParams:
+    (NSString *)params {
+  NSMutableDictionary<NSString *, NSNumber *> *result =
+      [[NSMutableDictionary alloc] init];
+
+  NSRegularExpression *styleRegex =
+      [NSRegularExpression regularExpressionWithPattern:@"style=([\"'])(.*?)\\1"
+                                                options:0
+                                                  error:nullptr];
+  NSTextCheckingResult *match =
+      [styleRegex firstMatchInString:params
+                             options:0
+                               range:NSMakeRange(0, params.length)];
+  if (match == nullptr || match.numberOfRanges < 3) {
+    return result;
+  }
+
+  NSString *cssContent = [params substringWithRange:[match rangeAtIndex:2]];
+  for (NSString *declaration in [cssContent componentsSeparatedByString:@";"]) {
+    NSRange colonRange = [declaration rangeOfString:@":"];
+    if (colonRange.location == NSNotFound) {
+      continue;
+    }
+
+    NSString *property =
+        [[declaration substringToIndex:colonRange.location]
+            stringByTrimmingCharactersInSet:[NSCharacterSet
+                                                whitespaceCharacterSet]]
+            .lowercaseString;
+    NSString *value = [[declaration substringFromIndex:colonRange.location + 1]
+        stringByTrimmingCharactersInSet:[NSCharacterSet
+                                            whitespaceCharacterSet]];
+    if (value.length == 0) {
+      continue;
+    }
+
+    if ([property isEqualToString:@"margin-top"]) {
+      NSString *marginTop = [self parseCssDimension:value];
+      if (marginTop != nullptr) {
+        result[@"top"] = @([marginTop floatValue]);
+      }
+    } else if ([property isEqualToString:@"margin-bottom"]) {
+      NSString *marginBottom = [self parseCssDimension:value];
+      if (marginBottom != nullptr) {
+        result[@"bottom"] = @([marginBottom floatValue]);
+      }
+    } else if ([property isEqualToString:@"margin"]) {
+      NSArray<NSString *> *parts = [value
+          componentsSeparatedByCharactersInSet:[NSCharacterSet
+                                                   whitespaceCharacterSet]];
+      NSMutableArray<NSString *> *values = [[NSMutableArray alloc] init];
+
+      for (NSString *part in parts) {
+        if (part.length > 0) {
+          [values addObject:part];
+        }
+      }
+
+      if (values.count == 0) {
+        continue;
+      }
+
+      NSString *marginTop = [self parseCssDimension:values[0]];
+      NSString *marginBottom =
+          [self parseCssDimension:values.count >= 3 ? values[2] : values[0]];
+
+      if (marginTop != nullptr && result[@"top"] == nil) {
+        result[@"top"] = @([marginTop floatValue]);
+      }
+      if (marginBottom != nullptr && result[@"bottom"] == nil) {
+        result[@"bottom"] = @([marginBottom floatValue]);
+      }
+    }
+  }
+
+  return result;
 }
 
 + (NSString *)firstInFontFamilyString:(NSString *)value {
@@ -1790,6 +1906,38 @@
       [foundAlignments addObject:entry];
     }
   }
+}
+
++ (void)checkForParagraphMargins:(NSArray *)tagData
+                       plainText:(NSString *)plainText
+           foundParagraphMargins:
+               (NSMutableArray<ParagraphMarginEntry *> *)foundParagraphMargins
+             precedingImageCount:(NSInteger)precedingImageCount {
+  if (tagData == nil) {
+    return;
+  }
+
+  NSString *storedParams = (tagData.count > 2) ? tagData[2] : nil;
+  NSDictionary<NSString *, NSNumber *> *margins =
+      [self paragraphMarginsFromStyleParams:storedParams ?: @""];
+
+  if (margins[@"top"] == nil && margins[@"bottom"] == nil) {
+    return;
+  }
+
+  NSInteger startLoc = [tagData[0] integerValue];
+  NSInteger actualStart = startLoc + precedingImageCount;
+  NSInteger length = (NSInteger)plainText.length - startLoc;
+
+  if (length <= 0) {
+    return;
+  }
+
+  ParagraphMarginEntry *entry = [[ParagraphMarginEntry alloc] init];
+  entry.range = NSMakeRange(actualStart, length);
+  entry.marginTop = margins[@"top"];
+  entry.marginBottom = margins[@"bottom"];
+  [foundParagraphMargins addObject:entry];
 }
 
 @end

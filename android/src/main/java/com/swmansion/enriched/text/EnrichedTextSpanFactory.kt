@@ -21,6 +21,7 @@ import com.swmansion.enriched.text.spans.EnrichedTextItalicSpan
 import com.swmansion.enriched.text.spans.EnrichedTextLinkSpan
 import com.swmansion.enriched.text.spans.EnrichedTextMentionSpan
 import com.swmansion.enriched.text.spans.EnrichedTextOrderedListSpan
+import com.swmansion.enriched.text.spans.EnrichedTextParagraphMarginSpan
 import com.swmansion.enriched.text.spans.EnrichedTextStrikeThroughSpan
 import com.swmansion.enriched.text.spans.EnrichedTextUnderlineSpan
 import com.swmansion.enriched.text.spans.EnrichedTextUnorderedListSpan
@@ -87,6 +88,12 @@ class EnrichedTextSpanFactory(
   override fun createBlockQuoteSpan(style: EnrichedTextStyle) = EnrichedTextBlockQuoteSpan(style)
 
   override fun createCodeBlockSpan(style: EnrichedTextStyle) = EnrichedTextCodeBlockSpan(style)
+
+  override fun createParagraphMarginSpan(
+    marginTop: Float?,
+    marginBottom: Float?,
+    style: EnrichedTextStyle,
+  ) = EnrichedTextParagraphMarginSpan(marginTop, marginBottom, style.allowFontScaling)
 
   override fun createCustomStyleSpan(
     foregroundColor: Int?,

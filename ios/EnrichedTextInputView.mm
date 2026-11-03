@@ -980,10 +980,18 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   // edge case: empty input should still be of a height of a single line, so we
   // add a mock "I" character
   if ([currentStr length] == 0) {
-    [currentStr
-        appendAttributedString:[[NSAttributedString alloc]
-                                   initWithString:@"I"
-                                       attributes:textView.typingAttributes]];
+    NSMutableDictionary *attributes = [textView.typingAttributes mutableCopy];
+    NSMutableParagraphStyle *paragraphStyle =
+        [attributes[NSParagraphStyleAttributeName] mutableCopy];
+
+    if (paragraphStyle != nil) {
+      paragraphStyle.paragraphSpacingBefore = 0;
+      attributes[NSParagraphStyleAttributeName] = paragraphStyle;
+    }
+
+    [currentStr appendAttributedString:[[NSAttributedString alloc]
+                                           initWithString:@"I"
+                                               attributes:attributes]];
   }
 
   // edge case: input with only a zero width space should still be of a height

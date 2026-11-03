@@ -12,6 +12,7 @@ import androidx.core.graphics.withTranslation
 import com.swmansion.enriched.common.CheckboxDrawable
 import com.swmansion.enriched.common.EnrichedStyle
 import com.swmansion.enriched.common.spans.interfaces.EnrichedParagraphSpan
+import com.swmansion.enriched.common.spans.interfaces.isSpacerLine
 import com.swmansion.enriched.textinput.styles.HtmlStyle
 
 open class EnrichedCheckboxListSpan(
@@ -43,6 +44,8 @@ open class EnrichedCheckboxListSpan(
     v: Int,
     fm: Paint.FontMetricsInt,
   ) {
+    if (text.isSpacerLine(start, end)) return
+
     val checkboxSize = enrichedStyle.ulCheckboxBoxSize
     val currentLineHeight = fm.descent - fm.ascent
 

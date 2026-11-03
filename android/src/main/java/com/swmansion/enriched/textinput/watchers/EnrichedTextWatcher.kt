@@ -10,6 +10,7 @@ import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.events.OnChangeTextEvent
 import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
+import com.swmansion.enriched.textinput.utils.ParagraphMarginSpacers
 
 class EnrichedTextWatcher(
   private val view: EnrichedTextInputView,
@@ -20,6 +21,8 @@ class EnrichedTextWatcher(
 
   private var deletedText: String = ""
   private var anchorAlignmentToRestore: String? = null
+  private var removesAlignmentAnchor: Boolean = false
+  private var isApplyingStyles: Boolean = false
 
   override fun beforeTextChanged(
     s: CharSequence?,
@@ -31,6 +34,7 @@ class EnrichedTextWatcher(
     deletedText = if (count > 0 && s != null) s.substring(start, start + count) else ""
 
     anchorAlignmentToRestore = null
+    removesAlignmentAnchor = false
 
     // When a ZWS is being deleted, check whether it was anchoring a list or paragraph
     // style. If so, capture the co-located alignment value so AlignmentStyles can
@@ -48,6 +52,8 @@ class EnrichedTextWatcher(
             .getSpans(start, start + 1, EnrichedInputAlignmentSpan::class.java)
             .firstOrNull()
             ?.cssValue
+      } else {
+        removesAlignmentAnchor = s.getSpans(start, start + 1, EnrichedInputAlignmentSpan::class.java).isNotEmpty()
       }
     }
   }
@@ -66,11 +72,41 @@ class EnrichedTextWatcher(
 
   override fun afterTextChanged(s: Editable?) {
     if (s == null) return
+    if (view.isNormalizingParagraphMarginSpacers) return
+
+    val isNestedChange = isApplyingStyles
+    if (!view.isDuringTransaction && !isNestedChange && s.length < previousTextLength) {
+      mergeParagraphsJoinedAtMarginSpacers()
+    }
     emitEvents(s)
 
     if (view.isDuringTransaction) return
-    applyStyles(s)
+    isApplyingStyles = true
+    try {
+      applyStyles(s)
+    } finally {
+      isApplyingStyles = isNestedChange
+    }
+    if (!isNestedChange) view.normalizeParagraphMarginSpacers()
     view.layoutManager.invalidateLayout()
+  }
+
+  private fun mergeParagraphsJoinedAtMarginSpacers() {
+    val textLength = previousTextLength
+    val removedText = deletedText
+    val alignmentToRestore = anchorAlignmentToRestore
+    val isRemovingMany = view.isRemovingMany
+    val removesParagraphBreak = removesAlignmentAnchor
+    val join = view.mergeParagraphsJoinedAtMarginSpacers(endCursorPosition, removesParagraphBreak)
+    if (join == endCursorPosition) return
+
+    previousTextLength = textLength
+    deletedText = if (removesParagraphBreak) "\n" else removedText
+    anchorAlignmentToRestore = alignmentToRestore
+    removesAlignmentAnchor = false
+    view.isRemovingMany = isRemovingMany
+    startCursorPosition = join
+    endCursorPosition = join
   }
 
   private fun applyStyles(s: Editable) {
@@ -94,7 +130,7 @@ class EnrichedTextWatcher(
       OnChangeTextEvent(
         surfaceId,
         view.id,
-        editable,
+        ParagraphMarginSpacers.publicText(editable),
         view.experimentalSynchronousEvents,
       ),
     )

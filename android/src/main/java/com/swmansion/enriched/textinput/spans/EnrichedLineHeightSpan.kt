@@ -9,6 +9,7 @@ import android.text.style.MetricAffectingSpan
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.common.spans.centerInLineHeight
 import com.swmansion.enriched.common.spans.interfaces.EnrichedHeadingSpan
+import com.swmansion.enriched.common.spans.interfaces.isSpacerLine
 import com.swmansion.enriched.common.spans.tallestCustomLineHeightPx
 
 class EnrichedLineHeightSpan(
@@ -32,6 +33,7 @@ class EnrichedLineHeightSpan(
     v: Int,
     fm: Paint.FontMetricsInt,
   ) {
+    if (text.isSpacerLine(start, end)) return
     if (((text as? Spanned)?.tallestCustomLineHeightPx(start, end) ?: 0f) > 0f) return
 
     fm.centerInLineHeight(pixelFromSpOrDp(lineHeight, allowFontScaling))

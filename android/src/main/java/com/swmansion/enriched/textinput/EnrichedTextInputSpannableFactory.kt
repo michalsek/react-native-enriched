@@ -22,6 +22,7 @@ import com.swmansion.enriched.textinput.spans.EnrichedInputItalicSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputLinkSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputMentionSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputOrderedListSpan
+import com.swmansion.enriched.textinput.spans.EnrichedInputParagraphMarginSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputStrikeThroughSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputUnderlineSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputUnorderedListSpan
@@ -89,6 +90,12 @@ class EnrichedTextInputSpannableFactory(
   override fun createBlockQuoteSpan(style: HtmlStyle) = EnrichedInputBlockQuoteSpan(style)
 
   override fun createCodeBlockSpan(style: HtmlStyle) = EnrichedInputCodeBlockSpan(style)
+
+  override fun createParagraphMarginSpan(
+    marginTop: Float?,
+    marginBottom: Float?,
+    style: HtmlStyle,
+  ) = EnrichedInputParagraphMarginSpan(marginTop, marginBottom, style)
 
   override fun createCustomStyleSpan(
     foregroundColor: Int?,

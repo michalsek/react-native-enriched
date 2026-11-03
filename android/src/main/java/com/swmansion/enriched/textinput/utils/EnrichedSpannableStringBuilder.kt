@@ -4,14 +4,6 @@ import android.text.SpannableStringBuilder
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 
-fun CharSequence.zwsCountBefore(index: Int): Int {
-  var count = 0
-  for (i in 0 until index) {
-    if (this[i] == EnrichedConstants.ZWS) count++
-  }
-  return count
-}
-
 // Removes zero-width spaces from the given range in the SpannableStringBuilder without affecting spans
 fun SpannableStringBuilder.removeZWS(
   start: Int,

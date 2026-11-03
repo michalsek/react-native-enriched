@@ -163,15 +163,29 @@ static const CGFloat kNonTextLineSlack = 1.0;
     return YES;
   }
 
-  CGFloat spacingBefore = MAX(0, CGRectGetMinY(*lineFragmentUsedRect) -
-                                     CGRectGetMinY(*lineFragmentRect));
+  CGFloat proposedSpacingBefore = MAX(0, CGRectGetMinY(*lineFragmentUsedRect) -
+                                             CGRectGetMinY(*lineFragmentRect));
   CGFloat spacingAfter = MAX(0, CGRectGetMaxY(*lineFragmentRect) -
                                     CGRectGetMaxY(*lineFragmentUsedRect));
+  CGFloat spacingBefore = proposedSpacingBefore;
+
+  if (charRange.location == 0) {
+    NSParagraphStyle *paragraphStyle =
+        [textStorage attribute:NSParagraphStyleAttributeName
+                       atIndex:0
+                effectiveRange:NULL];
+    spacingBefore = MAX(spacingBefore, paragraphStyle.paragraphSpacingBefore);
+  }
+
   CGFloat height = above + below;
   CGFloat proposedHeight = lineFragmentUsedRect->size.height;
 
   if (hasAttachment || !explicitLineHeight) {
     if (proposedHeight - height > kNonTextLineSlack) {
+      CGFloat addedSpacing = spacingBefore - proposedSpacingBefore;
+      lineFragmentRect->size.height += addedSpacing;
+      lineFragmentUsedRect->origin.y += addedSpacing;
+      baselineOffset[0] += addedSpacing;
       return YES;
     }
     height = MAX(height, proposedHeight);
