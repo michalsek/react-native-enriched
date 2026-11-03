@@ -32,6 +32,10 @@
     @"&amp;" : @"&",
     @"&lt;" : @"<",
     @"&gt;" : @">",
+    @"&quot;" : @"\"",
+    @"&#39;" : @"'",
+    @"&apos;" : @"'",
+    @"&nbsp;" : @" ",
   };
 
   NSMutableDictionary *results = [[NSMutableDictionary alloc] init];
