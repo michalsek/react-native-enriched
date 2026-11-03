@@ -38,6 +38,8 @@ export const DEFAULT_STYLES: StylesState = {
     backgroundColor: '',
     fontSize: 0,
     fontFamily: '',
+    letterSpacing: 0,
+    lineHeight: 0,
   },
 };
 

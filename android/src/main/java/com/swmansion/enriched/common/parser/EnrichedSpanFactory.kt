@@ -87,5 +87,7 @@ interface EnrichedSpanFactory<T> {
     backgroundColor: Int?,
     fontSize: Float?,
     fontFamily: String?,
+    letterSpacing: Float?,
+    lineHeight: Float?,
   ): EnrichedCustomStyleSpan
 }

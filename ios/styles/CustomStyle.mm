@@ -4,6 +4,7 @@
 #import "interfaces/CustomStyleData.h"
 #import "interfaces/StyleHeaders.h"
 #import "utils/RangeUtils.h"
+#import "utils/ZeroWidthSpaceUtils.h"
 #import <React/RCTFont.h>
 
 static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
@@ -62,20 +63,45 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
   return resolvedFont;
 }
 
+- (NSNumber *)resolveKernForData:(CustomStyleData *)data {
+  return @([self.host.config
+      scaledFontSizeForValue:[data.letterSpacing doubleValue]]);
+}
+
+- (NSParagraphStyle *)resolveParagraphStyle:(NSParagraphStyle *)paragraphStyle
+                                    forData:(CustomStyleData *)data {
+  NSMutableParagraphStyle *resolvedStyle =
+      [paragraphStyle mutableCopy] ?: [[NSMutableParagraphStyle alloc] init];
+  CGFloat lineHeight =
+      [self.host.config scaledFontSizeForValue:[data.lineHeight doubleValue]];
+  resolvedStyle.minimumLineHeight = lineHeight;
+  resolvedStyle.maximumLineHeight = lineHeight;
+  return resolvedStyle;
+}
+
 - (BOOL)appliesStylingToTyping {
   CustomStyleData *data =
       [self getCustomStyleDataAt:self.host.textView.selectedRange.location];
-  return data.fontSize != nil || data.fontFamily.length > 0;
+  return data.fontSize != nil || data.fontFamily.length > 0 ||
+         data.letterSpacing != nil || data.lineHeight != nil;
 }
 
 - (void)applyStylingToTypingAttrs:(NSMutableDictionary *)attributes {
   CustomStyleData *data =
       [self getCustomStyleDataAt:self.host.textView.selectedRange.location];
-  if (data.fontSize == nil && data.fontFamily.length == 0)
-    return;
-
-  UIFont *currentFont = attributes[NSFontAttributeName];
-  attributes[NSFontAttributeName] = [self resolveFont:currentFont forData:data];
+  if (data.fontSize != nil || data.fontFamily.length > 0) {
+    UIFont *currentFont = attributes[NSFontAttributeName];
+    attributes[NSFontAttributeName] = [self resolveFont:currentFont
+                                                forData:data];
+  }
+  if (data.letterSpacing != nil) {
+    attributes[NSKernAttributeName] = [self resolveKernForData:data];
+  }
+  if (data.lineHeight != nil) {
+    attributes[NSParagraphStyleAttributeName] =
+        [self resolveParagraphStyle:attributes[NSParagraphStyleAttributeName]
+                            forData:data];
+  }
 }
 
 - (BOOL)styleCondition:(id)value range:(NSRange)range {
@@ -119,6 +145,9 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
                   attrs[NSBackgroundColorAttributeName] =
                       [data.backgroundColor colorWithResolvedAlpha];
                 }
+                if (data.letterSpacing != nil) {
+                  attrs[NSKernAttributeName] = [self resolveKernForData:data];
+                }
 
                 BOOL hasFontOverride =
                     data.fontSize != nil || data.fontFamily.length > 0;
@@ -132,6 +161,11 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
                   if (attrs.count > 0) {
                     [self.host.textView.textStorage addAttributes:attrs
                                                             range:applyRange];
+                  }
+                  if (data.letterSpacing != nil) {
+                    [ZeroWidthSpaceUtils
+                        applyKernForZeroWidthSpacesInRange:applyRange
+                                                      host:self.host];
                   }
                   if (hasFontOverride) {
                     [self.host.textView.textStorage
@@ -150,6 +184,23 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
                                              range:fontRange];
                                 }];
                   }
+                }
+
+                if (data.lineHeight != nil) {
+                  [self.host.textView.textStorage
+                      enumerateAttribute:NSParagraphStyleAttributeName
+                                 inRange:subRange
+                                 options:0
+                              usingBlock:^(id _Nullable value,
+                                           NSRange paragraphStyleRange,
+                                           BOOL *_Nonnull stop) {
+                                [self.host.textView.textStorage
+                                    addAttribute:NSParagraphStyleAttributeName
+                                           value:[self
+                                                     resolveParagraphStyle:value
+                                                                   forData:data]
+                                           range:paragraphStyleRange];
+                              }];
                 }
               }];
 }
@@ -228,6 +279,8 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
   NSMutableSet *backgroundColors = [NSMutableSet set];
   NSMutableSet *fontSizes = [NSMutableSet set];
   NSMutableSet *fontFamilies = [NSMutableSet set];
+  NSMutableSet *letterSpacings = [NSMutableSet set];
+  NSMutableSet *lineHeights = [NSMutableSet set];
 
   [self.host.textView.textStorage
       enumerateAttribute:CustomStyleAttributeName
@@ -244,6 +297,9 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
                     addObject:data.backgroundColor ?: (id)[NSNull null]];
                 [fontSizes addObject:data.fontSize ?: (id)[NSNull null]];
                 [fontFamilies addObject:data.fontFamily ?: (id)[NSNull null]];
+                [letterSpacings
+                    addObject:data.letterSpacing ?: (id)[NSNull null]];
+                [lineHeights addObject:data.lineHeight ?: (id)[NSNull null]];
               }];
 
   CustomStyleData *data = [[CustomStyleData alloc] init];
@@ -251,6 +307,8 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
   data.backgroundColor = [self getSingleValueFromSet:backgroundColors];
   data.fontSize = [self getSingleValueFromSet:fontSizes];
   data.fontFamily = [self getSingleValueFromSet:fontFamilies];
+  data.letterSpacing = [self getSingleValueFromSet:letterSpacings];
+  data.lineHeight = [self getSingleValueFromSet:lineHeights];
   if (data.isEmpty)
     return nil;
 

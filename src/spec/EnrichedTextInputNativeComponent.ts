@@ -127,6 +127,8 @@ export interface OnChangeStateEvent {
     backgroundColor: string;
     fontSize: CodegenTypes.Float;
     fontFamily: string;
+    letterSpacing: CodegenTypes.Float;
+    lineHeight: CodegenTypes.Float;
   };
 }
 
@@ -289,6 +291,8 @@ export interface OnContextMenuItemPressEvent {
       backgroundColor: string;
       fontSize: CodegenTypes.Float;
       fontFamily: string;
+      letterSpacing: CodegenTypes.Float;
+      lineHeight: CodegenTypes.Float;
     };
   };
 }

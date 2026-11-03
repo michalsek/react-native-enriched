@@ -343,6 +343,12 @@ TEST(GumboParserTest, SpanRemappings) {
             "<span style=\"color: red; background-color: blue; font-size: "
             "12px; font-family: Inter\"><b>x</b></span>");
 
+  EXPECT_EQ(GumboParser::normalizeHtml(
+                "<span style=\"line-height: 24px; letter-spacing: -0.5px\">x</"
+                "span>"),
+            "<span style=\"letter-spacing: -0.5px; line-height: 24px\">x</"
+            "span>");
+
   // `&` and `"` are escaped
   EXPECT_EQ(GumboParser::normalizeHtml(
                 "<span style='font-size: 1px\" onclick=\"x'>x</span>"),

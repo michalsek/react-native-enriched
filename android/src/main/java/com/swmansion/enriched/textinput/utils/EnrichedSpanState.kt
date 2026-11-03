@@ -164,8 +164,10 @@ class EnrichedSpanState(
     bgColor: Int?,
     fontSize: Float? = null,
     fontFamily: String? = null,
+    letterSpacing: Float? = null,
+    lineHeight: Float? = null,
   ) {
-    this.customStyle = CustomStyle(fgColor, bgColor, fontSize, fontFamily)
+    this.customStyle = CustomStyle(fgColor, bgColor, fontSize, fontFamily, letterSpacing, lineHeight)
     emitStateChangeEvent()
   }
 
@@ -345,6 +347,8 @@ class EnrichedSpanState(
 
     customStyleMap.putDouble("fontSize", (customStyle?.fontSize ?: 0f).toDouble())
     customStyleMap.putString("fontFamily", customStyle?.fontFamily ?: "")
+    customStyleMap.putDouble("letterSpacing", (customStyle?.letterSpacing ?: 0f).toDouble())
+    customStyleMap.putDouble("lineHeight", (customStyle?.lineHeight ?: 0f).toDouble())
 
     return customStyleMap
   }

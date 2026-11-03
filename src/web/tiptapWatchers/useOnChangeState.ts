@@ -107,6 +107,8 @@ function buildState(
       backgroundColor: toHexColor(customStyle.backgroundColor),
       fontSize: customStyle.fontSize ?? 0,
       fontFamily: customStyle.fontFamily ?? '',
+      letterSpacing: 0,
+      lineHeight: 0,
     },
   };
 }

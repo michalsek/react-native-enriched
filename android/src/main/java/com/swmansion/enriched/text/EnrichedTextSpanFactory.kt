@@ -93,12 +93,16 @@ class EnrichedTextSpanFactory(
     backgroundColor: Int?,
     fontSize: Float?,
     fontFamily: String?,
+    letterSpacing: Float?,
+    lineHeight: Float?,
   ): EnrichedCustomStyleSpan =
-    EnrichedTextCustomStyleSpan(
+    EnrichedTextCustomStyleSpan.create(
       foregroundColor,
       backgroundColor,
       fontSize,
       fontFamily,
+      letterSpacing,
+      lineHeight,
       assets,
       allowFontScaling,
     )

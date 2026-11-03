@@ -394,6 +394,8 @@ export interface OnChangeStateEvent {
     backgroundColor: string;
     fontSize: number;
     fontFamily: string;
+    letterSpacing: number;
+    lineHeight: number;
   };
 }
 
@@ -603,6 +605,8 @@ export interface EnrichedTextInputInstance {
     backgroundColor?: ColorValue | null;
     fontSize?: number | null;
     fontFamily?: string | null;
+    letterSpacing?: number | null;
+    lineHeight?: number | null;
   }) => void;
 }
 

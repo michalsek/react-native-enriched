@@ -299,12 +299,16 @@ export const EnrichedTextInput = ({
       backgroundColor?: ColorValue | null;
       fontSize?: number | null;
       fontFamily?: string | null;
+      letterSpacing?: number | null;
+      lineHeight?: number | null;
     }) => {
       const payload: {
         foregroundColor?: number | null;
         backgroundColor?: number | null;
         fontSize?: number | null;
         fontFamily?: string | null;
+        letterSpacing?: number | null;
+        lineHeight?: number | null;
       } = {};
       if (customStyle.foregroundColor !== undefined) {
         payload.foregroundColor = getSafeColorInt(customStyle.foregroundColor);
@@ -317,6 +321,12 @@ export const EnrichedTextInput = ({
       }
       if (customStyle.fontFamily !== undefined) {
         payload.fontFamily = customStyle.fontFamily;
+      }
+      if (customStyle.letterSpacing !== undefined) {
+        payload.letterSpacing = customStyle.letterSpacing;
+      }
+      if (customStyle.lineHeight !== undefined) {
+        payload.lineHeight = customStyle.lineHeight;
       }
       Commands.setStyle(nullthrows(nativeRef.current), JSON.stringify(payload));
     },

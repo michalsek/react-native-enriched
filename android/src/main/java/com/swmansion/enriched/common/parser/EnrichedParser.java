@@ -353,6 +353,8 @@ public class EnrichedParser {
           Integer bgColor = cs.getBackgroundColor();
           Float fontSize = cs.getFontSize();
           String fontFamily = cs.getFontFamily();
+          Float letterSpacing = cs.getLetterSpacing();
+          Float lineHeight = cs.getLineHeight();
           if (!cs.toCustomStyle().isEmpty()) {
             StringBuilder cssProps = new StringBuilder();
             if (fgColor != null) {
@@ -379,6 +381,20 @@ public class EnrichedParser {
               } else {
                 cssProps.append("font-family: ").append(fontFamily).append(";");
               }
+            }
+            if (letterSpacing != null) {
+              if (cssProps.length() > 0) cssProps.append(" ");
+              cssProps
+                  .append("letter-spacing: ")
+                  .append(formatCssFontSizeValue(letterSpacing))
+                  .append("px;");
+            }
+            if (lineHeight != null) {
+              if (cssProps.length() > 0) cssProps.append(" ");
+              cssProps
+                  .append("line-height: ")
+                  .append(formatCssFontSizeValue(lineHeight))
+                  .append("px;");
             }
             out.append("<span style=\"")
                 .append(
@@ -495,6 +511,14 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
 
   private static final Pattern CSS_FONT_FAMILY_PATTERN =
       Pattern.compile("font-family\\s*:\\s*([^;]+)", Pattern.CASE_INSENSITIVE);
+
+  private static final Pattern CSS_LETTER_SPACING_PATTERN =
+      Pattern.compile(
+          "letter-spacing\\s*:\\s*(-?[0-9.]+)(?:\\s*px)?(?=\\s*;|\\s*$)", Pattern.CASE_INSENSITIVE);
+
+  private static final Pattern CSS_LINE_HEIGHT_PATTERN =
+      Pattern.compile(
+          "line-height\\s*:\\s*([0-9.]+)(?:\\s*px)?(?=\\s*;|\\s*$)", Pattern.CASE_INSENSITIVE);
 
   private static String parseCssAlignmentValue(Attributes attributes) {
     String style = attributes.getValue("", "style");
@@ -1010,6 +1034,8 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     Integer bg = null;
     Float fontSize = null;
     String fontFamily = null;
+    Float letterSpacing = null;
+    Float lineHeight = null;
 
     if (styleAttr != null) {
       Matcher fgMatcher = CSS_FG_PATTERN.matcher(styleAttr);
@@ -1031,10 +1057,20 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
       if (fontFamilyMatcher.find()) {
         fontFamily = parseCssFontFamily(fontFamilyMatcher.group(1));
       }
+      Matcher letterSpacingMatcher = CSS_LETTER_SPACING_PATTERN.matcher(styleAttr);
+      if (letterSpacingMatcher.find()) {
+        float parsedLetterSpacing = Float.parseFloat(letterSpacingMatcher.group(1));
+        letterSpacing = parsedLetterSpacing != 0f ? parsedLetterSpacing : null;
+      }
+      Matcher lineHeightMatcher = CSS_LINE_HEIGHT_PATTERN.matcher(styleAttr);
+      if (lineHeightMatcher.find()) {
+        float parsedLineHeight = Float.parseFloat(lineHeightMatcher.group(1));
+        lineHeight = parsedLineHeight > 0f ? parsedLineHeight : null;
+      }
     }
 
-    if (!new CustomStyle(fg, bg, fontSize, fontFamily).isEmpty()) {
-      start(text, new CustomStyleMark(fg, bg, fontSize, fontFamily));
+    if (!new CustomStyle(fg, bg, fontSize, fontFamily, letterSpacing, lineHeight).isEmpty()) {
+      start(text, new CustomStyleMark(fg, bg, fontSize, fontFamily, letterSpacing, lineHeight));
     }
   }
 
@@ -1070,7 +1106,13 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     setSpanFromMark(
         text,
         mark,
-        spanFactory.createCustomStyleSpan(mark.mFg, mark.mBg, mark.mFontSize, mark.mFontFamily));
+        spanFactory.createCustomStyleSpan(
+            mark.mFg,
+            mark.mBg,
+            mark.mFontSize,
+            mark.mFontFamily,
+            mark.mLetterSpacing,
+            mark.mLineHeight));
   }
 
   public void setDocumentLocator(Locator locator) {}
@@ -1205,12 +1247,22 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     public final Integer mBg;
     public final Float mFontSize;
     public final String mFontFamily;
+    public final Float mLetterSpacing;
+    public final Float mLineHeight;
 
-    public CustomStyleMark(Integer fg, Integer bg, Float fontSize, String fontFamily) {
+    public CustomStyleMark(
+        Integer fg,
+        Integer bg,
+        Float fontSize,
+        String fontFamily,
+        Float letterSpacing,
+        Float lineHeight) {
       mFg = fg;
       mBg = bg;
       mFontSize = fontSize;
       mFontFamily = fontFamily;
+      mLetterSpacing = letterSpacing;
+      mLineHeight = lineHeight;
     }
   }
 

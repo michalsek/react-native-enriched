@@ -21,6 +21,8 @@ class CustomStyles(
     val hasBg = json.has("backgroundColor")
     val hasFontSize = json.has("fontSize")
     val hasFontFamily = json.has("fontFamily")
+    val hasLetterSpacing = json.has("letterSpacing")
+    val hasLineHeight = json.has("lineHeight")
 
     val fgColor = if (hasFg && !json.isNull("foregroundColor")) json.getInt("foregroundColor") else null
     val bgColor = if (hasBg && !json.isNull("backgroundColor")) json.getInt("backgroundColor") else null
@@ -36,6 +38,18 @@ class CustomStyles(
       } else {
         null
       }
+    val letterSpacing =
+      if (hasLetterSpacing && !json.isNull("letterSpacing")) {
+        json.getDouble("letterSpacing").toFloat().takeIf { it != 0f }
+      } else {
+        null
+      }
+    val lineHeight =
+      if (hasLineHeight && !json.isNull("lineHeight")) {
+        json.getDouble("lineHeight").toFloat().takeIf { it > 0f }
+      } else {
+        null
+      }
 
     val styleUpdater: (CustomStyle) -> CustomStyle = { oldStyle ->
       CustomStyle(
@@ -43,6 +57,8 @@ class CustomStyles(
         backgroundColor = if (hasBg) bgColor else oldStyle.backgroundColor,
         fontSize = if (hasFontSize) fontSize else oldStyle.fontSize,
         fontFamily = if (hasFontFamily) fontFamily else oldStyle.fontFamily,
+        letterSpacing = if (hasLetterSpacing) letterSpacing else oldStyle.letterSpacing,
+        lineHeight = if (hasLineHeight) lineHeight else oldStyle.lineHeight,
       )
     }
 
@@ -53,6 +69,8 @@ class CustomStyles(
         merged.backgroundColor,
         merged.fontSize,
         merged.fontFamily,
+        merged.letterSpacing,
+        merged.lineHeight,
       )
     } else {
       applyCustomStyleSpan(view.text as Spannable, start, end, styleUpdater)
@@ -215,11 +233,13 @@ class CustomStyles(
     if (start >= end || style.isEmpty()) return
 
     val span =
-      EnrichedInputCustomStyleSpan(
+      EnrichedInputCustomStyleSpan.create(
         style.foregroundColor,
         style.backgroundColor,
         style.fontSize,
         style.fontFamily,
+        style.letterSpacing,
+        style.lineHeight,
         view.context.assets,
         view.allowFontScaling,
       )

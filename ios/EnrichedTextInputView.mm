@@ -945,6 +945,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 }
 
 - (void)refreshLineHeight {
+  CustomStyle *customStyle = stylesDict[@([CustomStyle getType])];
   [textView.textStorage
       enumerateAttribute:NSParagraphStyleAttributeName
                  inRange:NSMakeRange(0, textView.textStorage.string.length)
@@ -954,6 +955,9 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                 NSMutableParagraphStyle *pStyle =
                     [(NSParagraphStyle *)value mutableCopy];
                 if (pStyle == nil)
+                  return;
+                if ([customStyle getStoredCustomStyleDataAt:range.location]
+                        .lineHeight != nil)
                   return;
                 pStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
                 [textView.textStorage addAttribute:NSParagraphStyleAttributeName
@@ -1214,8 +1218,14 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                .fontSize = currentCustomStyle.fontSize
                                ? [currentCustomStyle.fontSize doubleValue]
                                : 0.0,
-               .fontFamily =
-                   [currentCustomStyle.fontFamily UTF8String] ?: ""}});
+               .fontFamily = [currentCustomStyle.fontFamily UTF8String] ?: "",
+               .letterSpacing =
+                   currentCustomStyle.letterSpacing
+                       ? [currentCustomStyle.letterSpacing doubleValue]
+                       : 0.0,
+               .lineHeight = currentCustomStyle.lineHeight
+                                 ? [currentCustomStyle.lineHeight doubleValue]
+                                 : 0.0}});
     }
   }
 
@@ -1636,6 +1646,16 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                                        : [RCTConvert NSString:ffRaw];
   }
 
+  id lsRaw = dict[@"letterSpacing"];
+  if (lsRaw != nil) {
+    processedDict[@"letterSpacing"] = lsRaw;
+  }
+
+  id lhRaw = dict[@"lineHeight"];
+  if (lhRaw != nil) {
+    processedDict[@"lineHeight"] = lhRaw;
+  }
+
   [customStyleClass applyStyleFromDict:processedDict
                          selectedRange:selectedRange];
   [self anyTextMayHaveBeenModified];
@@ -2053,7 +2073,15 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                                  ? [contextCustomStyleData.fontSize doubleValue]
                                  : 0.0,
                  .fontFamily =
-                     [contextCustomStyleData.fontFamily UTF8String] ?: ""}}});
+                     [contextCustomStyleData.fontFamily UTF8String] ?: "",
+                 .letterSpacing =
+                     contextCustomStyleData.letterSpacing
+                         ? [contextCustomStyleData.letterSpacing doubleValue]
+                         : 0.0,
+                 .lineHeight =
+                     contextCustomStyleData.lineHeight
+                         ? [contextCustomStyleData.lineHeight doubleValue]
+                         : 0.0}}});
   }
 }
 

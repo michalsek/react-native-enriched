@@ -95,12 +95,16 @@ class EnrichedTextInputSpannableFactory(
     backgroundColor: Int?,
     fontSize: Float?,
     fontFamily: String?,
+    letterSpacing: Float?,
+    lineHeight: Float?,
   ): EnrichedCustomStyleSpan =
-    EnrichedInputCustomStyleSpan(
+    EnrichedInputCustomStyleSpan.create(
       foregroundColor,
       backgroundColor,
       fontSize,
       fontFamily,
+      letterSpacing,
+      lineHeight,
       assets,
       allowFontScaling,
     )

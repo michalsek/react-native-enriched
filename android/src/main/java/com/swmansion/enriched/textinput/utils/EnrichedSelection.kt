@@ -149,7 +149,14 @@ class EnrichedSelection(
     val (start, end) = getInlineSelection()
     val spannable = view.text as Spannable
     val style = getCustomStyleInRange(spannable, start, end)
-    state.setCustomStyle(style.foregroundColor, style.backgroundColor, style.fontSize, style.fontFamily)
+    state.setCustomStyle(
+      style.foregroundColor,
+      style.backgroundColor,
+      style.fontSize,
+      style.fontFamily,
+      style.letterSpacing,
+      style.lineHeight,
+    )
   }
 
   private fun getCustomStyleInRange(
@@ -169,6 +176,8 @@ class EnrichedSelection(
     val backgroundColors = mutableSetOf<Int?>()
     val fontSizes = mutableSetOf<Float?>()
     val fontFamilies = mutableSetOf<String?>()
+    val letterSpacings = mutableSetOf<Float?>()
+    val lineHeights = mutableSetOf<Float?>()
 
     var position = start
     while (position < end) {
@@ -182,6 +191,8 @@ class EnrichedSelection(
       backgroundColors.add(span?.getBackgroundColor())
       fontSizes.add(span?.getFontSize())
       fontFamilies.add(span?.getFontFamily())
+      letterSpacings.add(span?.getLetterSpacing())
+      lineHeights.add(span?.getLineHeight())
 
       position = next
     }
@@ -191,6 +202,8 @@ class EnrichedSelection(
       backgroundColor = backgroundColors.singleOrNull(),
       fontSize = fontSizes.singleOrNull(),
       fontFamily = fontFamilies.singleOrNull(),
+      letterSpacing = letterSpacings.singleOrNull(),
+      lineHeight = lineHeights.singleOrNull(),
     )
   }
 

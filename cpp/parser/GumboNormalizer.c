@@ -261,6 +261,8 @@ typedef struct {
   css_slice_t bg;
   css_slice_t font_size;
   css_slice_t font_family;
+  css_slice_t letter_spacing;
+  css_slice_t line_height;
 } custom_style_t;
 
 typedef struct {
@@ -365,8 +367,9 @@ static css_slice_t find_custom_css_value(const char *style, size_t style_len,
 }
 
 static css_styles_t parse_css_style(const char *style_value, size_t style_len) {
-  css_styles_t result = {
-      false, false, false, false, {{NULL, 0}, {NULL, 0}, {NULL, 0}, {NULL, 0}}};
+  css_styles_t result = {false, false, false, false,
+                         {{NULL, 0}, {NULL, 0}, {NULL, 0}, {NULL, 0}, {NULL, 0},
+                          {NULL, 0}}};
   if (!style_value || style_len == 0)
     return result;
 
@@ -425,6 +428,10 @@ static css_styles_t parse_css_style(const char *style_value, size_t style_len) {
       find_custom_css_value(style_value, style_len, "font-size");
   result.custom.font_family =
       find_custom_css_value(style_value, style_len, "font-family");
+  result.custom.letter_spacing =
+      find_custom_css_value(style_value, style_len, "letter-spacing");
+  result.custom.line_height =
+      find_custom_css_value(style_value, style_len, "line-height");
 
   return result;
 }
@@ -464,7 +471,8 @@ static void emit_styles_close(buffer_t *out, css_styles_t s) {
 }
 
 static bool custom_style_is_empty(custom_style_t s) {
-  return !s.fg.len && !s.bg.len && !s.font_size.len && !s.font_family.len;
+  return !s.fg.len && !s.bg.len && !s.font_size.len && !s.font_family.len &&
+         !s.letter_spacing.len && !s.line_height.len;
 }
 
 static void emit_custom_style_open(buffer_t *out, custom_style_t s) {
@@ -480,6 +488,12 @@ static void emit_custom_style_open(buffer_t *out, custom_style_t s) {
   if (s.font_family.len)
     append_style_prop(out, "font-family: ", s.font_family.val,
                       s.font_family.len, &first);
+  if (s.letter_spacing.len)
+    append_style_prop(out, "letter-spacing: ", s.letter_spacing.val,
+                      s.letter_spacing.len, &first);
+  if (s.line_height.len)
+    append_style_prop(out, "line-height: ", s.line_height.val,
+                      s.line_height.len, &first);
   buffer_append_str(out, "\">");
 }
 
@@ -1004,7 +1018,8 @@ static void walk_node(GumboNode *node, buffer_t *out,
 
     // own properties override the inherited ones
     custom_style_t own = s.custom;
-    custom_style_t style = {{NULL, 0}, {NULL, 0}, {NULL, 0}, {NULL, 0}};
+    custom_style_t style = {{NULL, 0}, {NULL, 0}, {NULL, 0},
+                            {NULL, 0}, {NULL, 0}, {NULL, 0}};
     if (inherited)
       style = *inherited;
     if (own.fg.len)
@@ -1015,6 +1030,10 @@ static void walk_node(GumboNode *node, buffer_t *out,
       style.font_size = own.font_size;
     if (own.font_family.len)
       style.font_family = own.font_family;
+    if (own.letter_spacing.len)
+      style.letter_spacing = own.letter_spacing;
+    if (own.line_height.len)
+      style.line_height = own.line_height;
 
     const custom_style_t *children_style = inherited;
     bool wrap = false;

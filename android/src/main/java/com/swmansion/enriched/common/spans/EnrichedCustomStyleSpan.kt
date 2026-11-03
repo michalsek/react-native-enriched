@@ -1,8 +1,11 @@
 package com.swmansion.enriched.common.spans
 
 import android.content.res.AssetManager
+import android.graphics.Paint
 import android.graphics.Typeface
+import android.text.Spanned
 import android.text.TextPaint
+import android.text.style.LineHeightSpan
 import android.text.style.MetricAffectingSpan
 import android.util.Log
 import com.facebook.react.common.ReactConstants
@@ -12,12 +15,15 @@ import com.swmansion.enriched.common.CustomStyle
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.common.spans.interfaces.EnrichedInlineSpan
 import com.swmansion.enriched.common.withOpacity
+import kotlin.math.roundToInt
 
 open class EnrichedCustomStyleSpan(
   private val foregroundColor: Int?,
   private val backgroundColor: Int?,
   private val fontSizeSp: Float?,
   private val fontFamily: String?,
+  private val letterSpacing: Float?,
+  private val lineHeight: Float?,
   private val assets: AssetManager,
   private val allowFontScaling: Boolean,
 ) : MetricAffectingSpan(),
@@ -40,12 +46,18 @@ open class EnrichedCustomStyleSpan(
 
   fun getFontFamily(): String? = fontFamily
 
+  fun getLetterSpacing(): Float? = letterSpacing
+
+  fun getLineHeight(): Float? = lineHeight
+
   fun toCustomStyle(): CustomStyle =
     CustomStyle(
       foregroundColor = foregroundColor,
       backgroundColor = backgroundColor,
       fontSize = fontSizeSp,
       fontFamily = fontFamily,
+      letterSpacing = letterSpacing,
+      lineHeight = lineHeight,
     )
 
   protected fun getAssets(): AssetManager = assets
@@ -74,7 +86,14 @@ open class EnrichedCustomStyleSpan(
     fontSizeSp?.takeIf { it > 0f }?.let { size ->
       textPaint.textSize = pixelFromSpOrDp(size, allowFontScaling)
     }
+    letterSpacing?.let { spacing ->
+      if (textPaint.textSize > 0f) {
+        textPaint.letterSpacing = pixelFromSpOrDp(spacing, allowFontScaling) / textPaint.textSize
+      }
+    }
   }
+
+  internal fun lineHeightPx(): Float? = lineHeight?.takeIf { it > 0f }?.let { pixelFromSpOrDp(it, allowFontScaling) }
 
   // ReactFontManager resolves custom fonts in such way, we don't have a way
   // of knowing if Typeface.DEFAULT was returned as a fallback to an unavailable
@@ -92,3 +111,92 @@ open class EnrichedCustomStyleSpan(
     private const val DEFAULT_FAMILY = "sans-serif"
   }
 }
+
+interface EnrichedCustomStyleLineHeightSpan : LineHeightSpan.WithDensity {
+  override fun chooseHeight(
+    text: CharSequence,
+    start: Int,
+    end: Int,
+    spanstartv: Int,
+    v: Int,
+    fm: Paint.FontMetricsInt,
+  ) {
+    chooseHeight(text, start, end, spanstartv, v, fm, null)
+  }
+
+  override fun chooseHeight(
+    text: CharSequence,
+    start: Int,
+    end: Int,
+    spanstartv: Int,
+    v: Int,
+    fm: Paint.FontMetricsInt,
+    paint: TextPaint?,
+  ) {
+    val spanned = text as? Spanned ?: return
+    if (!spanned.coversLine(this, start, end)) return
+    if (paint != null) spanned.resetToNaturalMetrics(start, end, fm, paint)
+    fm.fitToLineHeight(spanned.tallestCustomLineHeightPx(start, end))
+  }
+}
+
+private fun Spanned.resetToNaturalMetrics(
+  start: Int,
+  end: Int,
+  fm: Paint.FontMetricsInt,
+  paint: TextPaint,
+) {
+  var top = 0
+  var ascent = 0
+  var descent = 0
+  var bottom = 0
+
+  val runFm = Paint.FontMetricsInt()
+  var runStart = start
+  while (runStart < end) {
+    val runEnd = nextSpanTransition(runStart, end, MetricAffectingSpan::class.java)
+    val runPaint = TextPaint(paint)
+    for (span in getSpans(runStart, runEnd, MetricAffectingSpan::class.java)) {
+      if (getSpanStart(span) < runEnd && getSpanEnd(span) > runStart) {
+        span.updateMeasureState(runPaint)
+      }
+    }
+    runPaint.getFontMetricsInt(runFm)
+    top = minOf(top, runFm.top)
+    ascent = minOf(ascent, runFm.ascent)
+    descent = maxOf(descent, runFm.descent)
+    bottom = maxOf(bottom, runFm.bottom)
+    runStart = runEnd
+  }
+
+  fm.top = top
+  fm.ascent = ascent
+  fm.descent = descent
+  fm.bottom = bottom
+}
+
+private fun Paint.FontMetricsInt.fitToLineHeight(lineHeightPx: Float) {
+  if (lineHeightPx <= 0f) return
+  val grows = lineHeightPx >= descent - ascent
+  ascent = descent - lineHeightPx.roundToInt()
+  if (grows) {
+    top = minOf(top, ascent)
+  } else {
+    top = ascent
+    bottom = descent
+  }
+}
+
+private fun Spanned.coversLine(
+  span: Any,
+  start: Int,
+  end: Int,
+): Boolean = getSpanStart(span) < end && getSpanEnd(span) > start
+
+internal fun Spanned.tallestCustomLineHeightPx(
+  start: Int,
+  end: Int,
+): Float =
+  getSpans(start, end, EnrichedCustomStyleSpan::class.java).fold(0f) { tallest, span ->
+    if (coversLine(span, start, end)) maxOf(tallest, span.lineHeightPx() ?: 0f) else tallest
+  }

@@ -1527,6 +1527,18 @@
               [cssProps appendFormat:@"font-family: %@;", data.fontFamily];
             }
           }
+          if (data.letterSpacing != nil) {
+            if (cssProps.length > 0)
+              [cssProps appendString:@" "];
+            [cssProps appendFormat:@"letter-spacing: %gpx;",
+                                   [data.letterSpacing doubleValue]];
+          }
+          if (data.lineHeight != nil) {
+            if (cssProps.length > 0)
+              [cssProps appendString:@" "];
+            [cssProps appendFormat:@"line-height: %gpx;",
+                                   [data.lineHeight doubleValue]];
+          }
           if (cssProps.length > 0) {
             NSString *escapedStyle =
                 [cssProps stringByReplacingOccurrencesOfString:@"&"
@@ -1596,6 +1608,8 @@
   static NSRegularExpression *bgRegex;
   static NSRegularExpression *fontSizeRegex;
   static NSRegularExpression *fontFamilyRegex;
+  static NSRegularExpression *letterSpacingRegex;
+  static NSRegularExpression *lineHeightRegex;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
     styleAttrRegex = [NSRegularExpression
@@ -1624,6 +1638,18 @@
 
     fontFamilyRegex = [NSRegularExpression
         regularExpressionWithPattern:@"font-family\\s*:\\s*([^;]+)"
+                             options:NSRegularExpressionCaseInsensitive
+                               error:nil];
+
+    letterSpacingRegex = [NSRegularExpression
+        regularExpressionWithPattern:
+            @"letter-spacing\\s*:\\s*(-?[0-9.]+)(?:\\s*px)?(?=\\s*;|\\s*$)"
+                             options:NSRegularExpressionCaseInsensitive
+                               error:nil];
+
+    lineHeightRegex = [NSRegularExpression
+        regularExpressionWithPattern:
+            @"line-height\\s*:\\s*([0-9.]+)(?:\\s*px)?(?=\\s*;|\\s*$)"
                              options:NSRegularExpressionCaseInsensitive
                                error:nil];
   });
@@ -1674,6 +1700,30 @@
     double parsedFontSize = [fontSizeString doubleValue];
     if (parsedFontSize > 0) {
       data.fontSize = @(parsedFontSize);
+    }
+  }
+
+  NSTextCheckingResult *letterSpacingMatch =
+      [letterSpacingRegex firstMatchInString:css
+                                     options:0
+                                       range:NSMakeRange(0, css.length)];
+  if (letterSpacingMatch) {
+    double parsedLetterSpacing = [[css
+        substringWithRange:[letterSpacingMatch rangeAtIndex:1]] doubleValue];
+    if (parsedLetterSpacing != 0) {
+      data.letterSpacing = @(parsedLetterSpacing);
+    }
+  }
+
+  NSTextCheckingResult *lineHeightMatch =
+      [lineHeightRegex firstMatchInString:css
+                                  options:0
+                                    range:NSMakeRange(0, css.length)];
+  if (lineHeightMatch) {
+    double parsedLineHeight =
+        [[css substringWithRange:[lineHeightMatch rangeAtIndex:1]] doubleValue];
+    if (parsedLineHeight > 0) {
+      data.lineHeight = @(parsedLineHeight);
     }
   }
 
