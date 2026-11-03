@@ -59,6 +59,7 @@ using namespace facebook::react;
   UIColor *_placeholderColor;
   BOOL _emitFocusBlur;
   BOOL _emitTextChange;
+  BOOL _isSettingValue;
   NSMutableDictionary<NSValue *, UIImageView *> *_attachmentViews;
   NSArray<NSDictionary *> *_contextMenuItems;
   NSString *_submitBehavior;
@@ -143,6 +144,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   preserveTypingAttributesOnNextEmptyCheck = NO;
   _emitFocusBlur = YES;
   _emitTextChange = NO;
+  _isSettingValue = NO;
   dotReplacementRange = nullptr;
 
   defaultTypingAttributes =
@@ -747,6 +749,10 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     NSString *newDefaultValue =
         [NSString fromCppString:newViewProps.defaultValue];
 
+    BOOL isInitialValue = oldViewProps.defaultValue.empty();
+    _isSettingValue = YES;
+    NSRange previousSelectedRange = textView.selectedRange;
+
     NSString *initiallyProcessedHtml =
         [parser initiallyProcessHtml:newDefaultValue];
     if (initiallyProcessedHtml == nullptr) {
@@ -756,7 +762,19 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       // we've got some seemingly proper html
       [parser replaceWholeFromHtml:initiallyProcessedHtml];
     }
-    textView.selectedRange = NSRange(textView.textStorage.string.length, 0);
+
+    if (isInitialValue) {
+      textView.selectedRange =
+          NSMakeRange(textView.textStorage.string.length, 0);
+    } else {
+      NSUInteger textLength = textView.textStorage.string.length;
+      NSUInteger location = MIN(previousSelectedRange.location, textLength);
+      NSUInteger length =
+          MIN(previousSelectedRange.length, textLength - location);
+      textView.selectedRange = NSMakeRange(location, length);
+    }
+
+    _isSettingValue = NO;
   }
 
   // placeholderTextColor
@@ -1370,6 +1388,10 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 }
 
 - (void)setValue:(NSString *)value {
+  _isSettingValue = YES;
+
+  NSRange previousSelectedRange = textView.selectedRange;
+
   NSString *initiallyProcessedHtml = [parser initiallyProcessHtml:value];
   if (initiallyProcessedHtml == nullptr) {
     // reset the text first and reset typing attributes
@@ -1382,9 +1404,13 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     [parser replaceWholeFromHtml:initiallyProcessedHtml];
   }
 
-  // set selectedRange and check for changes
-  textView.selectedRange = NSRange(textView.textStorage.string.length, 0);
+  NSUInteger textLength = textView.textStorage.string.length;
+  NSUInteger location = MIN(previousSelectedRange.location, textLength);
+  NSUInteger length = MIN(previousSelectedRange.length, textLength - location);
+  textView.selectedRange = NSMakeRange(location, length);
   [self anyTextMayHaveBeenModified];
+
+  _isSettingValue = NO;
 }
 
 - (void)setCustomSelection:(NSInteger)visibleStart end:(NSInteger)visibleEnd {
@@ -2153,7 +2179,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
           substringWithRange:textView.selectedRange];
 
   auto emitter = [self getEventEmitter];
-  if (emitter != nullptr) {
+  if (emitter != nullptr && !_isSettingValue) {
     // iOS range works differently because it specifies location and length
     // here, start is the location, but end is the first index BEHIND the end.
     // So a 0 length range will have equal start and end

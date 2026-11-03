@@ -95,6 +95,7 @@ class EnrichedTextInputView :
   val customStyles: CustomStyles? = CustomStyles(this)
   var isDuringTransaction: Boolean = false
   var isRemovingMany: Boolean = false
+  var isSettingValue: Boolean = false
   var scrollEnabled: Boolean = true
   var allowFontScaling: Boolean = EnrichedConstants.ALLOW_FONT_SCALING_DEFAULT
     set(value) {
@@ -477,15 +478,25 @@ class EnrichedTextInputView :
   ) {
     if (value == null) return
 
-    runAsATransaction {
-      val newText = if (shouldParseHtml) parseText(value) else value
-      setText(newText)
-      applyLineSpacing()
+    isSettingValue = true
+    try {
+      val previousStart = selectionStart
+      val previousEnd = selectionEnd
 
-      observeAsyncImages()
+      runAsATransaction {
+        val newText = if (shouldParseHtml) parseText(value) else value
+        setText(newText)
+        applyLineSpacing()
 
-      // Scroll to the last line of text
-      setSelection(text?.length ?: 0)
+        observeAsyncImages()
+
+        val textLength = text?.length ?: 0
+        val start = previousStart.coerceIn(0, textLength)
+        val end = previousEnd.coerceIn(start, textLength)
+        setSelection(start, end)
+      }
+    } finally {
+      isSettingValue = false
     }
     layoutManager.invalidateLayout()
   }

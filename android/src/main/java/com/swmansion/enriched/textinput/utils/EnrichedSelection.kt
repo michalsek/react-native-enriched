@@ -59,7 +59,9 @@ class EnrichedSelection(
     validateStyles()
 
     view.parametrizedStyles?.afterSelectionChangedMentions(finalStart, finalEnd)
-    emitSelectionChangeEvent(view.text, finalStart, finalEnd)
+    if (!view.isSettingValue) {
+      emitSelectionChangeEvent(view.text, finalStart, finalEnd)
+    }
   }
 
   private fun isZeroWidthSelection(
