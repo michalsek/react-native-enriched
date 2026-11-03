@@ -220,9 +220,24 @@
   // getEntryIfPresent properly returns nullptr for styles that we don't want to
   // extend this way. Attributes from _removedTypingAttributes aren't added
   // because they were just removed.
-  if (selectedRange.location > 0) {
-    [self restoreInlineStylesPresentInRange:NSMakeRange(
-                                                selectedRange.location - 1, 1)
+  NSString *storageString = textView.textStorage.string;
+  NSCharacterSet *newlines = [NSCharacterSet newlineCharacterSet];
+  BOOL startsNonEmptyParagraph =
+      selectedRange.location < storageString.length &&
+      ![newlines
+          characterIsMember:[storageString
+                                characterAtIndex:selectedRange.location]] &&
+      (selectedRange.location == 0 ||
+       [newlines
+           characterIsMember:[storageString
+                                 characterAtIndex:selectedRange.location - 1]]);
+  BOOL hasSourceCharacter =
+      startsNonEmptyParagraph || selectedRange.location > 0;
+  NSUInteger sourceIndex = startsNonEmptyParagraph ? selectedRange.location
+                                                   : selectedRange.location - 1;
+
+  if (hasSourceCharacter) {
+    [self restoreInlineStylesPresentInRange:NSMakeRange(sourceIndex, 1)
                                   intoAttrs:newAttrs];
   }
 
