@@ -13,6 +13,7 @@
 #import "textHtmlParser/TextHtmlParser.h"
 #import "utils/AttachmentLayoutUtils.h"
 #import "utils/EnrichedTextTouchHandler.h"
+#import "utils/LineBoxLayoutDelegate.h"
 #import "utils/StyleUtils.h"
 #import <React/RCTConversions.h>
 #import <React/RCTFabricComponentsPlugins.h>
@@ -79,6 +80,7 @@ Class<RCTComponentViewProtocol> EnrichedTextViewCls(void) {
   textView.scrollEnabled = NO;
   textView.adjustsFontForContentSizeCategory = YES;
   textView.layoutManager.input = self;
+  textView.layoutManager.delegate = [LineBoxLayoutDelegate shared];
 }
 
 - (void)setupStyles {
@@ -620,6 +622,7 @@ Class<RCTComponentViewProtocol> EnrichedTextViewCls(void) {
       [config primaryColor];
   NSMutableParagraphStyle *pStyle = [[NSMutableParagraphStyle alloc] init];
   pStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
+  pStyle.maximumLineHeight = [config scaledPrimaryLineHeight];
   defaultTypingAttributes[NSParagraphStyleAttributeName] = pStyle;
   textView.typingAttributes = defaultTypingAttributes;
 }
@@ -673,22 +676,11 @@ Class<RCTComponentViewProtocol> EnrichedTextViewCls(void) {
   // Use TextKit measurement so height respects:
   // - maximumNumberOfLines / lineBreakMode
   // - varying line heights (e.g. headings)
-  NSTextStorage *measurementStorage =
-      [[NSTextStorage alloc] initWithAttributedString:currentStr];
-  NSLayoutManager *measurementLayoutManager = [[NSLayoutManager alloc] init];
-  NSTextContainer *measurementContainer =
-      [[NSTextContainer alloc] initWithSize:CGSizeMake(maxWidth, CGFLOAT_MAX)];
-  measurementContainer.lineFragmentPadding = 0;
-  measurementContainer.maximumNumberOfLines =
-      textView.textContainer.maximumNumberOfLines;
-  measurementContainer.lineBreakMode = textView.textContainer.lineBreakMode;
-  [measurementLayoutManager addTextContainer:measurementContainer];
-  [measurementStorage addLayoutManager:measurementLayoutManager];
-  [measurementLayoutManager ensureLayoutForTextContainer:measurementContainer];
-
-  CGRect usedRect =
-      [measurementLayoutManager usedRectForTextContainer:measurementContainer];
-  CGFloat measuredHeight = ceil(usedRect.size.height);
+  CGFloat measuredHeight = ceil([LineBoxLayoutDelegate
+      usedHeightOfAttributedString:currentStr
+                             width:maxWidth
+              maximumNumberOfLines:textView.textContainer.maximumNumberOfLines
+                     lineBreakMode:textView.textContainer.lineBreakMode]);
 
   return CGSizeMake(maxWidth, measuredHeight);
 }

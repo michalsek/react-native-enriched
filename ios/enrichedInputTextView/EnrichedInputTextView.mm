@@ -33,6 +33,42 @@
     paraRange = [text paragraphRangeForRange:NSMakeRange(idx, 0)];
   }
 
+  CGRect lineRect = CGRectZero;
+  CGRect usedRect = CGRectZero;
+  NSLayoutManager *layoutManager = self.layoutManager;
+  UIEdgeInsets inset = self.textContainerInset;
+  CGPoint point = CGPointMake(CGRectGetMidX(rect) - inset.left,
+                              CGRectGetMidY(rect) - inset.top);
+
+  if (layoutManager.extraLineFragmentTextContainer != nil &&
+      point.y >= CGRectGetMinY(layoutManager.extraLineFragmentRect)) {
+    lineRect = layoutManager.extraLineFragmentRect;
+    usedRect = layoutManager.extraLineFragmentUsedRect;
+  } else if (layoutManager.numberOfGlyphs > 0) {
+    NSUInteger glyphIndex =
+        [layoutManager glyphIndexForPoint:point
+                          inTextContainer:self.textContainer];
+    lineRect = [layoutManager lineFragmentRectForGlyphAtIndex:glyphIndex
+                                               effectiveRange:nil];
+    usedRect = [layoutManager lineFragmentUsedRectForGlyphAtIndex:glyphIndex
+                                                   effectiveRange:nil];
+  }
+
+  CGFloat top = CGRectGetMinY(rect);
+  CGFloat bottom = CGRectGetMaxY(rect);
+
+  if (CGRectGetMinY(usedRect) > CGRectGetMinY(lineRect)) {
+    top = MAX(top, CGRectGetMinY(usedRect) + inset.top);
+  }
+  if (CGRectGetMaxY(usedRect) < CGRectGetMaxY(lineRect)) {
+    bottom = MIN(bottom, CGRectGetMaxY(usedRect) + inset.top);
+  }
+
+  if (usedRect.size.height > 0 && bottom > top) {
+    rect.origin.y = top;
+    rect.size.height = bottom - top;
+  }
+
   // Non-empty paragraph gets its caret drawn the usual way.
   if (paraRange.length != 0) {
     return rect;

@@ -3,6 +3,7 @@
 #import "extensions/FontExtension.h"
 #import "interfaces/CustomStyleData.h"
 #import "interfaces/StyleHeaders.h"
+#import "utils/LineBoxLayoutDelegate.h"
 #import "utils/RangeUtils.h"
 #import "utils/ZeroWidthSpaceUtils.h"
 #import <React/RCTFont.h>
@@ -68,12 +69,16 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
       scaledFontSizeForValue:[data.letterSpacing doubleValue]]);
 }
 
+- (NSNumber *)resolveLineBoxHeightForData:(CustomStyleData *)data {
+  return @(
+      [self.host.config scaledFontSizeForValue:[data.lineHeight doubleValue]]);
+}
+
 - (NSParagraphStyle *)resolveParagraphStyle:(NSParagraphStyle *)paragraphStyle
                                     forData:(CustomStyleData *)data {
   NSMutableParagraphStyle *resolvedStyle =
       [paragraphStyle mutableCopy] ?: [[NSMutableParagraphStyle alloc] init];
-  CGFloat lineHeight =
-      [self.host.config scaledFontSizeForValue:[data.lineHeight doubleValue]];
+  CGFloat lineHeight = [[self resolveLineBoxHeightForData:data] doubleValue];
   resolvedStyle.minimumLineHeight = lineHeight;
   resolvedStyle.maximumLineHeight = lineHeight;
   return resolvedStyle;
@@ -101,6 +106,8 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
     attributes[NSParagraphStyleAttributeName] =
         [self resolveParagraphStyle:attributes[NSParagraphStyleAttributeName]
                             forData:data];
+    attributes[LineBoxHeightAttributeName] =
+        [self resolveLineBoxHeightForData:data];
   }
 }
 
@@ -201,6 +208,10 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
                                                                    forData:data]
                                            range:paragraphStyleRange];
                               }];
+                  [self.host.textView.textStorage
+                      addAttribute:LineBoxHeightAttributeName
+                             value:[self resolveLineBoxHeightForData:data]
+                             range:subRange];
                 }
               }];
 }

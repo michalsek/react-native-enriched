@@ -14,6 +14,7 @@
 #import "utils/AttachmentLayoutUtils.h"
 #import "utils/DotReplacementUtils.h"
 #import "utils/KeyboardUtils.h"
+#import "utils/LineBoxLayoutDelegate.h"
 #import "utils/ParagraphAttributesUtils.h"
 #import "utils/ShortcutsUtils.h"
 #import "utils/StyleUtils.h"
@@ -167,6 +168,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   textView.delegate = self;
   textView.input = self;
   textView.layoutManager.input = self;
+  textView.layoutManager.delegate = [LineBoxLayoutDelegate shared];
   textView.textStorage.delegate = self;
 
   textView.adjustsFontForContentSizeCategory = YES;
@@ -675,6 +677,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     NSMutableParagraphStyle *defaultPStyle =
         [[NSMutableParagraphStyle alloc] init];
     defaultPStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
+    defaultPStyle.maximumLineHeight = [config scaledPrimaryLineHeight];
     defaultTypingAttributes[NSParagraphStyleAttributeName] = defaultPStyle;
 
     // no emitting during styles reload
@@ -960,6 +963,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                         .lineHeight != nil)
                   return;
                 pStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
+                pStyle.maximumLineHeight = [config scaledPrimaryLineHeight];
                 [textView.textStorage addAttribute:NSParagraphStyleAttributeName
                                              value:pStyle
                                              range:range];
@@ -1006,13 +1010,13 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     }
   }
 
-  CGRect boundingBox =
-      [currentStr boundingRectWithSize:CGSizeMake(maxWidth, CGFLOAT_MAX)
-                               options:NSStringDrawingUsesLineFragmentOrigin |
-                                       NSStringDrawingUsesFontLeading
-                               context:nullptr];
+  CGFloat height = [LineBoxLayoutDelegate
+      usedHeightOfAttributedString:currentStr
+                             width:maxWidth
+              maximumNumberOfLines:0
+                     lineBreakMode:textView.textContainer.lineBreakMode];
 
-  return CGSizeMake(maxWidth, ceil(boundingBox.size.height));
+  return CGSizeMake(maxWidth, ceil(height));
 }
 
 // make sure the newest state is kept in _state property
@@ -2262,6 +2266,12 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
   NSMutableDictionary *newTypingAttrs = [defaultTypingAttributes mutableCopy];
   newTypingAttrs[NSFontAttributeName] = [config primaryFont];
+  NSMutableParagraphStyle *pStyle =
+      [newTypingAttrs[NSParagraphStyleAttributeName] mutableCopy]
+          ?: [[NSMutableParagraphStyle alloc] init];
+  pStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
+  pStyle.maximumLineHeight = [config scaledPrimaryLineHeight];
+  newTypingAttrs[NSParagraphStyleAttributeName] = pStyle;
 
   defaultTypingAttributes = newTypingAttrs;
   textView.typingAttributes = defaultTypingAttributes;

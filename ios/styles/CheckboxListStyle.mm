@@ -52,6 +52,10 @@
                 pStyle.firstLineHeadIndent = listHeadIndent;
                 pStyle.minimumLineHeight =
                     [self calculateMinimumLineHeight:pStyle.minimumLineHeight];
+                if (pStyle.maximumLineHeight > 0) {
+                  pStyle.maximumLineHeight =
+                      MAX(pStyle.maximumLineHeight, pStyle.minimumLineHeight);
+                }
                 [self.host.textView.textStorage
                     addAttribute:NSParagraphStyleAttributeName
                            value:pStyle
@@ -73,6 +77,10 @@
   pStyle.firstLineHeadIndent = indent;
   pStyle.minimumLineHeight =
       [self calculateMinimumLineHeight:pStyle.minimumLineHeight];
+  if (pStyle.maximumLineHeight > 0) {
+    pStyle.maximumLineHeight =
+        MAX(pStyle.maximumLineHeight, pStyle.minimumLineHeight);
+  }
   attributes[NSParagraphStyleAttributeName] = pStyle;
 }
 

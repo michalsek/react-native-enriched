@@ -15,7 +15,8 @@ import com.swmansion.enriched.common.CustomStyle
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.common.spans.interfaces.EnrichedInlineSpan
 import com.swmansion.enriched.common.withOpacity
-import kotlin.math.roundToInt
+import kotlin.math.ceil
+import kotlin.math.floor
 
 open class EnrichedCustomStyleSpan(
   private val foregroundColor: Int?,
@@ -136,7 +137,7 @@ interface EnrichedCustomStyleLineHeightSpan : LineHeightSpan.WithDensity {
     val spanned = text as? Spanned ?: return
     if (!spanned.coversLine(this, start, end)) return
     if (paint != null) spanned.resetToNaturalMetrics(start, end, fm, paint)
-    fm.fitToLineHeight(spanned.tallestCustomLineHeightPx(start, end))
+    fm.centerInLineHeight(spanned.tallestCustomLineHeightPx(start, end))
   }
 }
 
@@ -175,12 +176,16 @@ private fun Spanned.resetToNaturalMetrics(
   fm.bottom = bottom
 }
 
-private fun Paint.FontMetricsInt.fitToLineHeight(lineHeightPx: Float) {
+internal fun Paint.FontMetricsInt.centerInLineHeight(lineHeightPx: Float) {
   if (lineHeightPx <= 0f) return
-  val grows = lineHeightPx >= descent - ascent
-  ascent = descent - lineHeightPx.roundToInt()
-  if (grows) {
+
+  val extra = lineHeightPx - (descent - ascent)
+  ascent -= ceil(extra / 2f).toInt()
+  descent += floor(extra / 2f).toInt()
+
+  if (extra >= 0f) {
     top = minOf(top, ascent)
+    bottom = maxOf(bottom, descent)
   } else {
     top = ascent
     bottom = descent
