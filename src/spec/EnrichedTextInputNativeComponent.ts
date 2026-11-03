@@ -405,6 +405,7 @@ export interface NativeProps extends ViewProps {
   returnKeyLabel?: string;
   submitBehavior?: string;
   allowFontScaling?: boolean;
+  spaceKerning?: string;
   verticalAlign?: string;
 
   // event callbacks

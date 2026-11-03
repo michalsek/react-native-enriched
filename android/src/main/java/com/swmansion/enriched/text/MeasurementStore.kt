@@ -20,6 +20,8 @@ import com.facebook.yoga.YogaMeasureMode
 import com.facebook.yoga.YogaMeasureOutput
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.GumboNormalizer
+import com.swmansion.enriched.common.SpaceKerning
+import com.swmansion.enriched.common.SpaceKerningTable
 import com.swmansion.enriched.common.allowFontScalingFromProps
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
@@ -187,9 +189,28 @@ object MeasurementStore {
     val fontStyle = parseFontStyle(props?.getString("fontStyle"))
     val fontWeight = parseFontWeight(props?.getString("fontWeight"))
     val typeface = applyStyles(null, fontStyle, fontWeight, fontFamily, context.assets)
-    val size = measure(width, measuredText, typeface, fontSize, numberOfLines, ellipsizeMode)
+    val kernedText = applySpaceKerning(measuredText, props, fontFamily, typeface, fontSize)
+    val size = measure(width, kernedText, typeface, fontSize, numberOfLines, ellipsizeMode)
 
     return size
+  }
+
+  private fun applySpaceKerning(
+    text: CharSequence,
+    props: ReadableMap?,
+    fontFamily: String?,
+    typeface: Typeface,
+    fontSize: Float,
+  ): CharSequence {
+    val table = SpaceKerningTable.fromJson(props?.getString("spaceKerning")) ?: return text
+    val spannable = text as? Spannable ?: SpannableString(text)
+    val paint =
+      TextPaint().apply {
+        this.typeface = typeface
+        textSize = fontSize
+      }
+    SpaceKerning.update(spannable, table, fontFamily, paint)
+    return spannable
   }
 
   fun getMeasureById(

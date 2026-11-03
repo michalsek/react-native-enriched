@@ -3,6 +3,7 @@ export { EnrichedTextInput } from './native/EnrichedTextInput';
 export type {
   EnrichedInputStyle,
   EnrichedTextInputProps,
+  SpaceKerning,
   OnChangeTextEvent,
   OnChangeHtmlEvent,
   OnChangeContentSizeEvent,

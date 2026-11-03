@@ -14,6 +14,7 @@ import android.text.InputType
 import android.text.Layout
 import android.text.Spannable
 import android.text.SpannableString
+import android.text.SpannableStringBuilder
 import android.util.AttributeSet
 import android.util.Log
 import android.util.Patterns
@@ -43,8 +44,11 @@ import com.facebook.react.views.text.ReactTypefaceUtils.parseFontWeight
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.EnrichedSpanFlags
 import com.swmansion.enriched.common.GumboNormalizer
+import com.swmansion.enriched.common.SpaceKerning
+import com.swmansion.enriched.common.SpaceKerningTable
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
+import com.swmansion.enriched.common.spans.EnrichedSpaceKerningSpan
 import com.swmansion.enriched.textinput.events.MentionHandler
 import com.swmansion.enriched.textinput.events.OnChangeCaretRectEvent
 import com.swmansion.enriched.textinput.events.OnChangeContentSizeEvent
@@ -116,6 +120,7 @@ class EnrichedTextInputView :
         }
         applyLineSpacing()
         reApplyHtmlStyleForSpans(htmlStyle, htmlStyle) // force re-apply
+        spaceKerningDirty = true
       }
     }
 
@@ -126,6 +131,7 @@ class EnrichedTextInputView :
         val prev = field
         field = value
         reApplyHtmlStyleForSpans(prev, value)
+        spaceKerningDirty = true
       }
     }
 
@@ -168,6 +174,9 @@ class EnrichedTextInputView :
   private var fontWeight: Int = ReactConstants.UNSET
   private var defaultValue: CharSequence? = null
   private var defaultValueDirty: Boolean = false
+  private var spaceKerningJson: String? = null
+  private var spaceKerning: SpaceKerningTable? = null
+  private var spaceKerningDirty = false
 
   private var inputMethodManager: InputMethodManager? = null
 
@@ -503,7 +512,15 @@ class EnrichedTextInputView :
       val previousEnd = selectionEnd
 
       runAsATransaction {
-        val newText = if (shouldParseHtml) parseText(value) else value
+        val parsedText = if (shouldParseHtml) parseText(value) else value
+        val newText =
+          if (spaceKerning != null) {
+            (parsedText as? Spannable ?: SpannableStringBuilder(parsedText)).also {
+              SpaceKerning.update(it, spaceKerning, fontFamily, paint)
+            }
+          } else {
+            parsedText
+          }
         setText(newText)
         normalizeParagraphMarginSpacers()
         applyLineSpacing()
@@ -607,6 +624,7 @@ class EnrichedTextInputView :
     val sizeInt = ceil(pixelFromSpOrDp(size, allowFontScaling))
     fontSize = sizeInt
     setTextSize(TypedValue.COMPLEX_UNIT_PX, sizeInt)
+    spaceKerningDirty = true
 
     // This ensured that newly created spans will take the new font size into account
     htmlStyle.invalidateStyles()
@@ -640,7 +658,26 @@ class EnrichedTextInputView :
     if (family != fontFamily) {
       fontFamily = family
       typefaceDirty = true
+      spaceKerningDirty = true
     }
+  }
+
+  fun setSpaceKerning(json: String?) {
+    if (json == spaceKerningJson) return
+
+    spaceKerningJson = json
+    spaceKerning = SpaceKerningTable.fromJson(json)
+    spaceKerningDirty = true
+  }
+
+  fun updateSpaceKerning(
+    start: Int = 0,
+    end: Int = text?.length ?: 0,
+  ) {
+    val editable = text ?: return
+    if (spaceKerning == null && editable.getSpans(0, editable.length, EnrichedSpaceKerningSpan::class.java).isEmpty()) return
+
+    SpaceKerning.update(editable, spaceKerning, fontFamily, paint, start, end)
   }
 
   fun setFontWeight(weight: String?) {
@@ -836,6 +873,15 @@ class EnrichedTextInputView :
   fun afterUpdateTransaction() {
     updateTypeface()
     updateDefaultValue()
+    updateSpaceKerningIfDirty()
+  }
+
+  private fun updateSpaceKerningIfDirty() {
+    if (!spaceKerningDirty) return
+
+    spaceKerningDirty = false
+    updateSpaceKerning()
+    layoutManager.invalidateLayout()
   }
 
   fun setDefaultValue(value: CharSequence?) {
@@ -1088,6 +1134,7 @@ class EnrichedTextInputView :
     runAsATransaction {
       customStyles?.setStyle(styleJSON, collapsedSelectionMode)
     }
+    updateSpaceKerning(selectionStart, selectionEnd)
     layoutManager.invalidateLayout()
   }
 

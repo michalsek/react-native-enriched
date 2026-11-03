@@ -4,6 +4,7 @@ export type {
   EnrichedInputStyle,
   EnrichedTextInputProps,
   EnrichedTextProps,
+  SpaceKerning,
   OnChangeTextEvent,
   OnChangeHtmlEvent,
   OnChangeContentSizeEvent,

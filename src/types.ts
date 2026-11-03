@@ -667,6 +667,11 @@ export interface SanitizationConfig {
   linkRegex?: RegExp;
 }
 
+export type SpaceKerning = Record<
+  string,
+  { before: Record<string, number>; after: Record<string, number> }
+>;
+
 /**
  * Props for the `<EnrichedTextInput />` rich-text editor component.
  */
@@ -882,6 +887,8 @@ export interface EnrichedTextInputProps extends Omit<ViewProps, 'children'> {
    * Enabled by default.
    */
   allowFontScaling?: boolean;
+
+  spaceKerning?: SpaceKerning;
 }
 
 /**
@@ -963,6 +970,8 @@ export interface EnrichedTextProps extends ViewProps {
    * Enabled by default.
    */
   allowFontScaling?: boolean;
+
+  spaceKerning?: SpaceKerning;
 
   /** Called when the user taps a hyperlink inside the rendered content. */
   onLinkPress?: (event: OnLinkPressEvent) => void;

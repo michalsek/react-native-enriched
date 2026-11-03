@@ -80,14 +80,20 @@ class EnrichedTextWatcher(
     }
     emitEvents(s)
 
-    if (view.isDuringTransaction) return
+    if (view.isDuringTransaction) {
+      updateSpaceKerning()
+      return
+    }
     isApplyingStyles = true
     try {
       applyStyles(s)
     } finally {
       isApplyingStyles = isNestedChange
     }
-    if (!isNestedChange) view.normalizeParagraphMarginSpacers()
+    if (!isNestedChange) {
+      view.normalizeParagraphMarginSpacers()
+      updateSpaceKerning()
+    }
     view.layoutManager.invalidateLayout()
   }
 
@@ -119,6 +125,15 @@ class EnrichedTextWatcher(
     view.parametrizedStyles?.afterTextChanged(s, startCursorPosition, endCursorPosition)
   }
 
+  private fun updateSpaceKerning() {
+    if (view.isSettingValue) return
+
+    view.updateSpaceKerning(
+      startCursorPosition - SPACER_INDEX_SLACK,
+      endCursorPosition + SPACER_INDEX_SLACK,
+    )
+  }
+
   private fun emitChangeText(editable: Editable) {
     if (!view.shouldEmitOnChangeText) {
       return
@@ -139,5 +154,9 @@ class EnrichedTextWatcher(
   private fun emitEvents(s: Editable) {
     emitChangeText(s)
     view.spanWatcher?.emitEvent(s, null)
+  }
+
+  companion object {
+    private const val SPACER_INDEX_SLACK = 4
   }
 }

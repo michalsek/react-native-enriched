@@ -25,6 +25,8 @@ import com.facebook.react.views.text.ReactTypefaceUtils.parseFontWeight
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.EnrichedSpanFlags
 import com.swmansion.enriched.common.GumboNormalizer
+import com.swmansion.enriched.common.SpaceKerning
+import com.swmansion.enriched.common.SpaceKerningTable
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.text.spans.EnrichedTextImageSpan
@@ -44,6 +46,8 @@ class EnrichedTextView : AppCompatTextView {
   private var fontSizeRaw: Float? = null
   private var lineHeight: Float? = null
   private var htmlStyleMap: ReadableMap? = null
+  private var spaceKerningJson: String? = null
+  private var spaceKerning: SpaceKerningTable? = null
   var allowFontScaling: Boolean = EnrichedConstants.ALLOW_FONT_SCALING_DEFAULT
     set(value) {
       if (field == value) return
@@ -189,14 +193,21 @@ class EnrichedTextView : AppCompatTextView {
 
     val parsed = parseText(text, style)
     if (parsed != null) {
-      parsedText = parsed
-      setText(parsed, BufferType.NORMAL)
+      parsedText = applySpaceKerning(parsed)
+      setText(parsedText, BufferType.NORMAL)
       observeAsyncImages()
     } else {
       parsedText = null
-      this.text = text
+      this.text = applySpaceKerning(text)
     }
     applyLineSpacing()
+  }
+
+  private fun applySpaceKerning(text: CharSequence): CharSequence {
+    val table = spaceKerning ?: return text
+    val spannable = text as? Spannable ?: SpannableString(text)
+    SpaceKerning.update(spannable, table, fontFamily, paint)
+    return spannable
   }
 
   private fun parseText(
@@ -315,6 +326,7 @@ class EnrichedTextView : AppCompatTextView {
     val sizeInt = ceil(pixelFromSpOrDp(size, allowFontScaling))
     fontSize = sizeInt
     setTextSize(TypedValue.COMPLEX_UNIT_PX, sizeInt)
+    if (spaceKerning != null) valueDirty = true
   }
 
   fun setLineHeight(height: Float) {
@@ -348,7 +360,16 @@ class EnrichedTextView : AppCompatTextView {
     if (family != fontFamily) {
       fontFamily = family
       typefaceDirty = true
+      if (spaceKerning != null) valueDirty = true
     }
+  }
+
+  fun setSpaceKerning(json: String?) {
+    if (json == spaceKerningJson) return
+
+    spaceKerningJson = json
+    spaceKerning = SpaceKerningTable.fromJson(json)
+    valueDirty = true
   }
 
   fun setFontWeight(weight: String?) {
