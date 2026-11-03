@@ -292,6 +292,18 @@ export interface OnChangeHtmlEvent {
   value: string;
 }
 
+export interface OnChangeContentSizeEvent {
+  width: number;
+  height: number;
+}
+
+export interface OnChangeCaretRectEvent {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface OnChangeStateEvent {
   bold: {
     isActive: boolean;
@@ -769,6 +781,12 @@ export interface EnrichedTextInputProps extends Omit<ViewProps, 'children'> {
    * moves into a bold region). Use this to update toolbar toggle states.
    */
   onChangeState?: (e: NativeSyntheticEvent<OnChangeStateEvent>) => void;
+
+  onChangeContentSize?: (
+    e: NativeSyntheticEvent<OnChangeContentSizeEvent>
+  ) => void;
+
+  onChangeCaretRect?: (e: NativeSyntheticEvent<OnChangeCaretRectEvent>) => void;
 
   /** Called when the editor auto-detects a URL matching `linkRegex`. */
   onLinkDetected?: (e: OnLinkDetected) => void;

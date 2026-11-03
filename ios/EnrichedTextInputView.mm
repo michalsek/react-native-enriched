@@ -60,6 +60,10 @@ using namespace facebook::react;
   UIColor *_placeholderColor;
   BOOL _emitFocusBlur;
   BOOL _emitTextChange;
+  BOOL _emitContentSize;
+  CGSize _recentlyEmittedContentSize;
+  BOOL _emitCaretRect;
+  CGRect _recentlyEmittedCaretRect;
   BOOL _isSettingValue;
   NSMutableDictionary<NSValue *, UIImageView *> *_attachmentViews;
   NSArray<NSDictionary *> *_contextMenuItems;
@@ -146,6 +150,10 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   preserveTypingAttributesOnNextEmptyCheck = NO;
   _emitFocusBlur = YES;
   _emitTextChange = NO;
+  _emitContentSize = NO;
+  _recentlyEmittedContentSize = CGSizeMake(-1, -1);
+  _emitCaretRect = NO;
+  _recentlyEmittedCaretRect = CGRectNull;
   _isSettingValue = NO;
   _verticalAlign = @"top";
   dotReplacementRange = nullptr;
@@ -716,6 +724,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   if (newViewProps.verticalAlign != oldViewProps.verticalAlign) {
     _verticalAlign = [NSString fromCppString:newViewProps.verticalAlign];
     [self updateVerticalAlignment];
+    [self tryEmittingCaretRect];
   }
 
   // textShortcuts
@@ -889,6 +898,17 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
   // isOnChangeTextSet
   _emitTextChange = newViewProps.isOnChangeTextSet;
+
+  if (_emitContentSize != newViewProps.isOnChangeContentSizeSet) {
+    _emitContentSize = newViewProps.isOnChangeContentSizeSet;
+    [self updateVerticalAlignment];
+  }
+
+  if (_emitCaretRect != newViewProps.isOnChangeCaretRectSet) {
+    _emitCaretRect = newViewProps.isOnChangeCaretRectSet;
+    _recentlyEmittedCaretRect = CGRectNull;
+    [self tryEmittingCaretRect];
+  }
 
   // contextMenuItems
   bool contextMenuChanged = newViewProps.contextMenuItems.size() !=
@@ -1492,10 +1512,16 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       insets.top = 0;
       textView.textContainerInset = insets;
     }
+    if (_emitContentSize) {
+      [self tryEmittingContentSize:[self laidOutContentHeight]];
+    }
     return;
   }
 
   CGFloat contentHeight = [self laidOutContentHeight];
+  if (_emitContentSize) {
+    [self tryEmittingContentSize:contentHeight];
+  }
   CGFloat freeSpace = textView.bounds.size.height - contentHeight;
   CGFloat displayScale = textView.traitCollection.displayScale > 0
                              ? textView.traitCollection.displayScale
@@ -1510,10 +1536,65 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   }
 }
 
+- (void)tryEmittingContentSize:(CGFloat)contentHeight {
+  CGFloat contentWidth = textView.textContainer.size.width;
+
+  if (ABS(contentHeight - _recentlyEmittedContentSize.height) < 0.5 &&
+      ABS(contentWidth - _recentlyEmittedContentSize.width) < 0.5) {
+    return;
+  }
+
+  auto emitter = [self getEventEmitter];
+  if (emitter == nullptr) {
+    return;
+  }
+
+  _recentlyEmittedContentSize = CGSizeMake(contentWidth, contentHeight);
+  emitter->onChangeContentSize({.width = static_cast<float>(contentWidth),
+                                .height = static_cast<float>(contentHeight)});
+}
+
 - (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
            oldLayoutMetrics:(const LayoutMetrics &)oldLayoutMetrics {
   [super updateLayoutMetrics:layoutMetrics oldLayoutMetrics:oldLayoutMetrics];
   [self updateVerticalAlignment];
+  [self tryEmittingCaretRect];
+}
+
+- (void)tryEmittingCaretRect {
+  if (!_emitCaretRect) {
+    return;
+  }
+
+  UITextRange *selection = textView.selectedTextRange;
+  if (selection == nil) {
+    return;
+  }
+
+  CGRect caretRect = [textView caretRectForPosition:selection.end];
+  if (CGRectIsNull(caretRect) || CGRectIsInfinite(caretRect)) {
+    return;
+  }
+
+  CGRect rect = [textView convertRect:caretRect toView:self];
+  if (!CGRectIsNull(_recentlyEmittedCaretRect) &&
+      ABS(rect.origin.x - _recentlyEmittedCaretRect.origin.x) < 0.5 &&
+      ABS(rect.origin.y - _recentlyEmittedCaretRect.origin.y) < 0.5 &&
+      ABS(rect.size.width - _recentlyEmittedCaretRect.size.width) < 0.5 &&
+      ABS(rect.size.height - _recentlyEmittedCaretRect.size.height) < 0.5) {
+    return;
+  }
+
+  auto emitter = [self getEventEmitter];
+  if (emitter == nullptr) {
+    return;
+  }
+
+  _recentlyEmittedCaretRect = rect;
+  emitter->onChangeCaretRect({.x = static_cast<float>(rect.origin.x),
+                              .y = static_cast<float>(rect.origin.y),
+                              .width = static_cast<float>(rect.size.width),
+                              .height = static_cast<float>(rect.size.height)});
 }
 
 - (void)setCustomSelection:(NSInteger)visibleStart end:(NSInteger)visibleEnd {
@@ -2007,6 +2088,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   [self tryUpdatingActiveStyles];
   // update drawing - schedule debounced relayout
   [self scheduleRelayoutIfNeeded];
+  [self tryEmittingCaretRect];
 }
 
 - (void)handlePlaceholderVisibility {
@@ -2320,6 +2402,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
   // manage selection changes
   [self manageSelectionBasedChanges];
+  [self tryEmittingCaretRect];
 }
 
 // this function isn't called always when some text changes (for example setting

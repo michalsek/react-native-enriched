@@ -6,6 +6,8 @@ export type {
   EnrichedTextProps,
   OnChangeTextEvent,
   OnChangeHtmlEvent,
+  OnChangeContentSizeEvent,
+  OnChangeCaretRectEvent,
   OnChangeStateEvent,
   OnLinkDetected,
   OnMentionDetected,

@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.BlendMode
 import android.graphics.BlendModeColorFilter
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Build
@@ -33,6 +34,7 @@ import com.facebook.react.bridge.ReactContext
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.common.ReactConstants
+import com.facebook.react.uimanager.PixelUtil
 import com.facebook.react.uimanager.StateWrapper
 import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.views.text.ReactTypefaceUtils.applyStyles
@@ -44,6 +46,8 @@ import com.swmansion.enriched.common.GumboNormalizer
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.textinput.events.MentionHandler
+import com.swmansion.enriched.textinput.events.OnChangeCaretRectEvent
+import com.swmansion.enriched.textinput.events.OnChangeContentSizeEvent
 import com.swmansion.enriched.textinput.events.OnContextMenuItemPressEvent
 import com.swmansion.enriched.textinput.events.OnInputBlurEvent
 import com.swmansion.enriched.textinput.events.OnInputFocusEvent
@@ -131,6 +135,20 @@ class EnrichedTextInputView :
 
   var shouldEmitHtml: Boolean = false
   var shouldEmitOnChangeText: Boolean = false
+  var shouldEmitContentSize: Boolean = false
+    set(value) {
+      field = value
+      if (value) invalidate()
+    }
+  private var recentlyEmittedContentWidth: Int = -1
+  private var recentlyEmittedContentHeight: Int = -1
+  var shouldEmitCaretRect: Boolean = false
+    set(value) {
+      field = value
+      recentlyEmittedCaretRect = null
+      if (value) invalidate()
+    }
+  private var recentlyEmittedCaretRect: Rect? = null
   var experimentalSynchronousEvents: Boolean = false
   var useHtmlNormalizer: Boolean = false
 
@@ -1126,6 +1144,71 @@ class EnrichedTextInputView :
     }
   }
 
+  override fun onDraw(canvas: Canvas) {
+    super.onDraw(canvas)
+    tryEmittingContentSize()
+    tryEmittingCaretRect()
+  }
+
+  private fun tryEmittingCaretRect() {
+    if (!shouldEmitCaretRect) return
+
+    val textLayout = layout ?: return
+    val caretOffset = selectionEnd
+    if (caretOffset < 0) return
+
+    val line = textLayout.getLineForOffset(caretOffset)
+    val left = totalPaddingLeft + textLayout.getPrimaryHorizontal(caretOffset).toInt() - scrollX
+    val top = totalPaddingTop + textLayout.getLineTop(line) - scrollY
+    val bottom = totalPaddingTop + textLayout.getLineBottom(line) - scrollY
+    val caretRect = Rect(left, top, left + PixelUtil.toPixelFromDIP(CARET_WIDTH_DP).toInt(), bottom)
+
+    if (caretRect == recentlyEmittedCaretRect) return
+
+    val reactContext = context as? ReactContext ?: return
+    val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(reactContext, id) ?: return
+    val surfaceId = UIManagerHelper.getSurfaceId(reactContext)
+
+    recentlyEmittedCaretRect = caretRect
+    dispatcher.dispatchEvent(
+      OnChangeCaretRectEvent(
+        surfaceId,
+        id,
+        PixelUtil.toDIPFromPixel(caretRect.left.toFloat()).toDouble(),
+        PixelUtil.toDIPFromPixel(caretRect.top.toFloat()).toDouble(),
+        PixelUtil.toDIPFromPixel(caretRect.width().toFloat()).toDouble(),
+        PixelUtil.toDIPFromPixel(caretRect.height().toFloat()).toDouble(),
+        experimentalSynchronousEvents,
+      ),
+    )
+  }
+
+  private fun tryEmittingContentSize() {
+    if (!shouldEmitContentSize) return
+
+    val textLayout = layout ?: return
+    val contentWidth = textLayout.width
+    val contentHeight = textLayout.height
+
+    if (contentWidth == recentlyEmittedContentWidth && contentHeight == recentlyEmittedContentHeight) return
+
+    val reactContext = context as? ReactContext ?: return
+    val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(reactContext, id) ?: return
+    val surfaceId = UIManagerHelper.getSurfaceId(reactContext)
+
+    recentlyEmittedContentWidth = contentWidth
+    recentlyEmittedContentHeight = contentHeight
+    dispatcher.dispatchEvent(
+      OnChangeContentSizeEvent(
+        surfaceId,
+        id,
+        PixelUtil.toDIPFromPixel(contentWidth.toFloat()).toDouble(),
+        PixelUtil.toDIPFromPixel(contentHeight.toFloat()).toDouble(),
+        experimentalSynchronousEvents,
+      ),
+    )
+  }
+
   private fun forceScrollToSelection() {
     val textLayout = layout ?: return
     val cursorOffset = selectionStart
@@ -1236,5 +1319,6 @@ class EnrichedTextInputView :
     const val TAG = "EnrichedTextInputView"
     private const val CONTEXT_MENU_ITEM_ID = 10000
     const val DEFAULT_IME_ACTION_LABEL = "DONE"
+    private const val CARET_WIDTH_DP = 2f
   }
 }
