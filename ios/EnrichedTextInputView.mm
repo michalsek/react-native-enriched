@@ -67,6 +67,7 @@ using namespace facebook::react;
   NSDictionary<NSAttributedStringKey, id> *_capturedAttributesBeforeChange;
   NSString *_recentlyEmittedAlignment;
   CustomStyleData *_recentlyEmittedCustomStyle;
+  NSString *_verticalAlign;
 }
 
 @synthesize blockEmitting = blockEmitting;
@@ -146,6 +147,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   _emitFocusBlur = YES;
   _emitTextChange = NO;
   _isSettingValue = NO;
+  _verticalAlign = @"top";
   dotReplacementRange = nullptr;
 
   defaultTypingAttributes =
@@ -711,6 +713,11 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     useHtmlNormalizer = newViewProps.useHtmlNormalizer;
   }
 
+  if (newViewProps.verticalAlign != oldViewProps.verticalAlign) {
+    _verticalAlign = [NSString fromCppString:newViewProps.verticalAlign];
+    [self updateVerticalAlignment];
+  }
+
   // textShortcuts
   bool textShortcutsChanged =
       newViewProps.textShortcuts.size() != oldViewProps.textShortcuts.size();
@@ -972,7 +979,25 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
 // MARK: - Measuring and states
 
+- (BOOL)needsMockLineToMeasure:(NSString *)string {
+  if (string.length == 0 || [string isEqualToString:@"\u200B"]) {
+    return YES;
+  }
+
+  unichar lastChar = [string characterAtIndex:string.length - 1];
+
+  return [[NSCharacterSet newlineCharacterSet] characterIsMember:lastChar];
+}
+
 - (CGSize)measureSize:(CGFloat)maxWidth {
+  NSTextStorage *textStorage = textView.textStorage;
+
+  if (maxWidth == textView.textContainer.size.width &&
+      textStorage.editedMask == 0 &&
+      ![self needsMockLineToMeasure:textStorage.string]) {
+    return CGSizeMake(maxWidth, ceil([self laidOutContentHeight]));
+  }
+
   // copy the the whole attributed string
   NSMutableAttributedString *currentStr = [[NSMutableAttributedString alloc]
       initWithAttributedString:textView.textStorage];
@@ -1434,6 +1459,61 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   [self anyTextMayHaveBeenModified];
 
   _isSettingValue = NO;
+}
+
+- (CGFloat)laidOutContentHeight {
+  NSLayoutManager *layoutManager = textView.layoutManager;
+  NSTextContainer *textContainer = textView.textContainer;
+
+  [layoutManager ensureLayoutForTextContainer:textContainer];
+
+  NSRange laidOutGlyphs =
+      [layoutManager glyphRangeForTextContainer:textContainer];
+
+  if (NSMaxRange(laidOutGlyphs) >= layoutManager.numberOfGlyphs) {
+    return CGRectGetMaxY(
+        [layoutManager usedRectForTextContainer:textContainer]);
+  }
+
+  return [LineBoxLayoutDelegate
+      usedHeightOfAttributedString:textView.textStorage
+                             width:textContainer.size.width
+              maximumNumberOfLines:0
+                     lineBreakMode:textContainer.lineBreakMode];
+}
+
+- (void)updateVerticalAlignment {
+  BOOL isCenter = [_verticalAlign isEqualToString:@"center"];
+  BOOL isBottom = [_verticalAlign isEqualToString:@"bottom"];
+  UIEdgeInsets insets = textView.textContainerInset;
+
+  if (!isCenter && !isBottom) {
+    if (insets.top != 0) {
+      insets.top = 0;
+      textView.textContainerInset = insets;
+    }
+    return;
+  }
+
+  CGFloat contentHeight = [self laidOutContentHeight];
+  CGFloat freeSpace = textView.bounds.size.height - contentHeight;
+  CGFloat displayScale = textView.traitCollection.displayScale > 0
+                             ? textView.traitCollection.displayScale
+                             : 1;
+  CGFloat alignedFreeSpace = isCenter ? freeSpace / 2 : freeSpace;
+  CGFloat topInset =
+      MAX(0, floor(alignedFreeSpace * displayScale) / displayScale);
+
+  if (insets.top != topInset) {
+    insets.top = topInset;
+    textView.textContainerInset = insets;
+  }
+}
+
+- (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
+           oldLayoutMetrics:(const LayoutMetrics &)oldLayoutMetrics {
+  [super updateLayoutMetrics:layoutMetrics oldLayoutMetrics:oldLayoutMetrics];
+  [self updateVerticalAlignment];
 }
 
 - (void)setCustomSelection:(NSInteger)visibleStart end:(NSInteger)visibleEnd {
@@ -1922,6 +2002,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   [attributesManager handleDirtyRangesStyling];
   // update height on each character change
   [self tryUpdatingHeight];
+  [self updateVerticalAlignment];
   // update active styles as well
   [self tryUpdatingActiveStyles];
   // update drawing - schedule debounced relayout
