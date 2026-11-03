@@ -115,22 +115,62 @@
   return output;
 }
 
++ (NSRegularExpression *)cachedRegexForPattern:(NSString *)pattern {
+  static NSMutableDictionary<NSString *, NSRegularExpression *> *cache;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    cache = [[NSMutableDictionary alloc] init];
+  });
+
+  @synchronized(cache) {
+    NSRegularExpression *regex = cache[pattern];
+    if (regex == nil) {
+      NSError *error = nil;
+      regex = [NSRegularExpression regularExpressionWithPattern:pattern
+                                                        options:0
+                                                          error:&error];
+      NSAssert(regex != nil, @"Invalid regex pattern %@: %@", pattern, error);
+      if (regex != nil) {
+        cache[pattern] = regex;
+      }
+    }
+    return regex;
+  }
+}
+
 + (NSString *)stringByAddingNewlinesToTag:(NSString *)tag
                                  inString:(NSString *)html
                                   leading:(BOOL)leading
                                  trailing:(BOOL)trailing {
   NSString *str = [html copy];
+  BOOL canNeighbourItself = [tag isEqualToString:@"<br>"];
   if (leading) {
-    NSString *formattedTag = [NSString stringWithFormat:@">%@", tag];
-    NSString *formattedNewTag = [NSString stringWithFormat:@">\n%@", tag];
-    str = [str stringByReplacingOccurrencesOfString:formattedTag
-                                         withString:formattedNewTag];
+    if (canNeighbourItself) {
+      str = [[self cachedRegexForPattern:@">(?=<br>)"]
+          stringByReplacingMatchesInString:str
+                                   options:0
+                                     range:NSMakeRange(0, str.length)
+                              withTemplate:@">\n"];
+    } else {
+      NSString *formattedTag = [NSString stringWithFormat:@">%@", tag];
+      NSString *formattedNewTag = [NSString stringWithFormat:@">\n%@", tag];
+      str = [str stringByReplacingOccurrencesOfString:formattedTag
+                                           withString:formattedNewTag];
+    }
   }
   if (trailing) {
-    NSString *formattedTag = [NSString stringWithFormat:@"%@<", tag];
-    NSString *formattedNewTag = [NSString stringWithFormat:@"%@\n<", tag];
-    str = [str stringByReplacingOccurrencesOfString:formattedTag
-                                         withString:formattedNewTag];
+    if (canNeighbourItself) {
+      str = [[self cachedRegexForPattern:@"(?<=<br>)<"]
+          stringByReplacingMatchesInString:str
+                                   options:0
+                                     range:NSMakeRange(0, str.length)
+                              withTemplate:@"\n<"];
+    } else {
+      NSString *formattedTag = [NSString stringWithFormat:@"%@<", tag];
+      NSString *formattedNewTag = [NSString stringWithFormat:@"%@\n<", tag];
+      str = [str stringByReplacingOccurrencesOfString:formattedTag
+                                           withString:formattedNewTag];
+    }
   }
   return str;
 }
@@ -280,6 +320,21 @@
     // change <br/> to <br>
     fixedHtml = [fixedHtml stringByReplacingOccurrencesOfString:@"<br/>"
                                                      withString:@"<br>"];
+
+    fixedHtml = [[self
+        cachedRegexForPattern:
+            @"<p(\\s[^>]*)>((?:<span(?:\\s[^>]*)?>)*)<br>((?:</span>)*)</p>"]
+        stringByReplacingMatchesInString:fixedHtml
+                                 options:0
+                                   range:NSMakeRange(0, fixedHtml.length)
+                            withTemplate:@"<p$1>$2$3</p>"];
+    fixedHtml =
+        [[self cachedRegexForPattern:
+                   @"<p>((?:<span(?:\\s[^>]*)?>)+)<br>((?:</span>)+)</p>"]
+            stringByReplacingMatchesInString:fixedHtml
+                                     options:0
+                                       range:NSMakeRange(0, fixedHtml.length)
+                                withTemplate:@"<p>$1$2</p>"];
 
     // remove <p> tags around <br>
     fixedHtml = [fixedHtml stringByReplacingOccurrencesOfString:@"<p><br>"
@@ -432,6 +487,11 @@
       [[NSMutableArray alloc] init];
   BOOL insideCheckboxList = NO;
   NSInteger precedingImageCount = 0;
+  NSInteger blockDepth = 0;
+  NSInteger paragraphStart = -1;
+  NSUInteger paragraphFirstEntry = 0;
+  NSInteger paragraphImageCount = 0;
+  id trailingParagraph = [NSNull null];
   BOOL insideTag = NO;
   BOOL gettingTagName = NO;
   BOOL gettingTagParams = NO;
@@ -511,6 +571,14 @@
       } else if (!closingTag) {
         BOOL isPlainParagraph = [currentTagName isEqualToString:@"p"] &&
                                 currentTagParams.length == 0;
+
+        if ([currentTagName isEqualToString:@"p"]) {
+          paragraphStart = plainText.length;
+          paragraphFirstEntry = initiallyProcessedTags.count;
+          paragraphImageCount = precedingImageCount;
+        } else if ([self isBlockTag:currentTagName]) {
+          blockDepth++;
+        }
 
         if (!isPlainParagraph) {
           // we finish opening tag - get its location, the current
@@ -601,14 +669,47 @@
               mutableCopy];
         }
 
+        if (isBlockTag && blockDepth > 0) {
+          blockDepth--;
+        }
+
+        NSInteger minimumLength = 0;
+        if ([currentTagName isEqualToString:@"p"]) {
+          BOOL isEmptyParagraph =
+              paragraphStart >= 0 && blockDepth == 0 &&
+              (NSInteger)plainText.length == paragraphStart &&
+              precedingImageCount == paragraphImageCount;
+          if (isEmptyParagraph && i + 1 < fixedHtml.length &&
+              [[NSCharacterSet newlineCharacterSet]
+                  characterIsMember:[fixedHtml characterAtIndex:i + 1]]) {
+            minimumLength = 1;
+            [self extendEmptySpanEntries:initiallyProcessedTags
+                               fromIndex:paragraphFirstEntry
+                                location:paragraphStart + paragraphImageCount];
+          } else if (isEmptyParagraph &&
+                     [[fixedHtml substringFromIndex:i + 1]
+                         stringByTrimmingCharactersInSet:
+                             [NSCharacterSet whitespaceAndNewlineCharacterSet]]
+                             .length == 0) {
+            trailingParagraph = [self
+                takeTrailingParagraphFrom:initiallyProcessedTags
+                                fromIndex:paragraphFirstEntry
+                                 location:paragraphStart + paragraphImageCount
+                                  tagData:ongoingTags[currentTagName]];
+          }
+          paragraphStart = -1;
+        }
+
         [self checkForAlignments:ongoingTags[currentTagName]
                        plainText:plainText
                  foundAlignments:foundAlignments
-             precedingImageCount:precedingImageCount];
+             precedingImageCount:precedingImageCount
+                   minimumLength:minimumLength];
         [self checkForParagraphMargins:ongoingTags[currentTagName]
                              plainText:plainText
                  foundParagraphMargins:foundParagraphMargins
-                   precedingImageCount:precedingImageCount];
+                   precedingImageCount:precedingImageCount
+                         minimumLength:minimumLength];
         [self finalizeTagEntry:currentTagName
                        ongoingTags:ongoingTags
             initiallyProcessedTags:initiallyProcessedTags
@@ -866,8 +967,10 @@
     [processedStyles addObject:styleArr];
   }
 
-  return
-      @[ plainText, processedStyles, foundAlignments, foundParagraphMargins ];
+  return @[
+    plainText, processedStyles, foundAlignments, foundParagraphMargins,
+    trailingParagraph
+  ];
 }
 
 + (NSString *)parseToHtmlFromRange:(NSRange)range
@@ -876,6 +979,12 @@
   NSString *text = [host.textView.textStorage.string substringWithRange:range];
 
   if (text.length == 0) {
+    NSString *trailingParagraphHtml = [self trailingParagraphHtmlForHost:host];
+    if (host.textView.textStorage.string.length == 0 &&
+        ![trailingParagraphHtml isEqualToString:@"\n<br>"]) {
+      return [NSString
+          stringWithFormat:@"<html>%@\n</html>", trailingParagraphHtml];
+    }
     return @"<html>\n<p></p>\n</html>";
   }
 
@@ -981,16 +1090,8 @@
             inCheckboxList = NO;
           }
         } else {
-          NSString *cssStyleString =
-              [self prepareCssStyleString:currentRange.location
-                             isOpeningTag:YES
-                                     host:host];
-          if (cssStyleString.length > 0) {
-            [result appendString:[NSString stringWithFormat:@"\n<p%@></p>",
-                                                            cssStyleString]];
-          } else {
-            [result appendString:@"\n<br>"];
-          }
+          [result appendString:[self emptyParagraphHtmlAt:currentRange.location
+                                                     host:host]];
         }
       } else {
         // newline finishes a paragraph and all style tags need to be closed
@@ -1357,6 +1458,9 @@
       inCheckboxList = NO;
       [result appendString:@"\n</ul>"];
     }
+    if (NSMaxRange(range) == host.textView.textStorage.string.length) {
+      [result appendString:[self trailingParagraphHtmlForHost:host]];
+    }
   }
 
   [result appendString:@"\n</html>"];
@@ -1380,6 +1484,109 @@
                                range:NSMakeRange(0, result.length)];
 
   return result;
+}
+
++ (NSString *)emptyParagraphHtmlAt:(NSInteger)location
+                              host:(id<EnrichedViewHost>)host {
+  NSParagraphStyle *pStyle =
+      [host.textView.textStorage attribute:NSParagraphStyleAttributeName
+                                   atIndex:location
+                            effectiveRange:nil];
+  CustomStyle *customStyle =
+      (CustomStyle *)host.stylesDict[@([CustomStyle getType])];
+  NSString *textCss = [self
+      customStyleCssForData:[customStyle getStoredCustomStyleDataAt:location]];
+  return [self emptyParagraphHtmlWithParagraphCss:
+                   [self cssStyleStringForParagraphStyle:pStyle]
+                                          textCss:textCss];
+}
+
++ (NSString *)trailingParagraphHtmlForHost:(id<EnrichedViewHost>)host {
+  NSDictionary *attributes = nil;
+  if ([host respondsToSelector:@selector(attributesManager)]) {
+    attributes = host.attributesManager.trailingParagraphAttributes;
+  }
+  if (attributes == nil) {
+    return @"\n<br>";
+  }
+
+  CustomStyle *customStyle =
+      (CustomStyle *)host.stylesDict[@([CustomStyle getType])];
+  NSString *paragraphCss = [self cssStyleStringForParagraphStyle:
+                                     attributes[NSParagraphStyleAttributeName]];
+  NSString *textCss =
+      [self customStyleCssForData:attributes[[customStyle getKey]]];
+  return [self emptyParagraphHtmlWithParagraphCss:paragraphCss textCss:textCss];
+}
+
++ (NSString *)emptyParagraphHtmlWithParagraphCss:(NSString *)paragraphCss
+                                         textCss:(NSString *)textCss {
+  if (paragraphCss.length == 0 && textCss.length == 0) {
+    return @"\n<br>";
+  }
+  if (textCss.length == 0) {
+    return [NSString stringWithFormat:@"\n<p%@><br></p>", paragraphCss];
+  }
+  return
+      [NSString stringWithFormat:@"\n<p%@><span style=\"%@\"><br></span></p>",
+                                 paragraphCss, textCss];
+}
+
++ (NSString *)customStyleCssForData:(CustomStyleData *)data {
+  if (![data isKindOfClass:[CustomStyleData class]] || data.isEmpty) {
+    return @"";
+  }
+
+  NSMutableString *cssProps = [NSMutableString string];
+  NSString *fg = [[data foregroundColor] hexString];
+  NSString *bg = [[data backgroundColor] hexString];
+  if (fg.length > 0) {
+    [cssProps appendFormat:@"color: %@;", fg];
+  }
+  if (bg.length > 0) {
+    if (cssProps.length > 0)
+      [cssProps appendString:@" "];
+    [cssProps appendFormat:@"background-color: %@;", bg];
+  }
+  if (data.fontSize != nil) {
+    if (cssProps.length > 0)
+      [cssProps appendString:@" "];
+    [cssProps appendFormat:@"font-size: %gpx;", [data.fontSize doubleValue]];
+  }
+  if (data.fontFamily.length > 0) {
+    if (cssProps.length > 0)
+      [cssProps appendString:@" "];
+    if ([data.fontFamily rangeOfString:@" "].location != NSNotFound ||
+        [data.fontFamily rangeOfString:@","].location != NSNotFound) {
+      [cssProps appendFormat:@"font-family: '%@';", data.fontFamily];
+    } else {
+      [cssProps appendFormat:@"font-family: %@;", data.fontFamily];
+    }
+  }
+  if (data.letterSpacing != nil) {
+    if (cssProps.length > 0)
+      [cssProps appendString:@" "];
+    [cssProps appendFormat:@"letter-spacing: %gpx;",
+                           [data.letterSpacing doubleValue]];
+  }
+  if (data.lineHeight != nil) {
+    if (cssProps.length > 0)
+      [cssProps appendString:@" "];
+    [cssProps
+        appendFormat:@"line-height: %gpx;", [data.lineHeight doubleValue]];
+  }
+  if (cssProps.length == 0) {
+    return @"";
+  }
+
+  NSString *escapedStyle =
+      [cssProps stringByReplacingOccurrencesOfString:@"&" withString:@"&amp;"];
+  escapedStyle = [escapedStyle stringByReplacingOccurrencesOfString:@"<"
+                                                         withString:@"&lt;"];
+  escapedStyle = [escapedStyle stringByReplacingOccurrencesOfString:@">"
+                                                         withString:@"&gt;"];
+  return [escapedStyle stringByReplacingOccurrencesOfString:@"\""
+                                                 withString:@"&quot;"];
 }
 
 + (NSString *)tagContentForStyle:(NSNumber *)style
@@ -1504,67 +1711,11 @@
     if (openingTag) {
       CustomStyle *customStyle =
           (CustomStyle *)host.stylesDict[@([CustomStyle getType])];
-      if (customStyle != nil) {
-        CustomStyleData *data =
-            [customStyle getStoredCustomStyleDataAt:location];
-        if (data != nil && !data.isEmpty) {
-          NSMutableString *cssProps = [NSMutableString string];
-          NSString *fg = [[data foregroundColor] hexString];
-          NSString *bg = [[data backgroundColor] hexString];
-          if (fg.length > 0) {
-            [cssProps appendFormat:@"color: %@;", fg];
-          }
-          if (bg.length > 0) {
-            if (cssProps.length > 0)
-              [cssProps appendString:@" "];
-            [cssProps appendFormat:@"background-color: %@;", bg];
-          }
-          if (data.fontSize != nil) {
-            if (cssProps.length > 0)
-              [cssProps appendString:@" "];
-            [cssProps
-                appendFormat:@"font-size: %gpx;", [data.fontSize doubleValue]];
-          }
-          if (data.fontFamily.length > 0) {
-            if (cssProps.length > 0)
-              [cssProps appendString:@" "];
-            if ([data.fontFamily rangeOfString:@" "].location != NSNotFound ||
-                [data.fontFamily rangeOfString:@","].location != NSNotFound) {
-              // font family contains spaces or commas, wrap in single quotes
-              [cssProps appendFormat:@"font-family: '%@';", data.fontFamily];
-            } else {
-              [cssProps appendFormat:@"font-family: %@;", data.fontFamily];
-            }
-          }
-          if (data.letterSpacing != nil) {
-            if (cssProps.length > 0)
-              [cssProps appendString:@" "];
-            [cssProps appendFormat:@"letter-spacing: %gpx;",
-                                   [data.letterSpacing doubleValue]];
-          }
-          if (data.lineHeight != nil) {
-            if (cssProps.length > 0)
-              [cssProps appendString:@" "];
-            [cssProps appendFormat:@"line-height: %gpx;",
-                                   [data.lineHeight doubleValue]];
-          }
-          if (cssProps.length > 0) {
-            NSString *escapedStyle =
-                [cssProps stringByReplacingOccurrencesOfString:@"&"
-                                                    withString:@"&amp;"];
-            escapedStyle =
-                [escapedStyle stringByReplacingOccurrencesOfString:@"<"
-                                                        withString:@"&lt;"];
-            escapedStyle =
-                [escapedStyle stringByReplacingOccurrencesOfString:@">"
-                                                        withString:@"&gt;"];
-            escapedStyle =
-                [escapedStyle stringByReplacingOccurrencesOfString:@"\""
-                                                        withString:@"&quot;"];
-            return
-                [NSString stringWithFormat:@"span style=\"%@\"", escapedStyle];
-          }
-        }
+      NSString *css =
+          [self customStyleCssForData:[customStyle
+                                          getStoredCustomStyleDataAt:location]];
+      if (css.length > 0) {
+        return [NSString stringWithFormat:@"span style=\"%@\"", css];
       }
       return @"span";
     } else {
@@ -1585,6 +1736,14 @@
       [host.textView.textStorage attribute:NSParagraphStyleAttributeName
                                    atIndex:location
                             effectiveRange:nil];
+  return [self cssStyleStringForParagraphStyle:pStyle];
+}
+
++ (NSString *)cssStyleStringForParagraphStyle:(NSParagraphStyle *)pStyle {
+  if (pStyle == nil) {
+    return @"";
+  }
+
   NSString *alignStr = [AlignmentUtils cssValueForAlignment:pStyle.alignment];
   NSMutableArray<NSString *> *declarations = [[NSMutableArray alloc] init];
 
@@ -1874,10 +2033,67 @@
   return data.isEmpty ? nil : data;
 }
 
++ (NSDictionary *)takeTrailingParagraphFrom:(NSMutableArray *)processedTags
+                                  fromIndex:(NSUInteger)fromIndex
+                                   location:(NSInteger)location
+                                    tagData:(NSArray *)tagData {
+  NSMutableDictionary *paragraph = [[NSMutableDictionary alloc] init];
+  NSMutableIndexSet *spanIndexes = [[NSMutableIndexSet alloc] init];
+
+  for (NSUInteger index = fromIndex; index < processedTags.count; index++) {
+    NSArray *entry = processedTags[index];
+    NSRange range = [((NSValue *)entry[1]) rangeValue];
+    if (![entry[0] isEqualToString:@"span"] || range.length != 0 ||
+        (NSInteger)range.location != location) {
+      continue;
+    }
+    CustomStyleData *data = [self
+        parseCustomStyleDataFromSpanParams:entry.count > 2 ? entry[2] : @""];
+    if (data != nil) {
+      paragraph[@"customStyle"] = data;
+    }
+    [spanIndexes addIndex:index];
+  }
+  [processedTags removeObjectsAtIndexes:spanIndexes];
+
+  NSString *params = tagData.count > 2 ? tagData[2] : nil;
+  if (params != nil) {
+    NSTextAlignment alignment =
+        [AlignmentUtils alignmentFromStyleParams:params];
+    if (alignment != NSTextAlignmentNatural) {
+      paragraph[@"alignment"] = @(alignment);
+    }
+    NSDictionary<NSString *, NSNumber *> *margins =
+        [self paragraphMarginsFromStyleParams:params];
+    if (margins[@"top"] != nil) {
+      paragraph[@"marginTop"] = margins[@"top"];
+    }
+    if (margins[@"bottom"] != nil) {
+      paragraph[@"marginBottom"] = margins[@"bottom"];
+    }
+  }
+
+  return paragraph;
+}
+
++ (void)extendEmptySpanEntries:(NSMutableArray *)processedTags
+                     fromIndex:(NSUInteger)fromIndex
+                      location:(NSInteger)location {
+  for (NSUInteger index = fromIndex; index < processedTags.count; index++) {
+    NSMutableArray *entry = processedTags[index];
+    NSRange range = [((NSValue *)entry[1]) rangeValue];
+    if ([entry[0] isEqualToString:@"span"] && range.length == 0 &&
+        (NSInteger)range.location == location) {
+      entry[1] = [NSValue valueWithRange:NSMakeRange(range.location, 1)];
+    }
+  }
+}
+
 + (void)checkForAlignments:(NSArray *)tagData
-                 plainText:(NSMutableString *)plainText
+                 plainText:(NSString *)plainText
            foundAlignments:(NSMutableArray<AlignmentEntry *> *)foundAlignments
-       precedingImageCount:(NSInteger)precedingImageCount {
+       precedingImageCount:(NSInteger)precedingImageCount
+             minimumLength:(NSInteger)minimumLength {
   if (tagData == nil) {
     return;
   }
@@ -1891,13 +2107,8 @@
     NSInteger startLoc = [tagData[0] integerValue];
     // Calculate range relative to plainText
     NSInteger actualStart = startLoc + precedingImageCount;
-    NSInteger length = plainText.length - startLoc;
-
-    // Empty aligned paragraphs have no characters to attach alignment to.
-    if (length == 0) {
-      [plainText appendString:@"\u200B"];
-      length = 1;
-    }
+    NSInteger length =
+        MAX((NSInteger)plainText.length - startLoc, minimumLength);
 
     if (length > 0) {
       AlignmentEntry *entry = [[AlignmentEntry alloc] init];
@@ -1912,7 +2123,8 @@
                        plainText:(NSString *)plainText
            foundParagraphMargins:
                (NSMutableArray<ParagraphMarginEntry *> *)foundParagraphMargins
-             precedingImageCount:(NSInteger)precedingImageCount {
+             precedingImageCount:(NSInteger)precedingImageCount
+                   minimumLength:(NSInteger)minimumLength {
   if (tagData == nil) {
     return;
   }
@@ -1927,7 +2139,7 @@
 
   NSInteger startLoc = [tagData[0] integerValue];
   NSInteger actualStart = startLoc + precedingImageCount;
-  NSInteger length = (NSInteger)plainText.length - startLoc;
+  NSInteger length = MAX((NSInteger)plainText.length - startLoc, minimumLength);
 
   if (length <= 0) {
     return;

@@ -2,25 +2,36 @@ package com.swmansion.enriched.textinput.styles
 
 import android.text.Editable
 import android.text.Spannable
+import android.text.SpannableStringBuilder
 import com.swmansion.enriched.common.CustomStyle
+import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.common.EnrichedSpanFlags
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.spans.EnrichedInputCustomStyleSpan
 import com.swmansion.enriched.textinput.utils.getParagraphBounds
+import com.swmansion.enriched.textinput.utils.safelyInsertZWS
 import org.json.JSONObject
 
 class CustomStyles(
   private val view: EnrichedTextInputView,
 ) {
+  private var deletedParagraphStyle: CustomStyle? = null
+  private var pendingStyle: CustomStyle? = null
+  private var pendingPosition: Int? = null
+
   fun setStyle(
     styleJSON: String,
     collapsedSelectionMode: String,
   ) {
     val selection = view.selection ?: return
+    val spannable = view.text as Spannable
     val (selectionStart, selectionEnd) = selection.getInlineSelection()
+    val (paragraphStart, paragraphEnd) = spannable.getParagraphBounds(selectionStart)
+    val isCollapsed = selectionStart == selectionEnd
+    val isInEmptyParagraph = isCollapsed && isZeroWidthSpaceOnly(spannable, paragraphStart, paragraphEnd)
     val (start, end) =
-      if (selectionStart == selectionEnd && collapsedSelectionMode == "paragraph") {
-        (view.text as Spannable).getParagraphBounds(selectionStart)
+      if (isCollapsed && !isInEmptyParagraph && collapsedSelectionMode == "paragraph") {
+        Pair(paragraphStart, paragraphEnd)
       } else {
         Pair(selectionStart, selectionEnd)
       }
@@ -72,6 +83,11 @@ class CustomStyles(
       )
     }
 
+    if (isInEmptyParagraph && setEmptyParagraphStyle(spannable, paragraphStart, paragraphEnd, styleUpdater)) {
+      selection.validateStyles()
+      return
+    }
+
     if (start == end) {
       val merged = styleUpdater(view.spanState?.customStyle ?: CustomStyle())
       view.spanState?.setCustomStyle(
@@ -87,6 +103,133 @@ class CustomStyles(
       view.selection.validateStyles()
     }
   }
+
+  private fun setEmptyParagraphStyle(
+    spannable: Spannable,
+    paragraphStart: Int,
+    paragraphEnd: Int,
+    styleUpdater: (CustomStyle) -> CustomStyle,
+  ): Boolean {
+    val ownStyle = getParagraphStyle(spannable, paragraphStart, includeNewline(spannable, paragraphEnd))
+    val style = styleUpdater(ownStyle ?: view.spanState?.customStyle ?: CustomStyle())
+    var contentEnd = paragraphEnd
+
+    if (paragraphStart == paragraphEnd) {
+      if (style.isEmpty()) {
+        val newlineEnd = includeNewline(spannable, paragraphEnd)
+        if (newlineEnd > paragraphStart) {
+          applyCustomStyleSpan(spannable, paragraphStart, newlineEnd) { CustomStyle() }
+        }
+        return false
+      }
+
+      val builder = spannable as? SpannableStringBuilder ?: return false
+      builder.safelyInsertZWS(paragraphStart)
+      contentEnd = paragraphStart + 1
+      if (view.selectionStart == paragraphStart && view.selectionEnd == paragraphStart) {
+        view.setSelection(contentEnd)
+      }
+    }
+
+    setParagraphStyle(spannable, paragraphStart, includeNewline(spannable, contentEnd), style)
+    return true
+  }
+
+  fun extendStyleOverAnchor(
+    spannable: Spannable,
+    anchor: Int,
+    fallbackStyle: CustomStyle?,
+  ) {
+    val styledEnd = includeNewline(spannable, anchor + 1)
+    val style = getParagraphStyle(spannable, anchor, styledEnd) ?: fallbackStyle ?: return
+    if (style.isEmpty()) return
+
+    setParagraphStyle(spannable, anchor, styledEnd, style)
+  }
+
+  fun pendingStyleAt(position: Int): CustomStyle? {
+    if (pendingPosition != position) {
+      pendingStyle = null
+      pendingPosition = null
+    }
+    return pendingStyle
+  }
+
+  fun beforeTextChanged(
+    s: CharSequence,
+    start: Int,
+    count: Int,
+    after: Int,
+  ) {
+    deletedParagraphStyle = null
+    val spannable = s as? Spannable ?: return
+    val end = start + count
+    if (count == 0 || after != 0 || end > s.length) return
+
+    val paragraphStart = spannable.getParagraphBounds(start).first
+    val isWholeParagraph = isZeroWidthSpaceOnly(s, paragraphStart, start) && (end == s.length || s[end] == '\n')
+    val isVisibleContent = (start until end).none { s[it] == '\n' } && !isZeroWidthSpaceOnly(s, start, end)
+    if (isWholeParagraph && isVisibleContent) {
+      deletedParagraphStyle = getParagraphStyle(spannable, start, start + 1)
+    }
+  }
+
+  private fun restoreParagraphStyle(
+    s: Editable,
+    position: Int,
+    style: CustomStyle,
+  ) {
+    val paragraphStart = s.getParagraphBounds(position).first
+    val styledEnd = includeNewline(s, position)
+    if (styledEnd > paragraphStart) {
+      setParagraphStyle(s, paragraphStart, styledEnd, style)
+    } else {
+      pendingStyle = style
+      pendingPosition = position
+    }
+    view.spanState?.setCustomStyle(
+      style.foregroundColor,
+      style.backgroundColor,
+      style.fontSize,
+      style.fontFamily,
+      style.letterSpacing,
+      style.lineHeight,
+    )
+  }
+
+  private fun getParagraphStyle(
+    spannable: Spannable,
+    start: Int,
+    end: Int,
+  ): CustomStyle? {
+    if (start >= end) return null
+    return spannable
+      .getSpans(start, end, EnrichedInputCustomStyleSpan::class.java)
+      .firstOrNull()
+      ?.toCustomStyle()
+      ?.takeIf { !it.isEmpty() }
+  }
+
+  private fun setParagraphStyle(
+    spannable: Spannable,
+    start: Int,
+    end: Int,
+    style: CustomStyle,
+  ) {
+    applyCustomStyleSpan(spannable, start, end) { style }
+    collapseAdjacentCustomSpans(spannable, start, end)
+  }
+
+  private fun isZeroWidthSpaceOnly(
+    text: CharSequence,
+    start: Int,
+    end: Int,
+  ): Boolean = (start until end).all { text[it] == EnrichedConstants.ZWS }
+
+  private fun includeNewline(
+    text: CharSequence,
+    position: Int,
+  ): Int = if (position < text.length && text[position] == '\n') position + 1 else position
 
   private fun applyCustomStyleSpan(
     spannable: Spannable,
@@ -140,6 +283,8 @@ class CustomStyles(
     endCursorPosition: Int,
   ) {
     val isInsertion = endCursorPosition > startCursorPosition
+    val deletedStyle = deletedParagraphStyle
+    deletedParagraphStyle = null
 
     if (isInsertion) {
       val activeStyle = view.spanState?.customStyle ?: CustomStyle()
@@ -148,6 +293,10 @@ class CustomStyles(
       splitCustomSpanOnInsertion(s, startCursorPosition, endCursorPosition, activeStyle)
 
       setCustomSpan(s, startCursorPosition, endCursorPosition, activeStyle)
+      pendingStyle = null
+      pendingPosition = null
+    } else if (deletedStyle != null) {
+      restoreParagraphStyle(s, startCursorPosition, deletedStyle)
     }
 
     // Merge any adjacent spans that have the exact same style

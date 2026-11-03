@@ -92,8 +92,15 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
 }
 
 - (void)applyStylingToTypingAttrs:(NSMutableDictionary *)attributes {
-  CustomStyleData *data =
-      [self getCustomStyleDataAt:self.host.textView.selectedRange.location];
+  [self
+      applyStylingForData:[self
+                              getCustomStyleDataAt:self.host.textView
+                                                       .selectedRange.location]
+            toTypingAttrs:attributes];
+}
+
+- (void)applyStylingForData:(CustomStyleData *)data
+              toTypingAttrs:(NSMutableDictionary *)attributes {
   if (data.fontSize != nil || data.fontFamily.length > 0) {
     UIFont *currentFont = attributes[NSFontAttributeName];
     attributes[NSFontAttributeName] = [self resolveFont:currentFont

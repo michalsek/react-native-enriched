@@ -7,6 +7,7 @@
 #import "utils/ParagraphAttributesUtils.h"
 #import "utils/RangeUtils.h"
 #import "utils/StyleUtils.h"
+#import "utils/TextListsUtils.h"
 #import "utils/ZeroWidthSpaceUtils.h"
 
 @implementation InputAttributesManager {
@@ -149,6 +150,39 @@
   EnrichedInputTextView *textView = _input->textView;
   NSRange selectedRange = textView.selectedRange;
 
+  [self clearTrailingParagraphAttributesIfNeeded];
+
+  BOOL keepsTypingOnEmptyText =
+      onlySelectionChanged && textView.textStorage.string.length == 0;
+  if (selectedRange.length == 0 && !keepsTypingOnEmptyText) {
+    NSDictionary *paragraphAttributes =
+        [self emptyParagraphAttributesAt:selectedRange.location
+                       requireTextStyles:!onlySelectionChanged];
+    if (paragraphAttributes != nullptr) {
+      NSMutableDictionary *newAttrs =
+          [[self typingAttributesFromParagraphAttributes:paragraphAttributes]
+              mutableCopy];
+      if (onlySelectionChanged) {
+        if (selectedRange.location < textView.textStorage.string.length) {
+          [self restoreInlineStylesPresentInRange:NSMakeRange(
+                                                      selectedRange.location, 1)
+                                        intoAttrs:newAttrs];
+        }
+      } else {
+        NSSet<NSString *> *paragraphKeys = [self paragraphAttributeKeys];
+        for (NSString *key in textView.typingAttributes) {
+          if ([_customAttributesKeys containsObject:key] &&
+              ![paragraphKeys containsObject:key]) {
+            newAttrs[key] = textView.typingAttributes[key];
+          }
+        }
+      }
+      textView.typingAttributes = newAttrs;
+      [self storeTrailingParagraphAttributesIfNeeded];
+      return;
+    }
+  }
+
   // Typing attributes get reset (except alignment) when only selection changed
   // to an empty line (or empty line with newline).
   if (onlySelectionChanged) {
@@ -184,6 +218,7 @@
                                       intoAttrs:newAttrs];
         textView.typingAttributes = newAttrs;
       }
+      [self storeTrailingParagraphAttributesIfNeeded];
       return;
     }
   }
@@ -251,10 +286,230 @@
   }
 
   textView.typingAttributes = newAttrs;
+
+  [self storeTrailingParagraphAttributesIfNeeded];
 }
 
 - (void)repeatRecentTypingAttributesManagement {
   [self manageTypingAttributesWithOnlySelection:_recentOnlySelectionStatus];
+}
+
+- (CustomStyle *)customStyle {
+  return _input->stylesDict[@([CustomStyle getType])];
+}
+
+- (ParagraphMarginStyle *)paragraphMarginStyle {
+  return _input->stylesDict[@([ParagraphMarginStyle getType])];
+}
+
+- (NSString *)alignmentMarkerPrefix {
+  AlignmentStyle *alignmentStyle =
+      _input->stylesDict[@([AlignmentStyle getType])];
+  return [alignmentStyle getMarkerPrefix];
+}
+
+- (NSSet<NSString *> *)paragraphAttributeKeys {
+  NSMutableSet<NSString *> *keys = [[NSMutableSet alloc] init];
+  [keys addObject:NSParagraphStyleAttributeName];
+  CustomStyle *customStyle = [self customStyle];
+  if (customStyle != nullptr) {
+    [keys addObject:[customStyle getKey]];
+  }
+  ParagraphMarginStyle *marginStyle = [self paragraphMarginStyle];
+  if (marginStyle != nullptr) {
+    [keys addObject:[marginStyle getKey]];
+  }
+  return keys;
+}
+
+- (CustomStyleData *)customStyleData:(id)value {
+  if (![value isKindOfClass:[CustomStyleData class]] ||
+      [(CustomStyleData *)value isEmpty]) {
+    return nullptr;
+  }
+  return (CustomStyleData *)value;
+}
+
+- (CustomStyleData *)customStyleDataAt:(NSUInteger)location {
+  NSTextStorage *textStorage = _input->textView.textStorage;
+  CustomStyle *customStyle = [self customStyle];
+  if (customStyle == nullptr || location >= textStorage.length) {
+    return nullptr;
+  }
+  return [self customStyleData:[textStorage attribute:[customStyle getKey]
+                                              atIndex:location
+                                       effectiveRange:nullptr]];
+}
+
+- (void)storeTypingTextStylesOnEmptyParagraphAt:(NSUInteger)location {
+  if ([self customStyleDataAt:location] != nullptr) {
+    return;
+  }
+  CustomStyle *customStyle = [self customStyle];
+  CustomStyleData *typingData = [self
+      customStyleData:_input->textView.typingAttributes[[customStyle getKey]]];
+  if (typingData == nullptr) {
+    return;
+  }
+  [customStyle setCustomStyleData:typingData
+                            range:NSMakeRange(location, 1)
+                       withTyping:NO
+                   withDirtyRange:YES];
+}
+
+- (BOOL)isInTrailingEmptyParagraph:(NSRange)range {
+  NSString *string = _input->textView.textStorage.string;
+  return range.length == 0 && range.location == string.length &&
+         (string.length == 0 ||
+          [[NSCharacterSet newlineCharacterSet]
+              characterIsMember:[string characterAtIndex:string.length - 1]]);
+}
+
+- (NSDictionary *)emptyParagraphAttributesAt:(NSUInteger)location
+                           requireTextStyles:(BOOL)requireTextStyles {
+  NSString *string = _input->textView.textStorage.string;
+  if ([self isInTrailingEmptyParagraph:NSMakeRange(location, 0)]) {
+    return _trailingParagraphAttributes;
+  }
+
+  NSCharacterSet *newlines = [NSCharacterSet newlineCharacterSet];
+  if (location >= string.length ||
+      ![newlines characterIsMember:[string characterAtIndex:location]] ||
+      (location > 0 &&
+       ![newlines characterIsMember:[string characterAtIndex:location - 1]])) {
+    return nullptr;
+  }
+
+  NSDictionary *attributes =
+      [_input->textView.textStorage attributesAtIndex:location
+                                       effectiveRange:nullptr];
+  NSParagraphStyle *pStyle = attributes[NSParagraphStyleAttributeName];
+  if ([TextListsUtils textListsByRemovingPrefix:[self alignmentMarkerPrefix]
+                                      fromArray:pStyle.textLists]
+          .count > 0) {
+    return nullptr;
+  }
+
+  if (requireTextStyles && [self customStyleDataAt:location] == nullptr) {
+    return nullptr;
+  }
+  return attributes;
+}
+
+- (NSTextAlignment)alignmentOfParagraphStyle:(NSParagraphStyle *)pStyle {
+  NSTextList *marker =
+      [TextListsUtils firstTextListWithPrefix:[self alignmentMarkerPrefix]
+                                      inArray:pStyle.textLists];
+  if (marker != nullptr) {
+    return [AlignmentUtils markerToAlignment:marker.markerFormat];
+  }
+  return pStyle != nullptr ? pStyle.alignment : NSTextAlignmentNatural;
+}
+
+- (NSDictionary *)typingAttributesFromParagraphAttributes:
+    (NSDictionary *)paragraphAttributes {
+  NSMutableDictionary *newAttrs = [_input->defaultTypingAttributes mutableCopy];
+
+  NSTextAlignment alignment =
+      [self alignmentOfParagraphStyle:paragraphAttributes
+                                          [NSParagraphStyleAttributeName]];
+  NSMutableParagraphStyle *pStyle =
+      [newAttrs[NSParagraphStyleAttributeName] mutableCopy]
+          ?: [[NSMutableParagraphStyle alloc] init];
+  pStyle.textLists = @[ [[NSTextList alloc]
+      initWithMarkerFormat:[AlignmentUtils alignmentToMarker:alignment]
+                   options:0] ];
+  pStyle.alignment = alignment;
+  newAttrs[NSParagraphStyleAttributeName] = pStyle;
+
+  CustomStyle *customStyle = [self customStyle];
+  CustomStyleData *data =
+      [self customStyleData:paragraphAttributes[[customStyle getKey]]];
+  if (data != nullptr) {
+    newAttrs[[customStyle getKey]] = data;
+    [customStyle applyStylingForData:data toTypingAttrs:newAttrs];
+  }
+
+  ParagraphMarginStyle *marginStyle = [self paragraphMarginStyle];
+  NSString *margin = paragraphAttributes[[marginStyle getKey]];
+  if (marginStyle != nullptr && margin.length > 0) {
+    newAttrs[[marginStyle getKey]] = margin;
+    [marginStyle applyStylingToTypingAttrs:newAttrs];
+  }
+
+  return newAttrs;
+}
+
+- (NSDictionary *)paragraphAttributesWithCustomStyleData:(CustomStyleData *)data
+                                               alignment:
+                                                   (NSTextAlignment)alignment
+                                                  margin:(NSString *)margin {
+  NSMutableDictionary *paragraphAttributes = [[NSMutableDictionary alloc] init];
+
+  CustomStyle *customStyle = [self customStyle];
+  if (customStyle != nullptr && data != nullptr) {
+    paragraphAttributes[[customStyle getKey]] = data;
+  }
+
+  NSMutableParagraphStyle *pStyle = [[NSMutableParagraphStyle alloc] init];
+  pStyle.alignment = alignment;
+  paragraphAttributes[NSParagraphStyleAttributeName] = pStyle;
+
+  ParagraphMarginStyle *marginStyle = [self paragraphMarginStyle];
+  if (marginStyle != nullptr && margin.length > 0) {
+    paragraphAttributes[[marginStyle getKey]] = margin;
+    [marginStyle applyStylingToTypingAttrs:paragraphAttributes];
+  }
+
+  return paragraphAttributes;
+}
+
+- (NSDictionary *)paragraphAttributesFromParsedParagraph:
+    (NSDictionary *)parsedParagraph {
+  NSNumber *alignment = parsedParagraph[@"alignment"];
+  NSNumber *marginTop = parsedParagraph[@"marginTop"];
+  NSNumber *marginBottom = parsedParagraph[@"marginBottom"];
+  NSString *margin =
+      marginTop != nullptr || marginBottom != nullptr
+          ? [ParagraphMarginStyle valueWithMarginTop:marginTop
+                                        marginBottom:marginBottom]
+          : nullptr;
+  return [self
+      paragraphAttributesWithCustomStyleData:
+          [self customStyleData:parsedParagraph[@"customStyle"]]
+                                   alignment:alignment != nullptr
+                                                 ? (NSTextAlignment)
+                                                       [alignment integerValue]
+                                                 : NSTextAlignmentNatural
+                                      margin:margin];
+}
+
+- (void)storeTrailingParagraphAttributesIfNeeded {
+  EnrichedInputTextView *textView = _input->textView;
+  if (![self isInTrailingEmptyParagraph:textView.selectedRange]) {
+    return;
+  }
+  NSDictionary *typingAttributes = textView.typingAttributes;
+  self.trailingParagraphAttributes = [self
+      paragraphAttributesWithCustomStyleData:
+          [self customStyleData:typingAttributes[[[self customStyle] getKey]]]
+                                   alignment:
+                                       [self
+                                           alignmentOfParagraphStyle:
+                                               typingAttributes
+                                                   [NSParagraphStyleAttributeName]]
+                                      margin:typingAttributes[
+                                                 [[self paragraphMarginStyle]
+                                                     getKey]]];
+}
+
+- (void)clearTrailingParagraphAttributesIfNeeded {
+  NSString *string = _input->textView.textStorage.string;
+  if (string.length > 0 &&
+      ![[NSCharacterSet newlineCharacterSet]
+          characterIsMember:[string characterAtIndex:string.length - 1]]) {
+    self.trailingParagraphAttributes = nullptr;
+  }
 }
 
 @end

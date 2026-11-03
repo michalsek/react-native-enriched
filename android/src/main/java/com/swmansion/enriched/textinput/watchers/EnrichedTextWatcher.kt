@@ -32,6 +32,9 @@ class EnrichedTextWatcher(
   ) {
     previousTextLength = s?.length ?: 0
     deletedText = if (count > 0 && s != null) s.substring(start, start + count) else ""
+    if (s != null && !view.isDuringTransaction && !view.isNormalizingParagraphMarginSpacers) {
+      view.customStyles?.beforeTextChanged(s, start, count, after)
+    }
 
     anchorAlignmentToRestore = null
     removesAlignmentAnchor = false

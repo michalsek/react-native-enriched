@@ -57,6 +57,8 @@
         typedInput->textView.typingAttributes[NSParagraphStyleAttributeName];
     NSTextAlignment savedAlignment =
         currentParaStyle ? currentParaStyle.alignment : NSTextAlignmentNatural;
+    CustomStyleData *savedCustomStyleData =
+        [typedInput->attributesManager customStyleDataAt:range.location];
 
     // for styles that need ZWS (lists, quotes, etc.) we do the following:
     // - manually do the removing
@@ -98,10 +100,41 @@
                                host:typedInput
                       withSelection:YES];
     [self resetTypingAttributes:typedInput preservingAlignment:savedAlignment];
+    [self restoreCustomStyleData:savedCustomStyleData
+              onEmptyParagraphAt:range.location
+                           input:typedInput];
     return YES;
   }
 
   return NO;
+}
+
++ (void)restoreCustomStyleData:(CustomStyleData *)data
+            onEmptyParagraphAt:(NSUInteger)location
+                         input:(EnrichedTextInputView *)input {
+  if (data == nullptr) {
+    return;
+  }
+
+  NSString *string = input->textView.textStorage.string;
+  NSCharacterSet *newlines = [NSCharacterSet newlineCharacterSet];
+  BOOL hasNewline = location < string.length &&
+                    [newlines
+                        characterIsMember:[string characterAtIndex:location]];
+  BOOL isEmptyParagraph =
+      (hasNewline || location == string.length) &&
+      (location == 0 ||
+       [newlines characterIsMember:[string characterAtIndex:location - 1]]);
+  if (!isEmptyParagraph) {
+    return;
+  }
+
+  CustomStyle *customStyle = input->stylesDict[@([CustomStyle getType])];
+  [customStyle setCustomStyleData:data
+                            range:NSMakeRange(location, hasNewline ? 1 : 0)
+                       withTyping:YES
+                   withDirtyRange:YES];
+  [input->attributesManager storeTrailingParagraphAttributesIfNeeded];
 }
 
 /**

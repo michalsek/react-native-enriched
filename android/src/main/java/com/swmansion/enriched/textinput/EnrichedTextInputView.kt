@@ -47,6 +47,7 @@ import com.swmansion.enriched.common.GumboNormalizer
 import com.swmansion.enriched.common.SpaceKerning
 import com.swmansion.enriched.common.SpaceKerningTable
 import com.swmansion.enriched.common.TrailingLetterSpacing
+import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.common.spans.EnrichedSpaceKerningSpan
@@ -492,7 +493,7 @@ class EnrichedTextInputView :
     if (isInternalHtml) {
       try {
         val parsed = EnrichedParser.fromHtml(text.toString(), htmlStyle, spannableFactory, linkRegex)
-        return ParagraphMarginSpacers.normalized(parsed.trimEnd('\n'))
+        return ParagraphMarginSpacers.normalized(dropFinalParagraphTerminator(parsed))
       } catch (e: Exception) {
         Log.e(TAG, "Error parsing HTML: ${e.message}")
         return normalizeHtmlIfNeeded(text)
@@ -532,7 +533,12 @@ class EnrichedTextInputView :
         val textLength = text?.length ?: 0
         val start = ParagraphMarginSpacers.coerceIndex(text ?: "", previousStart.coerceIn(0, textLength))
         val end = ParagraphMarginSpacers.coerceIndex(text ?: "", previousEnd.coerceIn(start, textLength))
-        setSelection(start, end)
+        val isBeforeAnchor =
+          start == end &&
+            start < textLength &&
+            text?.get(start) == EnrichedConstants.ZWS &&
+            (start == 0 || text?.get(start - 1) == '\n')
+        if (isBeforeAnchor) setSelection(start + 1) else setSelection(start, end)
       }
     } finally {
       isSettingValue = false

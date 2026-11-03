@@ -216,6 +216,7 @@ class AlignmentStyles(
     val (rawStart, rawEnd) = selection.getParagraphSelection()
     val (start, end) = expandRangeToContiguousList(spannable, rawStart, rawEnd)
     val cssValue = toCssValue(alignment)
+    val typingStyle = if (selection.start == selection.end) view.spanState?.customStyle else null
 
     var shiftedEnd = end
     var cursor = start
@@ -236,6 +237,7 @@ class AlignmentStyles(
           // Empty paragraph: anchor alignment with a ZWS so the cursor sits inside the span.
           spannable.safelyInsertZWS(paraStart)
           setAlignmentSpan(spannable, cssValue, paraStart, paraStart + 1)
+          view.customStyles?.extendStyleOverAnchor(spannable, paraStart, typingStyle)
 
           shiftedEnd++
           if (paraStart + 1 >= shiftedEnd) break

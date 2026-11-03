@@ -15,6 +15,8 @@
             withDirtyRange:(BOOL)withDirtyRange;
 - (CustomStyleData *_Nullable)getCustomStyleDataInRange:(NSRange)range;
 - (CustomStyleData *_Nullable)getStoredCustomStyleDataAt:(NSUInteger)location;
+- (void)applyStylingForData:(CustomStyleData *_Nullable)data
+              toTypingAttrs:(NSMutableDictionary *_Nonnull)attributes;
 @end
 
 @interface BoldStyle : StyleBase

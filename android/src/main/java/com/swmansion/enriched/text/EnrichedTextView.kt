@@ -28,6 +28,7 @@ import com.swmansion.enriched.common.GumboNormalizer
 import com.swmansion.enriched.common.SpaceKerning
 import com.swmansion.enriched.common.SpaceKerningTable
 import com.swmansion.enriched.common.TrailingLetterSpacing
+import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.text.spans.EnrichedTextImageSpan
@@ -232,7 +233,7 @@ class EnrichedTextView : AppCompatTextView {
     if (isInternalHtml) {
       try {
         val parsed = EnrichedParser.fromHtml(text, style, spannableFactory)
-        return parsed.trimEnd('\n')
+        return dropFinalParagraphTerminator(parsed)
       } catch (e: Exception) {
         Log.e(TAG, "Error parsing HTML: ${e.message}")
         return normalizeHtmlIfNeeded(text, style)

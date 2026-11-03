@@ -21,6 +21,7 @@
 
 - (void)replaceWholeFromHtml:(NSString *_Nonnull)html {
   // reset the text first and reset typing attributes
+  _input->attributesManager.trailingParagraphAttributes = nullptr;
   _input->textView.text = @"";
   _input->textView.typingAttributes = _input->defaultTypingAttributes;
 
@@ -31,6 +32,20 @@
     NSArray *stylesInfo = (NSArray *)processingResult[1];
     NSArray *alignments = (NSArray *)processingResult[2];
     NSArray *paragraphMargins = (NSArray *)processingResult[3];
+    id trailingParagraph = processingResult[4];
+
+    BOOL endsWithEmptyParagraph =
+        plainText.length == 0 ||
+        [[NSCharacterSet newlineCharacterSet]
+            characterIsMember:[plainText
+                                  characterAtIndex:plainText.length - 1]];
+    if ([trailingParagraph isKindOfClass:[NSDictionary class]]) {
+      _input->attributesManager.trailingParagraphAttributes =
+          [_input->attributesManager
+              paragraphAttributesFromParsedParagraph:trailingParagraph];
+    } else if (endsWithEmptyParagraph) {
+      _input->attributesManager.trailingParagraphAttributes = @{};
+    }
 
     // set new text
     _input->textView.text = plainText;
@@ -48,6 +63,7 @@
                exception.reason);
 
     // set new text
+    _input->attributesManager.trailingParagraphAttributes = nullptr;
     _input->textView.text = html;
   }
 }

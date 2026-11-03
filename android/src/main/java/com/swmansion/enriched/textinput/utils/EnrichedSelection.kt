@@ -155,7 +155,8 @@ class EnrichedSelection(
     val state = view.spanState ?: return
     val (start, end) = getInlineSelection()
     val spannable = view.text as Spannable
-    val style = getCustomStyleInRange(spannable, start, end)
+    val pendingStyle = if (start == end) view.customStyles?.pendingStyleAt(start) else null
+    val style = pendingStyle ?: getCustomStyleInRange(spannable, start, end)
     state.setCustomStyle(
       style.foregroundColor,
       style.backgroundColor,
@@ -173,10 +174,11 @@ class EnrichedSelection(
   ): CustomStyle {
     // not-ranged selection
     if (start == end) {
-      return spannable
-        .getSpans(start, end, EnrichedInputCustomStyleSpan::class.java)
-        .firstOrNull { spannable.getSpanStart(it) < start && spannable.getSpanEnd(it) >= end }
-        ?.toCustomStyle() ?: CustomStyle()
+      return getEmptyParagraphCustomStyle(spannable, start)
+        ?: spannable
+          .getSpans(start, end, EnrichedInputCustomStyleSpan::class.java)
+          .firstOrNull { spannable.getSpanStart(it) < start && spannable.getSpanEnd(it) >= end }
+          ?.toCustomStyle() ?: CustomStyle()
     }
 
     val foregroundColors = mutableSetOf<Int?>()
@@ -212,6 +214,19 @@ class EnrichedSelection(
       letterSpacing = letterSpacings.singleOrNull(),
       lineHeight = lineHeights.singleOrNull(),
     )
+  }
+
+  private fun getEmptyParagraphCustomStyle(
+    spannable: Spannable,
+    position: Int,
+  ): CustomStyle? {
+    if (position >= spannable.length || spannable[position] != '\n') return null
+    if (position > 0 && spannable[position - 1] != '\n') return null
+
+    return spannable
+      .getSpans(position, position + 1, EnrichedInputCustomStyleSpan::class.java)
+      .firstOrNull()
+      ?.toCustomStyle()
   }
 
   fun getParagraphSelection(): Pair<Int, Int> {

@@ -1425,6 +1425,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                  range:textView.selectedRange
             withTyping:YES
         withDirtyRange:YES];
+    [attributesManager storeTrailingParagraphAttributesIfNeeded];
 
     [self anyTextMayHaveBeenModified];
     if (!_placeholderLabel.isHidden) {
@@ -1463,6 +1464,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   NSString *initiallyProcessedHtml = [parser initiallyProcessHtml:value];
   if (initiallyProcessedHtml == nullptr) {
     // reset the text first and reset typing attributes
+    attributesManager.trailingParagraphAttributes = nullptr;
     textView.text = @"";
     textView.typingAttributes = defaultTypingAttributes;
     // set new text
@@ -1629,6 +1631,22 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   return actualIndex;
 }
 
+- (NSUInteger)getVisibleIndex:(NSUInteger)actualIndex text:(NSString *)text {
+  NSUInteger limit = MIN(actualIndex, text.length);
+  if ([text rangeOfString:@"\u200B" options:0 range:NSMakeRange(0, limit)]
+          .location == NSNotFound) {
+    return limit;
+  }
+
+  NSUInteger visibleIndex = 0;
+  for (NSUInteger index = 0; index < limit; index++) {
+    if ([text characterAtIndex:index] != 0x200B) {
+      visibleIndex++;
+    }
+  }
+  return visibleIndex;
+}
+
 - (void)emitOnSubmitEdittingEvent {
   auto emitter = [self getEventEmitter];
   if (emitter != nullptr) {
@@ -1649,11 +1667,14 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     _recentlyActiveLinkData = linkData;
     _recentlyActiveLinkRange = range;
 
+    NSString *text = textView.textStorage.string;
     emitter->onLinkDetected({
         .text = [linkData.text toCppString],
         .url = [linkData.url toCppString],
-        .start = static_cast<int>(range.location),
-        .end = static_cast<int>(range.location + range.length),
+        .start = static_cast<int>([self getVisibleIndex:range.location
+                                                   text:text]),
+        .end = static_cast<int>([self getVisibleIndex:NSMaxRange(range)
+                                                 text:text]),
     });
   }
 }
@@ -1778,10 +1799,19 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   NSDictionary *dict = (NSDictionary *)parsed;
 
   NSRange selectedRange = textView.selectedRange;
-  if (selectedRange.length == 0 &&
-      [collapsedSelectionMode isEqualToString:@"paragraph"]) {
-    selectedRange =
-        [textView.textStorage.string paragraphRangeForRange:selectedRange];
+  if (selectedRange.length == 0) {
+    NSString *string = textView.textStorage.string;
+    NSRange paragraphRange = [string paragraphRangeForRange:selectedRange];
+    BOOL isEmptyParagraph =
+        paragraphRange.length == 0 ||
+        (paragraphRange.length == 1 &&
+         [[NSCharacterSet newlineCharacterSet]
+             characterIsMember:[string
+                                   characterAtIndex:paragraphRange.location]]);
+    if (isEmptyParagraph ||
+        [collapsedSelectionMode isEqualToString:@"paragraph"]) {
+      selectedRange = paragraphRange;
+    }
   }
   CustomStyle *customStyleClass =
       (CustomStyle *)stylesDict[@([CustomStyle getType])];
@@ -1836,8 +1866,18 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     processedDict[@"lineHeight"] = lhRaw;
   }
 
+  BOOL isEmptyInteriorParagraph =
+      textView.selectedRange.length == 0 && selectedRange.length == 1 &&
+      [[NSCharacterSet newlineCharacterSet]
+          characterIsMember:[textView.textStorage.string
+                                characterAtIndex:selectedRange.location]];
+  if (isEmptyInteriorParagraph) {
+    [attributesManager
+        storeTypingTextStylesOnEmptyParagraphAt:selectedRange.location];
+  }
   [customStyleClass applyStyleFromDict:processedDict
                          selectedRange:selectedRange];
+  [attributesManager storeTrailingParagraphAttributesIfNeeded];
   [self anyTextMayHaveBeenModified];
 }
 
@@ -1866,8 +1906,14 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     return;
   }
 
+  NSString *currentText = textView.textStorage.string;
+  NSUInteger actualStart = [self getActualIndex:MAX(start, 0) text:currentText];
+  NSUInteger actualEnd = [self getActualIndex:MAX(end, 0) text:currentText];
+
   // translate the output start-end notation to range
-  NSRange linkRange = NSMakeRange(start, end - start);
+  NSUInteger rangeStart = MIN(actualStart, actualEnd);
+  NSUInteger rangeLength = MAX(actualStart, actualEnd) - rangeStart;
+  NSRange linkRange = NSMakeRange(rangeStart, rangeLength);
   if ([StyleUtils handleStyleBlocksAndConflicts:[LinkStyle getType]
                                           range:linkRange
                                         forHost:self]) {
@@ -1886,16 +1932,12 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     return;
   }
 
-  NSInteger textLength = (NSInteger)textView.textStorage.length;
-  if (start < 0) {
-    start = 0;
-  }
-  if (end > textLength) {
-    end = textLength;
-  }
+  NSString *currentText = textView.textStorage.string;
+  NSUInteger actualStart = [self getActualIndex:MAX(start, 0) text:currentText];
+  NSUInteger actualEnd = [self getActualIndex:MAX(end, 0) text:currentText];
 
-  NSInteger rangeStart = MIN(start, end);
-  NSInteger rangeLength = MAX(start, end) - rangeStart;
+  NSUInteger rangeStart = MIN(actualStart, actualEnd);
+  NSUInteger rangeLength = MAX(actualStart, actualEnd) - rangeStart;
   NSRange linkRange = NSMakeRange(rangeStart, rangeLength);
 
   [linkStyleClass remove:linkRange withDirtyRange:YES];
@@ -2016,7 +2058,13 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     // reset typing attributes if we emptied the string
     // adding alignment via shortcuts wants to preserve typing attributes, so we
     // don't reset then
-    textView.typingAttributes = defaultTypingAttributes;
+    NSDictionary *trailingAttributes =
+        attributesManager.trailingParagraphAttributes;
+    textView.typingAttributes =
+        trailingAttributes != nullptr
+            ? [attributesManager
+                  typingAttributesFromParagraphAttributes:trailingAttributes]
+            : defaultTypingAttributes;
   }
   preserveTypingAttributesOnNextEmptyCheck = NO;
 
@@ -2384,9 +2432,11 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
 - (void)textViewDidChangeSelection:(UITextView *)textView {
   // emit the event
-  NSString *textAtSelection =
-      [[[NSMutableString alloc] initWithString:textView.textStorage.string]
-          substringWithRange:textView.selectedRange];
+  NSString *text = textView.textStorage.string;
+  NSRange selectedRange = textView.selectedRange;
+  NSString *textAtSelection = [[text substringWithRange:selectedRange]
+      stringByReplacingOccurrencesOfString:@"\u200B"
+                                withString:@""];
 
   auto emitter = [self getEventEmitter];
   if (emitter != nullptr && !_isSettingValue) {
@@ -2394,9 +2444,10 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     // here, start is the location, but end is the first index BEHIND the end.
     // So a 0 length range will have equal start and end
     emitter->onChangeSelection(
-        {.start = static_cast<int>(textView.selectedRange.location),
-         .end = static_cast<int>(textView.selectedRange.location +
-                                 textView.selectedRange.length),
+        {.start = static_cast<int>([self getVisibleIndex:selectedRange.location
+                                                    text:text]),
+         .end = static_cast<int>([self getVisibleIndex:NSMaxRange(selectedRange)
+                                                  text:text]),
          .text = [textAtSelection toCppString]});
   }
 

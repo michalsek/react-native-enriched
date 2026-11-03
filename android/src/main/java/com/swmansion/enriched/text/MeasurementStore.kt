@@ -24,6 +24,7 @@ import com.swmansion.enriched.common.SpaceKerning
 import com.swmansion.enriched.common.SpaceKerningTable
 import com.swmansion.enriched.common.TrailingLetterSpacing
 import com.swmansion.enriched.common.allowFontScalingFromProps
+import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
 import com.swmansion.enriched.textinput.spans.EnrichedLineHeightSpan
@@ -129,7 +130,7 @@ object MeasurementStore {
 
       val factory = EnrichedTextSpanFactory(context.assets, allowFontScaling)
       val parsed = EnrichedParser.fromHtml(textToParse, enrichedStyle, factory)
-      return parsed.trimEnd('\n')
+      return if (isInternalHtml) dropFinalParagraphTerminator(parsed) else parsed.trimEnd('\n')
     } catch (e: Exception) {
       Log.w("MeasurementStore", "Error parsing initial HTML text: ${e.message}")
       return text
