@@ -1,20 +1,52 @@
+import { useState } from 'react';
 import {
   FlatList,
-  PanResponder,
+  type ListRenderItemInfo,
   Pressable,
   StyleSheet,
   Text,
   View,
-  type ListRenderItemInfo,
 } from 'react-native';
 import { ToolbarButton } from './ToolbarButton';
+import { ColorPickerRow } from './ColorPickerRow';
+import { FontSizePickerRow } from './FontSizePickerRow';
+import { FontFamilyPickerRow } from './FontFamilyPickerRow';
 import type {
   OnChangeStateEvent,
   EnrichedTextInputInstance,
-} from 'react-native-enriched';
-import { useMemo, useState, type FC } from 'react';
+} from 'react-native-enriched-html';
+import type { FC } from 'react';
 
 const GRID_COLUMNS = 8;
+
+const COLORS = [
+  '#000000',
+  '#FFFFFF',
+  '#808080',
+  '#FF0000',
+  '#FF6600',
+  '#FFFF00',
+  '#00FF00',
+  '#008000',
+  '#00FFFF',
+  '#0000FF',
+  '#800080',
+  '#FF00FF',
+  '#FF69B4',
+  '#A52A2A',
+  '#FFA500',
+  '#ADD8E6',
+];
+
+const FONT_SIZES = [12, 16, 20, 24, 28, 32, 36, 40];
+
+const FONT_FAMILIES = [
+  { label: 'Bold', value: 'Nunito-Bold' },
+  { label: 'Italic', value: 'Nunito-Italic' },
+  { label: 'Code', value: 'CascadiaCode-Regular' },
+  { label: 'Code Bold', value: 'CascadiaCode-Bold' },
+  { label: 'Courier', value: 'Courier' },
+] as const;
 
 const STYLE_ITEMS = [
   {
@@ -105,143 +137,32 @@ const STYLE_ITEMS = [
     name: 'align-right',
     icon: 'align-right',
   },
-] as const;
-
-const FONT_OPTIONS = [
   {
-    label: 'Default',
-    value: null,
-    testID: 'toolbar-font-family-default',
+    name: 'text-color',
+    text: 'A',
   },
   {
-    label: 'Nunito',
-    value: 'Nunito-Regular',
-    testID: 'toolbar-font-family-nunito',
+    name: 'bg-color',
+    text: 'BG',
   },
   {
-    label: 'Cascadia',
-    value: 'CascadiaCode-Regular',
-    testID: 'toolbar-font-family-cascadia',
+    name: 'font-size',
+    text: 'Aa',
+  },
+  {
+    name: 'font-family',
+    text: 'Ff',
   },
 ] as const;
-
-const FONT_SIZE_FALLBACK = 18;
-const LETTER_SPACING_FALLBACK = 0;
-const LINE_HEIGHT_FALLBACK = 24;
 
 type Item = (typeof STYLE_ITEMS)[number];
 type StylesState = OnChangeStateEvent;
-
-interface TextStyleSliderProps {
-  label: string;
-  value: number;
-  valueLabel: string;
-  min: number;
-  max: number;
-  step: number;
-  isActive: boolean;
-  isDisabled: boolean;
-  onChange: (value: number) => void;
-  onReset: () => void;
-  testID: string;
-  resetTestID: string;
-}
-
-const clamp = (value: number, min: number, max: number) => {
-  return Math.min(Math.max(value, min), max);
-};
-
-const decimalPlaces = (value: number) => {
-  const [, decimals = ''] = value.toString().split('.');
-  return decimals.length;
-};
-
-const snapToStep = (value: number, min: number, step: number) => {
-  const snapped = Math.round((value - min) / step) * step + min;
-  return Number(snapped.toFixed(decimalPlaces(step)));
-};
-
-const formatValue = (value: number, step: number) => {
-  return value.toFixed(decimalPlaces(step));
-};
-
-const TextStyleSlider: FC<TextStyleSliderProps> = ({
-  label,
-  value,
-  valueLabel,
-  min,
-  max,
-  step,
-  isActive,
-  isDisabled,
-  onChange,
-  onReset,
-  testID,
-  resetTestID,
-}) => {
-  const [trackWidth, setTrackWidth] = useState(0);
-  const progress = clamp((value - min) / (max - min), 0, 1);
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => !isDisabled,
-        onStartShouldSetPanResponderCapture: () => !isDisabled,
-        onMoveShouldSetPanResponder: () => !isDisabled,
-        onMoveShouldSetPanResponderCapture: () => !isDisabled,
-        onPanResponderGrant: (event) => {
-          if (trackWidth <= 0) return;
-
-          const ratio = clamp(event.nativeEvent.locationX / trackWidth, 0, 1);
-          onChange(snapToStep(min + ratio * (max - min), min, step));
-        },
-        onPanResponderMove: (event) => {
-          if (trackWidth <= 0) return;
-
-          const ratio = clamp(event.nativeEvent.locationX / trackWidth, 0, 1);
-          onChange(snapToStep(min + ratio * (max - min), min, step));
-        },
-      }),
-    [isDisabled, max, min, onChange, step, trackWidth]
-  );
-
-  return (
-    <View style={[styles.sliderControl, isDisabled && styles.controlDisabled]}>
-      <View style={styles.controlHeader}>
-        <Text style={styles.controlLabel}>{label}</Text>
-        <View style={styles.controlValueRow}>
-          <Text style={[styles.controlValue, !isActive && styles.defaultValue]}>
-            {valueLabel}
-          </Text>
-          <Pressable
-            disabled={isDisabled || !isActive}
-            onPress={onReset}
-            style={[
-              styles.resetButton,
-              (isDisabled || !isActive) && styles.resetButtonDisabled,
-            ]}
-            testID={resetTestID}
-          >
-            <Text style={styles.resetButtonText}>Reset</Text>
-          </Pressable>
-        </View>
-      </View>
-      <View
-        {...panResponder.panHandlers}
-        style={styles.sliderHitArea}
-        testID={testID}
-      >
-        <View
-          style={styles.sliderTrack}
-          onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
-        >
-          <View style={[styles.sliderFill, { width: `${progress * 100}%` }]} />
-          <View style={[styles.sliderThumb, { left: `${progress * 100}%` }]} />
-        </View>
-      </View>
-    </View>
-  );
-};
+type OpenPicker =
+  | 'text-color'
+  | 'bg-color'
+  | 'font-size'
+  | 'font-family'
+  | null;
 
 export interface ToolbarProps {
   stylesState: StylesState;
@@ -258,6 +179,25 @@ export const Toolbar: FC<ToolbarProps> = ({
   onSelectImage,
   layout = 'horizontal',
 }) => {
+  const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
+
+  const activeFgColor = stylesState.customStyle?.foregroundColor ?? '';
+  const activeBgColor = stylesState.customStyle?.backgroundColor ?? '';
+  const activeFontSize = stylesState.customStyle?.fontSize ?? 0;
+  const activeFontFamily = stylesState.customStyle?.fontFamily ?? '';
+  const activeFontFamilyLabel =
+    FONT_FAMILIES.find((family) => family.value === activeFontFamily)?.label ??
+    '';
+
+  const fgIndicatorColor =
+    activeFgColor.length > 0 ? activeFgColor : 'transparent';
+  const fgIndicatorBorder =
+    activeFgColor.length > 0 ? activeFgColor : 'rgba(255,255,255,0.4)';
+  const bgIndicatorColor =
+    activeBgColor.length > 0 ? activeBgColor : 'transparent';
+  const bgIndicatorBorder =
+    activeBgColor.length > 0 ? activeBgColor : 'rgba(255,255,255,0.4)';
+
   const handlePress = (item: Item) => {
     const currentRef = editorRef?.current;
     if (!currentRef) return;
@@ -309,7 +249,6 @@ export const Toolbar: FC<ToolbarProps> = ({
         editorRef.current?.toggleOrderedList();
         break;
       case 'checkbox-list':
-        // Make checkbox checked by default
         editorRef.current?.toggleCheckboxList(true);
         break;
       case 'link':
@@ -430,6 +369,104 @@ export const Toolbar: FC<ToolbarProps> = ({
   };
 
   const renderItem = ({ item }: ListRenderItemInfo<Item>) => {
+    if (item.name === 'text-color') {
+      return (
+        <Pressable
+          testID="toolbar-text-color"
+          onPress={() =>
+            setOpenPicker((prev) =>
+              prev === 'text-color' ? null : 'text-color'
+            )
+          }
+          style={[
+            styles.colorButton,
+            layout === 'grid' ? styles.gridItem : undefined,
+            openPicker === 'text-color' && styles.colorButtonActive,
+          ]}
+        >
+          <Text style={styles.colorButtonLabel}>A</Text>
+          <View
+            style={[
+              styles.colorIndicator,
+              {
+                backgroundColor: fgIndicatorColor,
+                borderColor: fgIndicatorBorder,
+              },
+            ]}
+          />
+        </Pressable>
+      );
+    }
+
+    if (item.name === 'bg-color') {
+      return (
+        <Pressable
+          testID="toolbar-bg-color"
+          onPress={() =>
+            setOpenPicker((prev) => (prev === 'bg-color' ? null : 'bg-color'))
+          }
+          style={[
+            styles.colorButton,
+            layout === 'grid' ? styles.gridItem : undefined,
+            openPicker === 'bg-color' && styles.colorButtonActive,
+          ]}
+        >
+          <Text style={styles.colorButtonLabel}>BG</Text>
+          <View
+            style={[
+              styles.colorIndicator,
+              {
+                backgroundColor: bgIndicatorColor,
+                borderColor: bgIndicatorBorder,
+              },
+            ]}
+          />
+        </Pressable>
+      );
+    }
+
+    if (item.name === 'font-size') {
+      const fontSizeLabel = activeFontSize > 0 ? String(activeFontSize) : 'Aa';
+      return (
+        <Pressable
+          testID="toolbar-font-size"
+          onPress={() =>
+            setOpenPicker((prev) => (prev === 'font-size' ? null : 'font-size'))
+          }
+          style={[
+            styles.colorButton,
+            layout === 'grid' ? styles.gridItem : undefined,
+            (openPicker === 'font-size' || activeFontSize > 0) &&
+              styles.colorButtonActive,
+          ]}
+        >
+          <Text style={styles.colorButtonLabel}>{fontSizeLabel}</Text>
+        </Pressable>
+      );
+    }
+
+    if (item.name === 'font-family') {
+      const fontFamilyLabel = activeFontFamilyLabel || 'Ff';
+      return (
+        <Pressable
+          testID="toolbar-font-family"
+          onPress={() =>
+            setOpenPicker((prev) =>
+              prev === 'font-family' ? null : 'font-family'
+            )
+          }
+          style={[
+            styles.colorButton,
+            layout === 'grid' ? styles.gridItem : undefined,
+            (openPicker === 'font-family' || activeFontFamily.length > 0) &&
+              styles.colorButtonActive,
+          ]}
+        >
+          <Text style={styles.colorButtonLabel}>{fontFamilyLabel}</Text>
+        </Pressable>
+      );
+    }
+
     return (
       <ToolbarButton
         {...item}
@@ -443,18 +480,49 @@ export const Toolbar: FC<ToolbarProps> = ({
   };
 
   const keyExtractor = (item: Item) => item.name;
-  const fontSizeValue = stylesState.fontSize.isActive
-    ? stylesState.fontSizeValue
-    : FONT_SIZE_FALLBACK;
-  const letterSpacingValue = stylesState.letterSpacing.isActive
-    ? stylesState.letterSpacingValue
-    : LETTER_SPACING_FALLBACK;
-  const lineHeightValue = stylesState.lineHeight.isActive
-    ? stylesState.lineHeightValue
-    : LINE_HEIGHT_FALLBACK;
+
+  const handleSelectFgColor = (color: string) => {
+    editorRef?.current?.setStyle({ foregroundColor: color });
+    setOpenPicker(null);
+  };
+
+  const handleClearFgColor = () => {
+    editorRef?.current?.setStyle({ foregroundColor: null });
+    setOpenPicker(null);
+  };
+
+  const handleSelectBgColor = (color: string) => {
+    editorRef?.current?.setStyle({ backgroundColor: color });
+    setOpenPicker(null);
+  };
+
+  const handleClearBgColor = () => {
+    editorRef?.current?.setStyle({ backgroundColor: null });
+    setOpenPicker(null);
+  };
+
+  const handleSelectFontSize = (size: number) => {
+    editorRef?.current?.setStyle({ fontSize: size });
+    setOpenPicker(null);
+  };
+
+  const handleClearFontSize = () => {
+    editorRef?.current?.setStyle({ fontSize: null });
+    setOpenPicker(null);
+  };
+
+  const handleSelectFontFamily = (family: string) => {
+    editorRef?.current?.setStyle({ fontFamily: family });
+    setOpenPicker(null);
+  };
+
+  const handleClearFontFamily = () => {
+    editorRef?.current?.setStyle({ fontFamily: null });
+    setOpenPicker(null);
+  };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.wrapper}>
       <FlatList
         key={layout}
         numColumns={layout === 'grid' ? GRID_COLUMNS : undefined}
@@ -463,244 +531,78 @@ export const Toolbar: FC<ToolbarProps> = ({
         data={STYLE_ITEMS}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        style={styles.toolbarList}
+        style={styles.list}
         testID="toolbar"
       />
-      <View style={styles.textStylePanel} testID="toolbar-text-style-panel">
-        <View
-          style={[
-            styles.fontFamilyControl,
-            styles.controlBox,
-            stylesState.fontFamily.isBlocking && styles.controlDisabled,
-          ]}
-        >
-          <Text style={styles.controlLabel}>Font family</Text>
-          <View style={styles.segmentedControl}>
-            {FONT_OPTIONS.map((option) => {
-              const isDefault = option.value === null;
-              const isSelected = isDefault
-                ? !stylesState.fontFamily.isActive
-                : stylesState.fontFamily.isActive &&
-                  stylesState.fontFamilyValue === option.value;
-
-              return (
-                <Pressable
-                  key={option.label}
-                  disabled={stylesState.fontFamily.isBlocking}
-                  onPress={() =>
-                    editorRef?.current?.setFontFamily(option.value)
-                  }
-                  style={[
-                    styles.segmentButton,
-                    isSelected && styles.segmentButtonActive,
-                    stylesState.fontFamily.isBlocking &&
-                      styles.segmentButtonDisabled,
-                  ]}
-                  testID={option.testID}
-                >
-                  <Text
-                    style={[
-                      styles.segmentButtonText,
-                      isSelected && styles.segmentButtonTextActive,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-        <TextStyleSlider
-          label="Text size"
-          value={fontSizeValue}
-          valueLabel={
-            stylesState.fontSize.isActive
-              ? `${formatValue(fontSizeValue, 1)} px`
-              : 'Default'
-          }
-          min={10}
-          max={48}
-          step={1}
-          isActive={stylesState.fontSize.isActive}
-          isDisabled={stylesState.fontSize.isBlocking}
-          onChange={(value) => editorRef?.current?.setFontSize(value)}
-          onReset={() => editorRef?.current?.setFontSize(null)}
-          testID="toolbar-font-size-slider"
-          resetTestID="toolbar-font-size-reset"
+      {openPicker === 'text-color' && (
+        <ColorPickerRow
+          colors={COLORS}
+          activeColor={activeFgColor}
+          onSelectColor={handleSelectFgColor}
+          onClear={handleClearFgColor}
         />
-        <TextStyleSlider
-          label="Letter spacing"
-          value={letterSpacingValue}
-          valueLabel={
-            stylesState.letterSpacing.isActive
-              ? `${formatValue(letterSpacingValue, 0.5)} px`
-              : 'Default'
-          }
-          min={-2}
-          max={8}
-          step={0.5}
-          isActive={stylesState.letterSpacing.isActive}
-          isDisabled={stylesState.letterSpacing.isBlocking}
-          onChange={(value) => editorRef?.current?.setLetterSpacing(value)}
-          onReset={() => editorRef?.current?.setLetterSpacing(null)}
-          testID="toolbar-letter-spacing-slider"
-          resetTestID="toolbar-letter-spacing-reset"
+      )}
+      {openPicker === 'bg-color' && (
+        <ColorPickerRow
+          colors={COLORS}
+          activeColor={activeBgColor}
+          onSelectColor={handleSelectBgColor}
+          onClear={handleClearBgColor}
         />
-        <TextStyleSlider
-          label="Line height"
-          value={lineHeightValue}
-          valueLabel={
-            stylesState.lineHeight.isActive
-              ? `${formatValue(lineHeightValue, 1)} px`
-              : 'Default'
-          }
-          min={14}
-          max={72}
-          step={1}
-          isActive={stylesState.lineHeight.isActive}
-          isDisabled={stylesState.lineHeight.isBlocking}
-          onChange={(value) => editorRef?.current?.setLineHeight(value)}
-          onReset={() => editorRef?.current?.setLineHeight(null)}
-          testID="toolbar-line-height-slider"
-          resetTestID="toolbar-line-height-reset"
+      )}
+      {openPicker === 'font-size' && (
+        <FontSizePickerRow
+          sizes={FONT_SIZES}
+          activeSize={activeFontSize}
+          onSelectSize={handleSelectFontSize}
+          onClear={handleClearFontSize}
         />
-      </View>
+      )}
+      {openPicker === 'font-family' && (
+        <FontFamilyPickerRow
+          families={[...FONT_FAMILIES]}
+          activeFamily={activeFontFamily}
+          onSelectFamily={handleSelectFontFamily}
+          onClear={handleClearFontFamily}
+        />
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     width: '100%',
   },
-  toolbarList: {
+  list: {
     width: '100%',
   },
   gridItem: {
     flexBasis: `${100 / GRID_COLUMNS}%`,
     aspectRatio: 1,
   },
-  textStylePanel: {
-    width: '100%',
-    padding: 12,
-    gap: 12,
-    backgroundColor: 'gainsboro',
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-  },
-  controlBox: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
-  },
-  controlDisabled: {
-    opacity: 0.45,
-  },
-  controlHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-  },
-  controlLabel: {
-    flexShrink: 1,
-    color: 'rgb(0, 26, 114)',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  controlValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  controlValue: {
-    minWidth: 68,
-    color: 'rgb(0, 26, 114)',
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'right',
-  },
-  defaultValue: {
-    color: 'dimgray',
-  },
-  fontFamilyControl: {
-    gap: 10,
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  segmentButton: {
-    flex: 1,
-    minHeight: 36,
+  colorButton: {
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgb(0, 26, 114)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    backgroundColor: 'white',
+    width: 56,
+    height: 56,
+    backgroundColor: 'rgba(0, 26, 114, 0.8)',
+    gap: 2,
   },
-  segmentButtonActive: {
+  colorButtonActive: {
     backgroundColor: 'rgb(0, 26, 114)',
   },
-  segmentButtonDisabled: {
-    opacity: 0.8,
-  },
-  segmentButtonText: {
-    color: 'rgb(0, 26, 114)',
-    fontSize: 13,
+  colorButtonLabel: {
+    color: 'white',
+    fontSize: 15,
     fontWeight: '700',
+    lineHeight: 17,
     textAlign: 'center',
   },
-  segmentButtonTextActive: {
-    color: 'white',
-  },
-  sliderControl: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
-    gap: 10,
-  },
-  sliderHitArea: {
-    height: 32,
-    justifyContent: 'center',
-  },
-  sliderTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'lightgray',
-  },
-  sliderFill: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgb(0, 26, 114)',
-  },
-  sliderThumb: {
-    position: 'absolute',
-    top: -7,
+  colorIndicator: {
     width: 20,
-    height: 20,
-    marginLeft: -10,
-    borderRadius: 10,
-    backgroundColor: 'white',
-    borderWidth: 2,
-    borderColor: 'rgb(0, 26, 114)',
-  },
-  resetButton: {
-    minHeight: 28,
-    justifyContent: 'center',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    backgroundColor: 'rgb(0, 26, 114)',
-  },
-  resetButtonDisabled: {
-    backgroundColor: 'darkgray',
-  },
-  resetButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '700',
+    height: 5,
+    borderRadius: 2,
+    borderWidth: 1,
   },
 });

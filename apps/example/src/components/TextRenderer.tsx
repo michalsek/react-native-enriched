@@ -3,7 +3,8 @@ import {
   EnrichedText,
   type OnLinkPressEvent,
   type OnMentionPressEvent,
-} from 'react-native-enriched';
+  type OnImagePressEvent,
+} from 'react-native-enriched-html';
 import { enrichedTextHtmlStyle } from '../constants/editorConfig';
 
 interface TextRendererProps {
@@ -22,6 +23,13 @@ export const TextRenderer = ({ nodes }: TextRendererProps) => {
     );
   };
 
+  const handleImagePress = (e: OnImagePressEvent) => {
+    Alert.alert(
+      'Image Pressed',
+      `You pressed the image: ${JSON.stringify(e.image)}`
+    );
+  };
+
   if (nodes.length === 0) {
     return null;
   }
@@ -35,7 +43,7 @@ export const TextRenderer = ({ nodes }: TextRendererProps) => {
           htmlStyle={enrichedTextHtmlStyle}
           onLinkPress={handleLinkPress}
           onMentionPress={handleMentionPress}
-          useHtmlNormalizer
+          onImagePress={handleImagePress}
         >
           {node}
         </EnrichedText>

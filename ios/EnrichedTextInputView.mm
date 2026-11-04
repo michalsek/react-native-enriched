@@ -1,35 +1,40 @@
 #import "EnrichedTextInputView.h"
-#import "AlignmentUtils.h"
-#import "AttachmentLayoutUtils.h"
 #import "CoreText/CoreText.h"
-#import "DotReplacementUtils.h"
-#import "HtmlParser.h"
-#import "ImageAttachment.h"
-#import "KeyboardUtils.h"
-#import "LayoutManagerExtension.h"
-#import "LineBoxLayoutDelegate.h"
-#import "LineHeightUtils.h"
-#import "ParagraphAttributesUtils.h"
-#import "RCTFabricComponentsPlugins.h"
-#import "StringExtension.h"
-#import "StyleHeaders.h"
-#import "StyleUtils.h"
-#import "TextBlockTapGestureRecognizer.h"
-#import "UIView+React.h"
-#import "WordsUtils.h"
-#import "ZeroWidthSpaceUtils.h"
+#import "extensions/ColorExtension.h"
+#import "extensions/LayoutManagerExtension.h"
+#import "extensions/StringExtension.h"
+#import "generated/ReactCodegen/ReactNativeEnrichedSpec/EventEmitters.h"
+#import "generated/ReactCodegen/ReactNativeEnrichedSpec/Props.h"
+#import "generated/ReactCodegen/ReactNativeEnrichedSpec/RCTComponentViewHelpers.h"
+#import "htmlParser/HtmlParser.h"
+#import "interfaces/ImageAttachment.h"
+#import "interfaces/StyleHeaders.h"
+#import "internals/EnrichedTextInputViewComponentDescriptor.h"
+#import "utils/AlignmentUtils.h"
+#import "utils/AttachmentLayoutUtils.h"
+#import "utils/DotReplacementUtils.h"
+#import "utils/KeyboardUtils.h"
+#import "utils/LineBoxLayoutDelegate.h"
+#import "utils/ParagraphAttributesUtils.h"
+#import "utils/ShortcutsUtils.h"
+#import "utils/StyleUtils.h"
+#import "utils/TextBlockTapGestureRecognizer.h"
+#import "utils/TextInsertionUtils.h"
+#import "utils/WordsUtils.h"
+#import "utils/ZeroWidthSpaceUtils.h"
 #import <React/RCTConversions.h>
-#import <ReactNativeEnriched/EnrichedTextInputViewComponentDescriptor.h>
-#import <ReactNativeEnriched/EventEmitters.h>
-#import <ReactNativeEnriched/Props.h>
-#import <ReactNativeEnriched/RCTComponentViewHelpers.h>
+#import <React/RCTConvert.h>
+#import <React/RCTFabricComponentsPlugins.h>
+#import <React/UIView+React.h>
 #import <folly/dynamic.h>
 #import <react/utils/ManagedObjectWrapper.h>
 
 #define GET_STYLE_STATE(TYPE_ENUM)                                             \
-  {.isActive = [self isStyleActive:TYPE_ENUM],                                 \
-   .isBlocking = [self isStyle:TYPE_ENUM activeInMap:blockingStyles],          \
-   .isConflicting = [self isStyle:TYPE_ENUM activeInMap:conflictingStyles]}
+  {                                                                            \
+    .isActive = [self isStyleActive:TYPE_ENUM],                                \
+    .isBlocking = [self isStyle:TYPE_ENUM activeInMap:blockingStyles],         \
+    .isConflicting = [self isStyle:TYPE_ENUM activeInMap:conflictingStyles]    \
+  }
 
 using namespace facebook::react;
 
@@ -63,10 +68,10 @@ using namespace facebook::react;
   NSMutableDictionary<NSValue *, UIImageView *> *_attachmentViews;
   NSArray<NSDictionary *> *_contextMenuItems;
   NSString *_submitBehavior;
-  NSString *_verticalAlign;
   NSDictionary<NSAttributedStringKey, id> *_capturedAttributesBeforeChange;
   NSString *_recentlyEmittedAlignment;
-  NSArray<NSString *> *_recentlyEmittedTextStyleValues;
+  CustomStyleData *_recentlyEmittedCustomStyle;
+  NSString *_verticalAlign;
 }
 
 @synthesize blockEmitting = blockEmitting;
@@ -138,11 +143,11 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   _recentlyActiveLinkRange = NSMakeRange(0, 0);
   _recentlyActiveMentionRange = NSMakeRange(0, 0);
   _recentlyEmittedAlignment = @"left";
-  _recentlyEmittedTextStyleValues = @[ @"", @"", @"", @"" ];
   _recentInputString = @"";
   _recentlyEmittedHtml = @"<html>\n<p></p>\n</html>";
   _emitHtml = NO;
   blockEmitting = NO;
+  preserveTypingAttributesOnNextEmptyCheck = NO;
   _emitFocusBlur = YES;
   _emitTextChange = NO;
   _emitContentSize = NO;
@@ -681,10 +686,9 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
         [config primaryColor];
     NSMutableParagraphStyle *defaultPStyle =
         [[NSMutableParagraphStyle alloc] init];
-    [LineHeightUtils applyLineHeight:[config scaledPrimaryLineHeight]
-                    toParagraphStyle:defaultPStyle];
+    defaultPStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
+    defaultPStyle.maximumLineHeight = [config scaledPrimaryLineHeight];
     defaultTypingAttributes[NSParagraphStyleAttributeName] = defaultPStyle;
-    [LineHeightUtils applyBaselineOffsetToAttributes:defaultTypingAttributes];
 
     // no emitting during styles reload
     blockEmitting = YES;
@@ -717,11 +721,45 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     useHtmlNormalizer = newViewProps.useHtmlNormalizer;
   }
 
-  // verticalAlign
   if (newViewProps.verticalAlign != oldViewProps.verticalAlign) {
     _verticalAlign = [NSString fromCppString:newViewProps.verticalAlign];
     [self updateVerticalAlignment];
     [self tryEmittingCaretRect];
+  }
+
+  // textShortcuts
+  bool textShortcutsChanged =
+      newViewProps.textShortcuts.size() != oldViewProps.textShortcuts.size();
+  if (!textShortcutsChanged) {
+    for (size_t i = 0; i < newViewProps.textShortcuts.size(); i++) {
+      const auto &newItem = newViewProps.textShortcuts[i];
+      const auto &oldItem = oldViewProps.textShortcuts[i];
+      if (newItem.trigger != oldItem.trigger ||
+          newItem.style != oldItem.style) {
+        textShortcutsChanged = true;
+        break;
+      }
+    }
+  }
+
+  if (textShortcutsChanged) {
+    NSMutableArray *shortcuts = [NSMutableArray new];
+    for (const auto &item : newViewProps.textShortcuts) {
+      [shortcuts addObject:@{
+        @"trigger" : [NSString fromCppString:item.trigger],
+        @"style" : [NSString fromCppString:item.style],
+      }];
+    }
+    textShortcuts = shortcuts;
+  }
+
+  // linkRegex
+  LinkRegexConfig *oldRegexConfig =
+      [[LinkRegexConfig alloc] initWithLinkRegexProp:oldViewProps.linkRegex];
+  LinkRegexConfig *newRegexConfig =
+      [[LinkRegexConfig alloc] initWithLinkRegexProp:newViewProps.linkRegex];
+  if (![newRegexConfig isEqualToConfig:oldRegexConfig]) {
+    [config setLinkRegexConfig:newRegexConfig];
   }
 
   // default value - must be set before placeholder to make sure it correctly
@@ -730,9 +768,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     NSString *newDefaultValue =
         [NSString fromCppString:newViewProps.defaultValue];
 
-    // Updates after the first one behave like setValue: the selection is
-    // preserved and the internal caret moves are not emitted, so live
-    // defaultValue rewrites don't make the caret jump to the end of the text.
     BOOL isInitialValue = oldViewProps.defaultValue.empty();
     _isSettingValue = YES;
     NSRange previousSelectedRange = textView.selectedRange;
@@ -799,15 +834,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     [config setMentionIndicators:newIndicators];
   }
 
-  // linkRegex
-  LinkRegexConfig *oldRegexConfig =
-      [[LinkRegexConfig alloc] initWithLinkRegexProp:oldViewProps.linkRegex];
-  LinkRegexConfig *newRegexConfig =
-      [[LinkRegexConfig alloc] initWithLinkRegexProp:newViewProps.linkRegex];
-  if (![newRegexConfig isEqualToConfig:oldRegexConfig]) {
-    [config setLinkRegexConfig:newRegexConfig];
-  }
-
   // selection color sets both selection and cursor on iOS (just as in RN)
   if (newViewProps.selectionColor != oldViewProps.selectionColor) {
     if (isColorMeaningful(newViewProps.selectionColor)) {
@@ -853,13 +879,26 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     }
   }
 
+  // autoCorrect
+  if (newViewProps.autoCorrect != oldViewProps.autoCorrect) {
+    textView.autocorrectionType = newViewProps.autoCorrect
+                                      ? UITextAutocorrectionTypeYes
+                                      : UITextAutocorrectionTypeNo;
+  }
+
+  // spellCheck
+  if (newViewProps.spellCheck != oldViewProps.spellCheck) {
+    textView.spellCheckingType = newViewProps.spellCheck
+                                     ? UITextSpellCheckingTypeYes
+                                     : UITextSpellCheckingTypeNo;
+  }
+
   // isOnChangeHtmlSet
   _emitHtml = newViewProps.isOnChangeHtmlSet;
 
   // isOnChangeTextSet
   _emitTextChange = newViewProps.isOnChangeTextSet;
 
-  // isOnChangeContentSizeSet
   if (_emitContentSize != newViewProps.isOnChangeContentSizeSet) {
     _emitContentSize = newViewProps.isOnChangeContentSizeSet;
     [self updateVerticalAlignment];
@@ -936,8 +975,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 }
 
 - (void)refreshLineHeight {
-  LineHeightStyle *lineHeightStyle =
-      (LineHeightStyle *)stylesDict[@([LineHeightStyle getType])];
+  CustomStyle *customStyle = stylesDict[@([CustomStyle getType])];
   [textView.textStorage
       enumerateAttribute:NSParagraphStyleAttributeName
                  inRange:NSMakeRange(0, textView.textStorage.string.length)
@@ -948,27 +986,19 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                     [(NSParagraphStyle *)value mutableCopy];
                 if (pStyle == nil)
                   return;
-                // ranges with an inline line height keep their custom value
-                if ([lineHeightStyle getValueAt:range.location] != nullptr) {
+                if ([customStyle getStoredCustomStyleDataAt:range.location]
+                        .lineHeight != nil)
                   return;
-                }
-                [LineHeightUtils
-                     applyLineHeight:[config scaledPrimaryLineHeight]
-                    toParagraphStyle:pStyle];
+                pStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
+                pStyle.maximumLineHeight = [config scaledPrimaryLineHeight];
                 [textView.textStorage addAttribute:NSParagraphStyleAttributeName
                                              value:pStyle
                                              range:range];
               }];
-  [LineHeightUtils
-      applyBaselineOffsetsInTextStorage:textView.textStorage
-                                  range:NSMakeRange(0, textView.textStorage
-                                                           .string.length)];
 }
 
 // MARK: - Measuring and states
 
-// Empty text, a lone zero width space and a trailing break leave the last line
-// without a glyph of the input's font, so they are measured with a mock "I".
 - (BOOL)needsMockLineToMeasure:(NSString *)string {
   if (string.length == 0 || [string isEqualToString:@"\u200B"]) {
     return YES;
@@ -982,7 +1012,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 - (CGSize)measureSize:(CGFloat)maxWidth {
   NSTextStorage *textStorage = textView.textStorage;
 
-  // The text view's own layout already holds the line boxes at this width.
   if (maxWidth == textView.textContainer.size.width &&
       textStorage.editedMask == 0 &&
       ![self needsMockLineToMeasure:textStorage.string]) {
@@ -990,12 +1019,11 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   }
 
   // copy the the whole attributed string
-  NSMutableAttributedString *currentStr =
-      [[NSMutableAttributedString alloc] initWithAttributedString:textStorage];
+  NSMutableAttributedString *currentStr = [[NSMutableAttributedString alloc]
+      initWithAttributedString:textView.textStorage];
 
   // edge case: empty input should still be of a height of a single line, so we
-  // add a mock "I" character. The empty input draws the extra line fragment,
-  // which TextKit gives no spacing before, so the mock line gets none either.
+  // add a mock "I" character
   if ([currentStr length] == 0) {
     NSMutableDictionary *attributes = [textView.typingAttributes mutableCopy];
     NSMutableParagraphStyle *paragraphStyle =
@@ -1035,7 +1063,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     }
   }
 
-  // Laid out like the text view, so the line boxes drawn are the ones measured.
   CGFloat height = [LineBoxLayoutDelegate
       usedHeightOfAttributedString:currentStr
                              width:maxWidth
@@ -1199,30 +1226,12 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     updateNeeded = YES;
   }
 
-  // detect inline text style value changes
-  NSString *currentFontFamily =
-      [(TextStyleBase *)stylesDict[@([FontFamilyStyle getType])] getActiveValue]
-          ?: @"";
-  NSString *currentFontSize =
-      [(TextStyleBase *)stylesDict[@([FontSizeStyle getType])] getActiveValue]
-          ?: @"";
-  NSString *currentLetterSpacing =
-      [(TextStyleBase *)stylesDict[@([LetterSpacingStyle getType])]
-          getActiveValue]
-          ?: @"";
-  NSString *currentLineHeight =
-      [(TextStyleBase *)stylesDict[@([LineHeightStyle getType])] getActiveValue]
-          ?: @"";
-  NSString *currentForegroundColor =
-      [(TextStyleBase *)stylesDict[@([ForegroundColorStyle getType])]
-          getActiveValue]
-          ?: @"";
-  NSArray<NSString *> *currentTextStyleValues = @[
-    currentFontFamily, currentFontSize, currentLetterSpacing, currentLineHeight,
-    currentForegroundColor
-  ];
-  if (![currentTextStyleValues
-          isEqualToArray:_recentlyEmittedTextStyleValues]) {
+  // detect custom style change
+  CustomStyle *customStyle = stylesDict[@([CustomStyle getType])];
+  CustomStyleData *currentCustomStyle =
+      [customStyle getCustomStyleDataInRange:textView.selectedRange];
+  if (currentCustomStyle != _recentlyEmittedCustomStyle &&
+      ![currentCustomStyle isEqual:_recentlyEmittedCustomStyle]) {
     updateNeeded = YES;
   }
 
@@ -1233,7 +1242,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       _activeStyles = newActiveStyles;
       _blockedStyles = newBlockedStyles;
       _recentlyEmittedAlignment = currentAlignment;
-      _recentlyEmittedTextStyleValues = currentTextStyleValues;
+      _recentlyEmittedCustomStyle = currentCustomStyle;
 
       emitter->onChangeState(
           {.bold = GET_STYLE_STATE([BoldStyle getType]),
@@ -1255,17 +1264,25 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
            .codeBlock = GET_STYLE_STATE([CodeBlockStyle getType]),
            .image = GET_STYLE_STATE([ImageStyle getType]),
            .checkboxList = GET_STYLE_STATE([CheckboxListStyle getType]),
-           .fontFamily = GET_STYLE_STATE([FontFamilyStyle getType]),
-           .fontSize = GET_STYLE_STATE([FontSizeStyle getType]),
-           .letterSpacing = GET_STYLE_STATE([LetterSpacingStyle getType]),
-           .lineHeight = GET_STYLE_STATE([LineHeightStyle getType]),
-           .foregroundColor = GET_STYLE_STATE([ForegroundColorStyle getType]),
            .alignment = [currentAlignment UTF8String],
-           .fontFamilyValue = [currentFontFamily toCppString],
-           .fontSizeValue = [currentFontSize floatValue],
-           .letterSpacingValue = [currentLetterSpacing floatValue],
-           .lineHeightValue = [currentLineHeight floatValue],
-           .foregroundColorValue = [currentForegroundColor toCppString]});
+           .customStyle = {
+               .foregroundColor =
+                   [[currentCustomStyle.foregroundColor hexString] UTF8String]
+                       ?: "",
+               .backgroundColor =
+                   [[currentCustomStyle.backgroundColor hexString] UTF8String]
+                       ?: "",
+               .fontSize = currentCustomStyle.fontSize
+                               ? [currentCustomStyle.fontSize doubleValue]
+                               : 0.0,
+               .fontFamily = [currentCustomStyle.fontFamily UTF8String] ?: "",
+               .letterSpacing =
+                   currentCustomStyle.letterSpacing
+                       ? [currentCustomStyle.letterSpacing doubleValue]
+                       : 0.0,
+               .lineHeight = currentCustomStyle.lineHeight
+                                 ? [currentCustomStyle.lineHeight doubleValue]
+                                 : 0.0}});
     }
   }
 
@@ -1414,90 +1431,11 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     if (!_placeholderLabel.isHidden) {
       [self refreshPlaceholderLabelStyles];
     }
-  } else if ([commandName isEqualToString:@"setSelectionFontFamily"]) {
-    NSString *fontFamily = (NSString *)args[0];
+  } else if ([commandName isEqualToString:@"setStyle"]) {
+    NSString *styleJSON = (NSString *)args[0];
     NSString *collapsedSelectionMode = (NSString *)args[1];
-    [self setTextStyle:[FontFamilyStyle getType]
-                         value:fontFamily.length > 0 ? fontFamily : nullptr
-        collapsedSelectionMode:collapsedSelectionMode];
-  } else if ([commandName isEqualToString:@"setSelectionFontSize"]) {
-    float fontSize = [(NSNumber *)args[0] floatValue];
-    NSString *collapsedSelectionMode = (NSString *)args[1];
-    [self setTextStyle:[FontSizeStyle getType]
-                         value:fontSize != 0
-                                   ? [NSString stringWithFormat:@"%g", fontSize]
-                                   : nullptr
-        collapsedSelectionMode:collapsedSelectionMode];
-  } else if ([commandName isEqualToString:@"setSelectionLetterSpacing"]) {
-    float letterSpacing = [(NSNumber *)args[0] floatValue];
-    NSString *collapsedSelectionMode = (NSString *)args[1];
-    [self setTextStyle:[LetterSpacingStyle getType]
-                         value:letterSpacing != 0
-                                   ? [NSString
-                                         stringWithFormat:@"%g", letterSpacing]
-                                   : nullptr
-        collapsedSelectionMode:collapsedSelectionMode];
-  } else if ([commandName isEqualToString:@"setSelectionLineHeight"]) {
-    float lineHeight = [(NSNumber *)args[0] floatValue];
-    NSString *collapsedSelectionMode = (NSString *)args[1];
-    [self setTextStyle:[LineHeightStyle getType]
-                         value:lineHeight != 0
-                                   ? [NSString
-                                         stringWithFormat:@"%g", lineHeight]
-                                   : nullptr
-        collapsedSelectionMode:collapsedSelectionMode];
-  } else if ([commandName isEqualToString:@"setSelectionForegroundColor"]) {
-    NSString *foregroundColor = (NSString *)args[0];
-    NSString *collapsedSelectionMode = (NSString *)args[1];
-    [self setTextStyle:[ForegroundColorStyle getType]
-                         value:foregroundColor.length > 0 ? foregroundColor
-                                                          : nullptr
-        collapsedSelectionMode:collapsedSelectionMode];
+    [self setStyle:styleJSON collapsedSelectionMode:collapsedSelectionMode];
   }
-}
-
-- (void)setTextStyle:(StyleType)type
-                     value:(NSString *)value
-    collapsedSelectionMode:(NSString *)collapsedSelectionMode {
-  TextStyleBase *style = (TextStyleBase *)stylesDict[@(type)];
-  if (style == nullptr) {
-    return;
-  }
-
-  NSRange range = textView.selectedRange;
-  if (range.length == 0) {
-    NSString *string = textView.textStorage.string;
-    NSRange paragraphRange = [string paragraphRangeForRange:range];
-    // Text typed into an empty paragraph is its whole content, so the style
-    // goes to the paragraph's own stored styles in either mode.
-    BOOL isEmptyParagraph =
-        paragraphRange.length == 0 ||
-        (paragraphRange.length == 1 &&
-         [[NSCharacterSet newlineCharacterSet]
-             characterIsMember:[string
-                                   characterAtIndex:paragraphRange.location]]);
-    if (isEmptyParagraph ||
-        [collapsedSelectionMode isEqualToString:@"paragraph"]) {
-      range = paragraphRange;
-    }
-  }
-  if (value != nullptr && ![StyleUtils handleStyleBlocksAndConflicts:type
-                                                               range:range
-                                                             forHost:self]) {
-    return;
-  }
-
-  BOOL isEmptyInteriorParagraph =
-      textView.selectedRange.length == 0 && range.length == 1 &&
-      [[NSCharacterSet newlineCharacterSet]
-          characterIsMember:[textView.textStorage.string
-                                characterAtIndex:range.location]];
-  if (isEmptyInteriorParagraph) {
-    [attributesManager storeTypingTextStylesOnEmptyParagraphAt:range.location];
-  }
-  [style setValue:value range:range];
-  [attributesManager storeTrailingParagraphAttributesIfNeeded];
-  [self anyTextMayHaveBeenModified];
 }
 
 - (std::shared_ptr<EnrichedTextInputViewEventEmitter>)getEventEmitter {
@@ -1519,9 +1457,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 }
 
 - (void)setValue:(NSString *)value {
-  // The internal caret moves must not reach JS - consumers restoring the
-  // selection right after setValue would otherwise receive transient
-  // selection events.
   _isSettingValue = YES;
 
   NSRange previousSelectedRange = textView.selectedRange;
@@ -1539,9 +1474,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     [parser replaceWholeFromHtml:initiallyProcessedHtml];
   }
 
-  // Restore the previous selection clamped to the new text, so consecutive
-  // setValue calls (e.g. styling changes streamed from a slider) don't make
-  // the caret visibly jump to the end of the text and back.
   NSUInteger textLength = textView.textStorage.string.length;
   NSUInteger location = MIN(previousSelectedRange.location, textLength);
   NSUInteger length = MIN(previousSelectedRange.length, textLength - location);
@@ -1572,11 +1504,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                      lineBreakMode:textContainer.lineBreakMode];
 }
 
-// Vertically aligns the text content within the view's fixed bounds by
-// padding the text container from the top. Doing it natively keeps the text
-// position and the text layout in the same draw pass - consumers centering
-// an auto-sized input with flexbox get a one-frame lag instead, which reads
-// as vertical shaking while styles stream in (e.g. a font size slider).
 - (void)updateVerticalAlignment {
   BOOL isCenter = [_verticalAlign isEqualToString:@"center"];
   BOOL isBottom = [_verticalAlign isEqualToString:@"bottom"];
@@ -1859,6 +1786,101 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   }
 }
 
+- (void)setStyle:(NSString *)styleJSON
+    collapsedSelectionMode:(NSString *)collapsedSelectionMode {
+  NSData *jsonData = [styleJSON dataUsingEncoding:NSUTF8StringEncoding];
+  if (jsonData == nil)
+    return;
+  id parsed = [NSJSONSerialization JSONObjectWithData:jsonData
+                                              options:0
+                                                error:nil];
+  if (![parsed isKindOfClass:[NSDictionary class]])
+    return;
+  NSDictionary *dict = (NSDictionary *)parsed;
+
+  NSRange selectedRange = textView.selectedRange;
+  if (selectedRange.length == 0) {
+    NSString *string = textView.textStorage.string;
+    NSRange paragraphRange = [string paragraphRangeForRange:selectedRange];
+    BOOL isEmptyParagraph =
+        paragraphRange.length == 0 ||
+        (paragraphRange.length == 1 &&
+         [[NSCharacterSet newlineCharacterSet]
+             characterIsMember:[string
+                                   characterAtIndex:paragraphRange.location]]);
+    if (isEmptyParagraph ||
+        [collapsedSelectionMode isEqualToString:@"paragraph"]) {
+      selectedRange = paragraphRange;
+    }
+  }
+  CustomStyle *customStyleClass =
+      (CustomStyle *)stylesDict[@([CustomStyle getType])];
+  if (customStyleClass == nil)
+    return;
+
+  if (![StyleUtils handleStyleBlocksAndConflicts:[CustomStyle getType]
+                                           range:selectedRange
+                                         forHost:self]) {
+    return;
+  }
+
+  // Convert raw JSON values (NSNumber ARGB integers from processColor) to
+  // UIColor. NSNull is passed through as-is so mergeFromDict: can clear
+  // the color when the caller explicitly passes null.
+  NSMutableDictionary *processedDict = [NSMutableDictionary new];
+
+  id fgRaw = dict[@"foregroundColor"];
+  if (fgRaw != nil) {
+    processedDict[@"foregroundColor"] = [fgRaw isKindOfClass:[NSNull class]]
+                                            ? [NSNull null]
+                                            : [RCTConvert UIColor:fgRaw];
+  }
+
+  id bgRaw = dict[@"backgroundColor"];
+  if (bgRaw != nil) {
+    processedDict[@"backgroundColor"] = [bgRaw isKindOfClass:[NSNull class]]
+                                            ? [NSNull null]
+                                            : [RCTConvert UIColor:bgRaw];
+  }
+
+  id fsRaw = dict[@"fontSize"];
+  if (fsRaw != nil) {
+    processedDict[@"fontSize"] =
+        [fsRaw isKindOfClass:[NSNull class]] ? [NSNull null] : fsRaw;
+  }
+
+  id ffRaw = dict[@"fontFamily"];
+  if (ffRaw != nil) {
+    processedDict[@"fontFamily"] = [ffRaw isKindOfClass:[NSNull class]]
+                                       ? [NSNull null]
+                                       : [RCTConvert NSString:ffRaw];
+  }
+
+  id lsRaw = dict[@"letterSpacing"];
+  if (lsRaw != nil) {
+    processedDict[@"letterSpacing"] = lsRaw;
+  }
+
+  id lhRaw = dict[@"lineHeight"];
+  if (lhRaw != nil) {
+    processedDict[@"lineHeight"] = lhRaw;
+  }
+
+  BOOL isEmptyInteriorParagraph =
+      textView.selectedRange.length == 0 && selectedRange.length == 1 &&
+      [[NSCharacterSet newlineCharacterSet]
+          characterIsMember:[textView.textStorage.string
+                                characterAtIndex:selectedRange.location]];
+  if (isEmptyInteriorParagraph) {
+    [attributesManager
+        storeTypingTextStylesOnEmptyParagraphAt:selectedRange.location];
+  }
+  [customStyleClass applyStyleFromDict:processedDict
+                         selectedRange:selectedRange];
+  [attributesManager storeTrailingParagraphAttributesIfNeeded];
+  [self anyTextMayHaveBeenModified];
+}
+
 - (void)toggleCheckboxList:(BOOL)checked {
   CheckboxListStyle *style =
       (CheckboxListStyle *)stylesDict[@([CheckboxListStyle getType])];
@@ -2020,8 +2042,9 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 }
 
 - (void)anyTextMayHaveBeenModified {
-  // we don't do no text changes when working with iOS marked text
+  // we don't do text changes when working with iOS marked text
   if (textView.markedTextRange != nullptr) {
+    [self handlePlaceholderVisibility];
     return;
   }
 
@@ -2030,9 +2053,11 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
   // emptying input typing attributes management
   if (textView.textStorage.string.length == 0 &&
-      _recentInputString.length > 0) {
-    // reset typing attribtues, keeping the styles stored for the now empty
-    // (and last) paragraph
+      _recentInputString.length > 0 &&
+      !preserveTypingAttributesOnNextEmptyCheck) {
+    // reset typing attributes if we emptied the string
+    // adding alignment via shortcuts wants to preserve typing attributes, so we
+    // don't reset then
     NSDictionary *trailingAttributes =
         attributesManager.trailingParagraphAttributes;
     textView.typingAttributes =
@@ -2041,6 +2066,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                   typingAttributesFromParagraphAttributes:trailingAttributes]
             : defaultTypingAttributes;
   }
+  preserveTypingAttributesOnNextEmptyCheck = NO;
 
   // mentions management: removal and editing
   MentionStyle *mentionStyleClass =
@@ -2050,13 +2076,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     [mentionStyleClass manageMentionEditing];
   }
 
-  // placholder management
-  if (!_placeholderLabel.hidden && textView.textStorage.string.length > 0) {
-    [self setPlaceholderLabelShown:NO];
-  } else if (textView.textStorage.string.length == 0 &&
-             _placeholderLabel.hidden) {
-    [self setPlaceholderLabelShown:YES];
-  }
+  [self handlePlaceholderVisibility];
 
   // modified words handling
   NSArray *currentDirtyRanges = [attributesManager getDirtyRanges];
@@ -2087,18 +2107,23 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   }
 
   if (![textView.textStorage.string isEqualToString:_recentInputString]) {
-    // emit onChangeText event
     auto emitter = [self getEventEmitter];
-    if (emitter != nullptr && _emitTextChange) {
+    if (emitter != nullptr) {
       // set the recent input string only if the emitter is defined
+      // to properly emit the initial onChangeText event
+      // as anyTextMayHaveBeenModified also runs before the emitter's
+      // initialization
       _recentInputString = [textView.textStorage.string copy];
 
-      // emit string without zero width spaces
-      NSString *stringToBeEmitted = [[textView.textStorage.string
-          stringByReplacingOccurrencesOfString:@"\u200B"
-                                    withString:@""] copy];
+      // emit onChangeText event
+      if (_emitTextChange) {
+        // emit string without zero width spaces
+        NSString *stringToBeEmitted = [[textView.textStorage.string
+            stringByReplacingOccurrencesOfString:@"\u200B"
+                                      withString:@""] copy];
 
-      emitter->onChangeText({.value = [stringToBeEmitted toCppString]});
+        emitter->onChangeText({.value = [stringToBeEmitted toCppString]});
+      }
     }
   }
   // all the visible (not meta) attributes handling in the ranges that could
@@ -2109,10 +2134,19 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   [self updateVerticalAlignment];
   // update active styles as well
   [self tryUpdatingActiveStyles];
-  [self layoutAttachments];
   // update drawing - schedule debounced relayout
   [self scheduleRelayoutIfNeeded];
   [self tryEmittingCaretRect];
+}
+
+- (void)handlePlaceholderVisibility {
+  // placeholder management
+  if (!_placeholderLabel.hidden && textView.textStorage.string.length > 0) {
+    [self setPlaceholderLabelShown:NO];
+  } else if (textView.textStorage.string.length == 0 &&
+             _placeholderLabel.hidden) {
+    [self setPlaceholderLabelShown:YES];
+  }
 }
 
 // Debounced relayout helper - coalesces multiple requests into one per runloop
@@ -2150,6 +2184,9 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     // measureSize may not be up-to date at that point
     CGSize measuredSize = [self measureSize:self->textView.frame.size.width];
     self->textView.contentSize = measuredSize;
+
+    // Re-position attachment image views after the forced full re-layout
+    [self layoutAttachments];
   });
 }
 
@@ -2222,6 +2259,10 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     AlignmentStyle *alignmentStyle = stylesDict[@([AlignmentStyle getType])];
     NSString *currentAlignment = [alignmentStyle getStyleState];
 
+    CustomStyle *customStyle = stylesDict[@([CustomStyle getType])];
+    CustomStyleData *contextCustomStyleData =
+        [customStyle getCustomStyleDataInRange:textView.selectedRange];
+
     emitter->onContextMenuItemPress(
         {.itemText = [itemText toCppString],
          .selectedText = [selectedText toCppString],
@@ -2248,7 +2289,29 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
              .image = GET_STYLE_STATE([ImageStyle getType]),
              .mention = GET_STYLE_STATE([MentionStyle getType]),
              .checkboxList = GET_STYLE_STATE([CheckboxListStyle getType]),
-             .alignment = [currentAlignment UTF8String]}});
+             .alignment = [currentAlignment UTF8String],
+             .customStyle = {
+                 .foregroundColor =
+                     [[contextCustomStyleData.foregroundColor hexString]
+                         UTF8String]
+                         ?: "",
+                 .backgroundColor =
+                     [[contextCustomStyleData.backgroundColor hexString]
+                         UTF8String]
+                         ?: "",
+                 .fontSize = contextCustomStyleData.fontSize
+                                 ? [contextCustomStyleData.fontSize doubleValue]
+                                 : 0.0,
+                 .fontFamily =
+                     [contextCustomStyleData.fontFamily UTF8String] ?: "",
+                 .letterSpacing =
+                     contextCustomStyleData.letterSpacing
+                         ? [contextCustomStyleData.letterSpacing doubleValue]
+                         : 0.0,
+                 .lineHeight =
+                     contextCustomStyleData.lineHeight
+                         ? [contextCustomStyleData.lineHeight doubleValue]
+                         : 0.0}}});
   }
 }
 
@@ -2275,8 +2338,10 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
             replacementText:(NSString *)text {
   // Capture the attributes at range.location that are being replaced
   // (autocorrect / predictive) so didProcessEditing: can re-stamp them onto the
-  // replacement.
-  if (range.length > 0) {
+  // replacement. Skip pure deletions (text.length == 0) — there is no incoming
+  // text to receive attributes, and capturing here would cause the deleted
+  // character's CustomStyleData to be re-stamped onto the widened editedRange.
+  if (range.length > 0 && text.length > 0) {
     _capturedAttributesBeforeChange =
         [textView.textStorage attributesAtIndex:range.location
                                  effectiveRange:NULL];
@@ -2302,13 +2367,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
   [self handleKeyPressInRange:text range:range];
 
-  if (text.length > 0 && range.length == 0 &&
-      textView.markedTextRange == nullptr) {
-    [attributesManager manageTypingAttributesWithOnlySelection:NO];
-  }
-
-  UnorderedListStyle *uStyle = stylesDict[@([UnorderedListStyle getType])];
-  OrderedListStyle *oStyle = stylesDict[@([OrderedListStyle getType])];
   CheckboxListStyle *cbLStyle =
       (CheckboxListStyle *)stylesDict[@([CheckboxListStyle getType])];
   H1Style *h1Style = stylesDict[@([H1Style getType])];
@@ -2327,8 +2385,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       [ZeroWidthSpaceUtils handleBackspaceInRange:range
                                   replacementText:text
                                              host:self] ||
-      [uStyle tryHandlingListShorcutInRange:range replacementText:text] ||
-      [oStyle tryHandlingListShorcutInRange:range replacementText:text] ||
       [cbLStyle handleNewlinesInRange:range replacementText:text] ||
       [h1Style handleNewlinesInRange:range replacementText:text] ||
       [h2Style handleNewlinesInRange:range replacementText:text] ||
@@ -2342,7 +2398,14 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       [ParagraphAttributesUtils handleResetTypingAttributesOnBackspace:range
                                                        replacementText:text
                                                                  input:self]
-
+      // Check configurable text shortcuts (block: "# " → h1, inline: `code` →
+      // inline_code)
+      || [ShortcutsUtils tryHandlingParagraphShortcutsInRange:range
+                                              replacementText:text
+                                                        input:self] ||
+      [ShortcutsUtils tryHandlingInlineShortcutsInRange:range
+                                        replacementText:text
+                                                  input:self]
       //       CRITICAL: This callback HAS TO be always evaluated last.
       //
       //       This function is the "Generic Fallback": if no specific style
@@ -2354,6 +2417,14 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                                                                 input:self]) {
     [self anyTextMayHaveBeenModified];
     return NO;
+  }
+
+  // To be sure, we re-run typingAttributes management right before the
+  // character actually lands. Sometimes, between a selection change and the
+  // next keystroke, typing attributes might get removed - this seems like a
+  // native TextKit issue.
+  if (textView.markedTextRange == nil && text.length > 0) {
+    [attributesManager repeatRecentTypingAttributesManagement];
   }
 
   return YES;
@@ -2368,12 +2439,10 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
                                 withString:@""];
 
   auto emitter = [self getEventEmitter];
-  // selection moves performed internally by setValue are not emitted
   if (emitter != nullptr && !_isSettingValue) {
     // iOS range works differently because it specifies location and length
     // here, start is the location, but end is the first index BEHIND the end.
     // So a 0 length range will have equal start and end
-    // Indexes are emitted in the ZWS-free coordinates used by onChangeText.
     emitter->onChangeSelection(
         {.start = static_cast<int>([self getVisibleIndex:selectedRange.location
                                                     text:text]),
@@ -2421,14 +2490,11 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   NSMutableDictionary *newTypingAttrs = [defaultTypingAttributes mutableCopy];
   newTypingAttrs[NSFontAttributeName] = [config primaryFont];
   NSMutableParagraphStyle *pStyle =
-      [newTypingAttrs[NSParagraphStyleAttributeName] mutableCopy];
-  if (pStyle == nil) {
-    pStyle = [[NSMutableParagraphStyle alloc] init];
-  }
-  [LineHeightUtils applyLineHeight:[config scaledPrimaryLineHeight]
-                  toParagraphStyle:pStyle];
+      [newTypingAttrs[NSParagraphStyleAttributeName] mutableCopy]
+          ?: [[NSMutableParagraphStyle alloc] init];
+  pStyle.minimumLineHeight = [config scaledPrimaryLineHeight];
+  pStyle.maximumLineHeight = [config scaledPrimaryLineHeight];
   newTypingAttrs[NSParagraphStyleAttributeName] = pStyle;
-  [LineHeightUtils applyBaselineOffsetToAttributes:newTypingAttrs];
 
   defaultTypingAttributes = newTypingAttrs;
   textView.typingAttributes = defaultTypingAttributes;

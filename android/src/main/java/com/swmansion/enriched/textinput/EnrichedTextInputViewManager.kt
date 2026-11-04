@@ -261,6 +261,22 @@ class EnrichedTextInputViewManager :
     view.allowFontScaling = allowFontScaling
   }
 
+  @ReactProp(name = "autoCorrect")
+  override fun setAutoCorrect(
+    view: EnrichedTextInputView?,
+    autoCorrect: Boolean,
+  ) {
+    view?.setAutoCorrect(autoCorrect)
+  }
+
+  @ReactProp(name = "spellCheck")
+  override fun setSpellCheck(
+    view: EnrichedTextInputView?,
+    spellCheck: Boolean,
+  ) {
+    // not supported in Android's RN TextInput
+  }
+
   override fun onAfterUpdateTransaction(view: EnrichedTextInputView) {
     super.onAfterUpdateTransaction(view)
     view.afterUpdateTransaction()
@@ -346,6 +362,22 @@ class EnrichedTextInputViewManager :
     value: Boolean,
   ) {
     view?.useHtmlNormalizer = value
+  }
+
+  override fun setTextShortcuts(
+    view: EnrichedTextInputView?,
+    value: ReadableArray?,
+  ) {
+    val shortcuts = mutableListOf<Pair<String, String>>()
+    if (value != null) {
+      for (i in 0 until value.size()) {
+        val map = value.getMap(i) ?: continue
+        val trigger = map.getString("trigger") ?: continue
+        val style = map.getString("style") ?: continue
+        shortcuts.add(Pair(trigger, style))
+      }
+    }
+    view?.textShortcuts = shortcuts
   }
 
   override fun focus(view: EnrichedTextInputView?) {
@@ -496,44 +528,12 @@ class EnrichedTextInputViewManager :
     view?.setTextAlignment(alignment)
   }
 
-  override fun setSelectionFontFamily(
+  override fun setStyle(
     view: EnrichedTextInputView?,
-    fontFamily: String?,
+    styleJSON: String,
     collapsedSelectionMode: String,
   ) {
-    view?.setSelectionFontFamily(fontFamily, collapsedSelectionMode)
-  }
-
-  override fun setSelectionFontSize(
-    view: EnrichedTextInputView?,
-    fontSize: Float,
-    collapsedSelectionMode: String,
-  ) {
-    view?.setSelectionFontSize(fontSize, collapsedSelectionMode)
-  }
-
-  override fun setSelectionLetterSpacing(
-    view: EnrichedTextInputView?,
-    letterSpacing: Float,
-    collapsedSelectionMode: String,
-  ) {
-    view?.setSelectionLetterSpacing(letterSpacing, collapsedSelectionMode)
-  }
-
-  override fun setSelectionLineHeight(
-    view: EnrichedTextInputView?,
-    lineHeight: Float,
-    collapsedSelectionMode: String,
-  ) {
-    view?.setSelectionLineHeight(lineHeight, collapsedSelectionMode)
-  }
-
-  override fun setSelectionForegroundColor(
-    view: EnrichedTextInputView?,
-    foregroundColor: String?,
-    collapsedSelectionMode: String,
-  ) {
-    view?.setSelectionForegroundColor(foregroundColor, collapsedSelectionMode)
+    view?.setStyle(styleJSON, collapsedSelectionMode)
   }
 
   override fun measure(

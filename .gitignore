@@ -92,5 +92,5 @@ nitrogen/
 # Maestro screenshot diffs
 .maestro/**/*_diff.png
 
-# yarn pack output
-*.tgz
+# Claude skills
+.claude/skills/*-internal.md

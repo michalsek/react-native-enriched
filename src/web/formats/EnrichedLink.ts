@@ -1,15 +1,66 @@
-import Link from '@tiptap/extension-link';
-import type { CommandProps } from '@tiptap/core';
+import Link, { type LinkOptions } from '@tiptap/extension-link';
+import { mergeAttributes, type CommandProps } from '@tiptap/core';
 import type { Editor } from '@tiptap/react';
 
-import { nativePosToTiptapPos } from '../positionMapping';
+import {
+  nativeLeafText,
+  nativePosToTiptapPos,
+} from '../nativeMappers/positionMapping';
 import { isLinkBlocked } from './formatRules';
+import { findAutolinkRangesInWord } from '../pmPlugins/AutolinkPlugin/autolinkRegex';
 
-export const EnrichedLink = Link.extend({
+function isFullLinkMatch(text: string, linkRegex: RegExp | undefined): boolean {
+  const ranges = findAutolinkRangesInWord(text, linkRegex);
+  return ranges.some((r) => r.start === 0 && r.endExclusive === text.length);
+}
+
+export const EnrichedLink = Link.extend<
+  LinkOptions & { getLinkRegex: () => RegExp | null | undefined }
+>({
   excludes: 'link code',
 
+  parseHTML() {
+    return [
+      {
+        tag: 'a[href]',
+        getAttrs: (node: string | HTMLElement) => {
+          if (typeof node === 'string') return null;
+          const href = node.getAttribute('href');
+          if (!href || /^javascript:/i.test(href)) return false;
+          return null;
+        },
+      },
+    ];
+  },
+
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      auto: {
+        default: false,
+        parseHTML: (el) => {
+          const href = el.getAttribute('href');
+          const textContent = el.textContent;
+          if (!href || href !== textContent) return false;
+
+          const linkRegex = this.options.getLinkRegex();
+          if (linkRegex === null) return false;
+
+          return isFullLinkMatch(href, linkRegex);
+        },
+        renderHTML: () => {
+          return {};
+        },
+      },
+    };
+  },
+
   renderHTML({ HTMLAttributes }) {
-    return ['a', { href: HTMLAttributes.href }, 0];
+    return [
+      'a',
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes),
+      0,
+    ];
   },
 
   addOptions() {
@@ -23,6 +74,9 @@ export const EnrichedLink = Link.extend({
         ...parent.HTMLAttributes,
         target: null,
         rel: null,
+      },
+      getLinkRegex: () => {
+        throw new Error('EnrichedLink.configure({ getLinkRegex }) is required');
       },
     };
   },
@@ -55,6 +109,10 @@ export const EnrichedLink = Link.extend({
       },
     };
   },
+
+  addPasteRules() {
+    return [];
+  },
 });
 
 export function removeLink(editor: Editor, start: number, end: number) {
@@ -83,15 +141,20 @@ export function setLink(
   text: string,
   url: string
 ) {
-  if (url.length === 0 || text.length === 0) {
-    return;
-  }
   const { state } = editor;
   const doc = state.doc;
   const from = nativePosToTiptapPos(doc, start);
   const to = nativePosToTiptapPos(doc, end);
 
   if (isRangeLinkBlocked(editor, from, to)) {
+    return;
+  }
+
+  if (text.length === 0 && from !== to) {
+    editor.chain().focus().deleteRange({ from, to }).run();
+  }
+
+  if (text.length === 0 || url.length === 0) {
     return;
   }
 
@@ -107,7 +170,7 @@ export function setLink(
         const marksWithLink = linkMark.addToSet(marksAtRangeStart);
         tr.insert(from, s.schema.text(text, marksWithLink));
       } else {
-        const currentText = doc.textBetween(from, to);
+        const currentText = nativeLeafText(doc, from, to);
 
         if (text !== currentText) {
           const marksAtRangeStart = doc.resolve(from).marks();

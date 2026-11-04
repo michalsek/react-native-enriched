@@ -1,6 +1,6 @@
 buildscript {
 	ext.getExtOrDefault = {name ->
-		return rootProject.ext.has(name) ? rootProject.ext.get(name) : project.properties['ReactNativeEnriched_' + name]
+		return rootProject.ext.has(name) ? rootProject.ext.get(name) : project.properties['ReactNativeEnrichedHtml_' + name]
 	}
 
 	repositories {
@@ -20,14 +20,20 @@ buildscript {
 
 
 apply plugin: "com.android.library"
-apply plugin: "kotlin-android"
+// AGP 9 ships built-in Kotlin support and registers the `kotlin` extension
+// itself. Applying the Kotlin plugin on top of it fails configuration with
+// "Cannot add extension with name 'kotlin'". Only apply it when nothing has
+// registered that extension yet.
+if (project.extensions.findByName('kotlin') == null) {
+	apply plugin: "kotlin-android"
+}
 
 apply plugin: "com.facebook.react"
 
 apply from: "lint.gradle"
 
 def getExtOrIntegerDefault(name) {
-	return rootProject.ext.has(name) ? rootProject.ext.get(name) : (project.properties["ReactNativeEnriched_" + name]).toInteger()
+	return rootProject.ext.has(name) ? rootProject.ext.get(name) : (project.properties["ReactNativeEnrichedHtml_" + name]).toInteger()
 }
 
 def supportsNamespace() {
@@ -55,6 +61,7 @@ android {
 	defaultConfig {
 		minSdkVersion getExtOrIntegerDefault("minSdkVersion")
 		targetSdkVersion getExtOrIntegerDefault("targetSdkVersion")
+		consumerProguardFiles "consumer-rules.pro"
 	}
 
 	buildFeatures {
@@ -101,6 +108,6 @@ dependencies {
 
 react {
 	jsRootDir = file("../src/")
-	libraryName = "ReactNativeEnriched"
+	libraryName = "ReactNativeEnrichedHtml"
 	codegenJavaPackageName = "com.swmansion.enriched"
 }

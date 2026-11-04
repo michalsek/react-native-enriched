@@ -1,6 +1,6 @@
 #pragma once
-#include <ReactNativeEnriched/EnrichedTextViewShadowNode.h>
-#include <ReactNativeEnriched/Props.h>
+#include "EnrichedTextViewShadowNode.h"
+#include "generated/ReactCodegen/ReactNativeEnrichedSpec/Props.h"
 #include <react/debug/react_native_assert.h>
 #include <react/renderer/core/ConcreteComponentDescriptor.h>
 

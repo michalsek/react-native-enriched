@@ -1,4 +1,5 @@
 #import "FontExtension.h"
+#import <CoreText/CoreText.h>
 #import <React/RCTLog.h>
 
 @implementation UIFont (FontExtension)
@@ -40,8 +41,6 @@
   if (fontDescriptor != nullptr) {
     return [UIFont fontWithDescriptor:fontDescriptor size:0];
   } else {
-    RCTLogWarn(
-        @"[EnrichedTextInput]: Couldn't apply italic trait to the font.");
     return self;
   }
 }
@@ -69,41 +68,10 @@
   }
 }
 
-- (UIFont *)setFamily:(NSString *)family {
-  // Try a full font name first (e.g. "Helvetica-Bold")...
-  UIFont *baseFont = [UIFont fontWithName:family size:self.pointSize];
-  if (baseFont == nullptr) {
-    // ...then resolve the family through fontNamesForFamilyName:. This is the
-    // lookup expo-font swizzles for dynamically loaded fonts, so font family
-    // aliases registered at runtime resolve here. Prefer the shortest face
-    // name - regular faces have no style suffix - and let withFontTraits:
-    // restore bold/italic afterwards.
-    NSArray<NSString *> *faceNames = [UIFont fontNamesForFamilyName:family];
-    NSString *bestFaceName = nullptr;
-    for (NSString *faceName in faceNames) {
-      if (bestFaceName == nullptr || faceName.length < bestFaceName.length) {
-        bestFaceName = faceName;
-      }
-    }
-    if (bestFaceName != nullptr) {
-      baseFont = [UIFont fontWithName:bestFaceName size:self.pointSize];
-    }
-  }
-  if (baseFont == nullptr) {
-    // ...lastly fall back to descriptor matching by the family attribute
-    UIFontDescriptor *descriptor =
-        [UIFontDescriptor fontDescriptorWithFontAttributes:@{
-          UIFontDescriptorFamilyAttribute : family
-        }];
-    baseFont = [UIFont fontWithDescriptor:descriptor size:self.pointSize];
-  }
-  if (baseFont == nullptr) {
-    RCTLogWarn(@"[EnrichedTextInput]: Couldn't resolve font family: %@.",
-               family);
-    return self;
-  }
-  // preserve the bold/italic traits of the original font
-  return [baseFont withFontTraits:self];
+- (BOOL)coversCharacters:(const unichar *)chars count:(CFIndex)count {
+  CGGlyph glyphs[2] = {0, 0};
+  return CTFontGetGlyphsForCharacters((__bridge CTFontRef)self, chars, glyphs,
+                                      count);
 }
 
 @end

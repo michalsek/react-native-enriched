@@ -3,7 +3,11 @@ import type { Node } from '@tiptap/pm/model';
 import { Fragment } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 
-import { nativePosToTiptapPos, tiptapPosToNativePos } from '../positionMapping';
+import {
+  nativePosToTiptapPos,
+  tiptapPosToNativePos,
+} from '../nativeMappers/positionMapping';
+import { withPreservedAlignment } from './formatRules';
 
 /**
  * Clears block styling with `clearNodes`, then wraps the selection’s blocks in a flat
@@ -31,9 +35,8 @@ export function applyWrappingListToSelection(
   const nativeAnchor = tiptapPosToNativePos(docBefore, selBefore.anchor);
   const nativeHead = tiptapPosToNativePos(docBefore, selBefore.head);
 
-  return chain()
-    .clearNodes()
-    .command(({ tr, state }) => {
+  return withPreservedAlignment(editor, chain(), (c) =>
+    c.clearNodes().command(({ tr, state }) => {
       const listType = state.schema.nodes[listTypeName];
       const itemType = state.schema.nodes[itemTypeName];
       if (!listType || !itemType) {
@@ -72,5 +75,5 @@ export function applyWrappingListToSelection(
       );
       return true;
     })
-    .run();
+  );
 }

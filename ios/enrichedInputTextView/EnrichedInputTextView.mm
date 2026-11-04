@@ -1,8 +1,10 @@
 #import "EnrichedInputTextView.h"
 #import "EnrichedTextInputView.h"
-#import "HtmlParser.h"
-#import "StringExtension.h"
-#import "TextInsertionUtils.h"
+#import "extensions/StringExtension.h"
+#import "htmlParser/HtmlParser.h"
+#import "utils/AlignmentUtils.h"
+#import "utils/TextInsertionUtils.h"
+#import "utils/TextListsUtils.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 @implementation EnrichedInputTextView
@@ -31,8 +33,6 @@
     paraRange = [text paragraphRangeForRange:NSMakeRange(idx, 0)];
   }
 
-  // The caret spans the whole line fragment, and a paragraph's spacing lies in
-  // its first and last fragments around the line box (the used rect).
   CGRect lineRect = CGRectZero;
   CGRect usedRect = CGRectZero;
   NSLayoutManager *layoutManager = self.layoutManager;
@@ -54,8 +54,6 @@
                                                    effectiveRange:nil];
   }
 
-  // A side of the caret is clamped to the used rect only where the fragment
-  // holds spacing there, so a caret already inside the line box stays put.
   CGFloat top = CGRectGetMinY(rect);
   CGFloat bottom = CGRectGetMaxY(rect);
 
@@ -83,13 +81,26 @@
     return rect;
   }
 
-  NSTextAlignment alignment = pStyle.alignment;
+  NSString *marker =
+      [TextListsUtils firstTextListWithPrefix:@"EnrichedAlignment"
+                                      inArray:pStyle.textLists]
+          .markerFormat;
+  NSTextAlignment alignment = [AlignmentUtils markerToAlignment:marker];
   CGFloat containerWidth = self.textContainer.size.width;
 
   if (alignment == NSTextAlignmentCenter) {
     rect.origin.x = (containerWidth - rect.size.width) / 2.0;
   } else if (alignment == NSTextAlignmentRight) {
     rect.origin.x = containerWidth - rect.size.width;
+  } else {
+    // when we change selection to the last empty line in the editor,
+    // where we literally have no character there, UIKit seems to need to know
+    // the line's expected geometry (indent) and it derives typing attributes
+    // from the previous character (previous line). Happens even though we
+    // explicitly didn't want that in
+    // manageTypingAttributesWithOnlySelection:YES, so we can't trust typing
+    // attributes' pStyle here, manually setting the caret's position
+    rect.origin.x = 0;
   }
 
   return rect;

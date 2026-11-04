@@ -15,11 +15,6 @@ data class ParagraphSpanConfig(
   val isContinuous: Boolean,
 ) : ISpanConfig
 
-data class ListSpanConfig(
-  override val clazz: Class<*>,
-  val shortcut: String?,
-) : ISpanConfig
-
 data class StylesMergingConfig(
   // styles that should be removed when we apply specific style
   val conflictingStyles: Array<String> = emptyArray(),
@@ -55,12 +50,8 @@ object EnrichedSpans {
   const val IMAGE = "image"
   const val MENTION = "mention"
 
-  // inline text styles (parametrized by a value)
-  const val FONT_FAMILY = "font_family"
-  const val FONT_SIZE = "font_size"
-  const val LETTER_SPACING = "letter_spacing"
-  const val LINE_HEIGHT = "line_height"
-  const val FOREGROUND_COLOR = "foreground_color"
+  // custom style
+  const val CUSTOM_STYLE = "custom_style"
 
   val inlineSpans: Map<String, BaseSpanConfig> =
     mapOf(
@@ -83,11 +74,11 @@ object EnrichedSpans {
       CODE_BLOCK to ParagraphSpanConfig(EnrichedInputCodeBlockSpan::class.java, true),
     )
 
-  val listSpans: Map<String, ListSpanConfig> =
+  val listSpans: Map<String, BaseSpanConfig> =
     mapOf(
-      UNORDERED_LIST to ListSpanConfig(EnrichedInputUnorderedListSpan::class.java, "- "),
-      ORDERED_LIST to ListSpanConfig(EnrichedInputOrderedListSpan::class.java, "1. "),
-      CHECKBOX_LIST to ListSpanConfig(EnrichedInputCheckboxListSpan::class.java, null),
+      UNORDERED_LIST to BaseSpanConfig(EnrichedInputUnorderedListSpan::class.java),
+      ORDERED_LIST to BaseSpanConfig(EnrichedInputOrderedListSpan::class.java),
+      CHECKBOX_LIST to BaseSpanConfig(EnrichedInputCheckboxListSpan::class.java),
     )
 
   val parametrizedStyles: Map<String, BaseSpanConfig> =
@@ -97,19 +88,12 @@ object EnrichedSpans {
       MENTION to BaseSpanConfig(EnrichedInputMentionSpan::class.java),
     )
 
-  // Inline styles carrying a custom value. They cannot be handled by
-  // InlineStyles (spans are not created via a reflective single-argument
-  // constructor) - they are managed by TextStyles instead.
-  val textStyleSpans: Map<String, BaseSpanConfig> =
+  val customStyles: Map<String, BaseSpanConfig> =
     mapOf(
-      FONT_FAMILY to BaseSpanConfig(EnrichedInputFontFamilySpan::class.java),
-      FONT_SIZE to BaseSpanConfig(EnrichedInputFontSizeSpan::class.java),
-      LETTER_SPACING to BaseSpanConfig(EnrichedInputLetterSpacingSpan::class.java),
-      LINE_HEIGHT to BaseSpanConfig(EnrichedInputLineHeightSpan::class.java),
-      FOREGROUND_COLOR to BaseSpanConfig(EnrichedInputForegroundColorSpan::class.java),
+      CUSTOM_STYLE to BaseSpanConfig(EnrichedInputCustomStyleSpan::class.java),
     )
 
-  val allSpans: Map<String, ISpanConfig> = inlineSpans + paragraphSpans + listSpans + parametrizedStyles + textStyleSpans
+  val allSpans: Map<String, ISpanConfig> = inlineSpans + paragraphSpans + listSpans + parametrizedStyles + customStyles
 
   fun getMergingConfigForStyle(
     style: String,
@@ -215,11 +199,6 @@ object EnrichedSpans {
               INLINE_CODE,
               LINK,
               MENTION,
-              FONT_FAMILY,
-              FONT_SIZE,
-              LETTER_SPACING,
-              LINE_HEIGHT,
-              FOREGROUND_COLOR,
             ),
         )
       }
@@ -260,10 +239,8 @@ object EnrichedSpans {
         )
       }
 
-      FONT_FAMILY, FONT_SIZE, LETTER_SPACING, LINE_HEIGHT, FOREGROUND_COLOR -> {
-        StylesMergingConfig(
-          blockingStyles = arrayOf(CODE_BLOCK),
-        )
+      CUSTOM_STYLE -> {
+        StylesMergingConfig()
       }
 
       else -> {

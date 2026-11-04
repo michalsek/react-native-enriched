@@ -37,7 +37,6 @@ class EnrichedParagraphMarginSpacerSpan(
     return 0
   }
 
-  // The line's newline run brings the paint's font metrics, so the spacer sets the line box itself.
   override fun chooseHeight(
     text: CharSequence,
     start: Int,

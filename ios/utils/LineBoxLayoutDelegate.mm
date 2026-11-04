@@ -1,9 +1,7 @@
 #import "LineBoxLayoutDelegate.h"
-#import "LineHeightUtils.h"
 
-// A line can legitimately be taller than its text when an attachment or a
-// fallback font drives it; this much slack absorbs layout rounding without
-// swallowing that case.
+NSString *const LineBoxHeightAttributeName = @"EnrichedLineBoxHeight";
+
 static const CGFloat kNonTextLineSlack = 1.0;
 
 @implementation LineBoxLayoutDelegate
@@ -35,14 +33,9 @@ static const CGFloat kNonTextLineSlack = 1.0;
   [storage addLayoutManager:layoutManager];
   [layoutManager ensureLayoutForTextContainer:container];
 
-  // The used rect starts below the first paragraph's top margin.
   return CGRectGetMaxY([layoutManager usedRectForTextContainer:container]);
 }
 
-// The paragraph mark keeps the view's default font (14pt system) because the
-// HTML's styles only span the text, and half-leading is per run, so a mark left
-// in the line's metrics sizes the box from a font that draws nothing. CSS gives
-// a line break no inline box at all.
 + (NSRange)rangeWithoutTrailingBreak:(NSRange)range
                             inString:(NSString *)string {
   NSCharacterSet *newlines = [NSCharacterSet newlineCharacterSet];
@@ -58,8 +51,6 @@ static const CGFloat kNonTextLineSlack = 1.0;
     trimmed.length -= 1;
   }
 
-  // A line holding nothing but its break still needs a box, and one run always
-  // measures exactly its line height.
   return trimmed.length > 0 ? trimmed : range;
 }
 
@@ -84,8 +75,6 @@ static const CGFloat kNonTextLineSlack = 1.0;
   return lineHeight;
 }
 
-// A span's own line height lives in a run attribute, as TextKit makes the
-// paragraph style uniform across a paragraph.
 + (CGFloat)lineHeightForAttributes:
                (NSDictionary<NSAttributedStringKey, id> *)attrs
                               font:(UIFont *)font {
@@ -109,11 +98,6 @@ static const CGFloat kNonTextLineSlack = 1.0;
          paragraphStyle.maximumLineHeight > 0;
 }
 
-// TextKit sits the glyphs on the bottom edge of a line fragment and ignores a
-// negative NSBaselineOffsetAttributeName, so a font taller than its line height
-// spills the whole overflow above the line. CSS splits that overflow evenly,
-// and takes the line box from the tallest span rather than the paragraph's
-// first, so both the box and the baseline are computed here instead.
 - (BOOL)layoutManager:(NSLayoutManager *)layoutManager
     shouldSetLineFragmentRect:(inout CGRect *)lineFragmentRect
          lineFragmentUsedRect:(inout CGRect *)lineFragmentUsedRect
@@ -143,54 +127,48 @@ static const CGFloat kNonTextLineSlack = 1.0;
   __block BOOL hasAttachment = NO;
   __block BOOL explicitLineHeight = NO;
 
-  [textStorage
-      enumerateAttributesInRange:metricsRange
-                         options:0
-                      usingBlock:^(NSDictionary<NSAttributedStringKey, id>
-                                       *_Nonnull attrs,
-                                   NSRange attrsRange, BOOL *_Nonnull stop) {
-                        UIFont *font = attrs[NSFontAttributeName];
+  [textStorage enumerateAttributesInRange:metricsRange
+                                  options:0
+                               usingBlock:^(NSDictionary *attrs,
+                                            NSRange attrsRange, BOOL *stop) {
+                                 UIFont *font = attrs[NSFontAttributeName];
 
-                        if (attrs[NSAttachmentAttributeName] != nil) {
-                          hasAttachment = YES;
-                        }
+                                 if (attrs[NSAttachmentAttributeName] != nil) {
+                                   hasAttachment = YES;
+                                 }
 
-                        if (![font isKindOfClass:[UIFont class]]) {
-                          return;
-                        }
+                                 if (![font isKindOfClass:[UIFont class]]) {
+                                   return;
+                                 }
 
-                        if ([LineBoxLayoutDelegate
-                                hasExplicitLineHeight:attrs]) {
-                          explicitLineHeight = YES;
-                        }
+                                 if ([LineBoxLayoutDelegate
+                                         hasExplicitLineHeight:attrs]) {
+                                   explicitLineHeight = YES;
+                                 }
 
-                        CGFloat lineHeight = [LineBoxLayoutDelegate
-                            lineHeightForAttributes:attrs
-                                               font:font];
-                        CGFloat descent = -font.descender;
-                        CGFloat halfLeading =
-                            (lineHeight - font.lineHeight) / 2.0;
+                                 CGFloat lineHeight = [LineBoxLayoutDelegate
+                                     lineHeightForAttributes:attrs
+                                                        font:font];
+                                 CGFloat descent = -font.descender;
+                                 CGFloat halfLeading =
+                                     (lineHeight - font.lineHeight) / 2.0;
 
-                        above =
-                            MAX(above, font.lineHeight - descent + halfLeading);
-                        below = MAX(below, descent + halfLeading);
-                        measured = YES;
-                      }];
+                                 above = MAX(above, font.lineHeight - descent +
+                                                        halfLeading);
+                                 below = MAX(below, descent + halfLeading);
+                                 measured = YES;
+                               }];
 
   if (!measured) {
     return YES;
   }
 
-  // TextKit puts a paragraph's spacing inside the fragment of its first and
-  // last line, around the used rect.
   CGFloat proposedSpacingBefore = MAX(0, CGRectGetMinY(*lineFragmentUsedRect) -
                                              CGRectGetMinY(*lineFragmentRect));
   CGFloat spacingAfter = MAX(0, CGRectGetMaxY(*lineFragmentRect) -
                                     CGRectGetMaxY(*lineFragmentUsedRect));
   CGFloat spacingBefore = proposedSpacingBefore;
 
-  // TextKit drops the spacing before the first paragraph, while CSS keeps the
-  // first block's top margin.
   if (charRange.location == 0) {
     NSParagraphStyle *paragraphStyle =
         [textStorage attribute:NSParagraphStyleAttributeName
@@ -202,15 +180,12 @@ static const CGFloat kNonTextLineSlack = 1.0;
   CGFloat height = above + below;
   CGFloat proposedHeight = lineFragmentUsedRect->size.height;
 
-  // Only an attachment, or a fallback font (emoji, CJK, ...) on a line with no
-  // explicit line height, may make a line taller than its text, and the text
-  // never makes it shorter.
   if (hasAttachment || !explicitLineHeight) {
     if (proposedHeight - height > kNonTextLineSlack) {
       CGFloat addedSpacing = spacingBefore - proposedSpacingBefore;
       lineFragmentRect->size.height += addedSpacing;
       lineFragmentUsedRect->origin.y += addedSpacing;
-      *baselineOffset += addedSpacing;
+      baselineOffset[0] += addedSpacing;
       return YES;
     }
     height = MAX(height, proposedHeight);
@@ -220,7 +195,7 @@ static const CGFloat kNonTextLineSlack = 1.0;
   lineFragmentUsedRect->origin.y =
       CGRectGetMinY(*lineFragmentRect) + spacingBefore;
   lineFragmentUsedRect->size.height = height;
-  *baselineOffset = spacingBefore + above;
+  baselineOffset[0] = spacingBefore + above;
 
   return YES;
 }

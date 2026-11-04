@@ -22,6 +22,8 @@ export type {
   EnrichedTextInputInstance,
   ContextMenuItem,
   OnChangeMentionEvent,
+  TextShortcut,
+  TextShortcutStyle,
   TextStyleMutationOptions,
 } from './types';
 
@@ -33,4 +35,5 @@ export type {
   EnrichedTextHtmlStyle,
   OnMentionPressEvent,
   OnLinkPressEvent,
+  OnImagePressEvent,
 } from './types';

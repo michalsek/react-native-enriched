@@ -19,6 +19,8 @@ inline folly::dynamic toDynamic(const EnrichedTextInputViewProps &props) {
   serializedProps["fontFamily"] = props.fontFamily;
   serializedProps["lineHeight"] = props.lineHeight;
   serializedProps["allowFontScaling"] = props.allowFontScaling;
+  serializedProps["useHtmlNormalizer"] = props.useHtmlNormalizer;
+  serializedProps["spaceKerning"] = props.spaceKerning;
   serializedProps["htmlStyle"] = toDynamic(props.htmlStyle);
 
   return serializedProps;
@@ -33,9 +35,12 @@ inline folly::dynamic toDynamic(const EnrichedTextViewProps &props) {
   serializedProps["fontWeight"] = props.fontWeight;
   serializedProps["fontStyle"] = props.fontStyle;
   serializedProps["fontFamily"] = props.fontFamily;
+  serializedProps["lineHeight"] = props.lineHeight;
   serializedProps["numberOfLines"] = props.numberOfLines;
   serializedProps["ellipsizeMode"] = props.ellipsizeMode;
   serializedProps["allowFontScaling"] = props.allowFontScaling;
+  serializedProps["useHtmlNormalizer"] = props.useHtmlNormalizer;
+  serializedProps["spaceKerning"] = props.spaceKerning;
   serializedProps["htmlStyle"] = toDynamic(props.htmlStyle);
 
   return serializedProps;

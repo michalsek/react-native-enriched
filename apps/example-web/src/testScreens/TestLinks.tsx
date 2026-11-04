@@ -1,10 +1,12 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import {
   EnrichedTextInput,
   type EnrichedInputStyle,
   type EnrichedTextInputInstance,
+  type OnChangeSelectionEvent,
   type OnLinkDetected,
-} from 'react-native-enriched';
+  type OnLinkPressEvent,
+} from 'react-native-enriched-html';
 import { WEB_DEFAULT_HTML_STYLE } from '../defaultHtmlStyle';
 
 function toInteger(value: string): number {
@@ -12,10 +14,18 @@ function toInteger(value: string): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+type LinkRegexMode = 'default' | 'disabled' | 'custom';
+
 export function TestLinks() {
   const ref = useRef<EnrichedTextInputInstance>(null);
   const [htmlInput, setHtmlInput] = useState('<html><p></p></html>');
   const [editorHtml, setEditorHtml] = useState('');
+  const [linkRegexMode, setLinkRegexMode] = useState<LinkRegexMode>('default');
+  const [linkRegexPattern, setLinkRegexPattern] = useState(
+    String.raw`issue-\d+`
+  );
+  const [appliedLinkRegex, setAppliedLinkRegex] = useState<RegExp | null>();
+  const [linkRegexError, setLinkRegexError] = useState('');
   const [startInput, setStartInput] = useState('6');
   const [endInput, setEndInput] = useState('11');
   const [linkTextInput, setLinkTextInput] = useState('world');
@@ -26,6 +36,28 @@ export function TestLinks() {
   const [selEndInput, setSelEndInput] = useState('0');
   const [lastOnLinkDetected, setLastOnLinkDetected] =
     useState<OnLinkDetected | null>(null);
+  const [lastSelection, setLastSelection] =
+    useState<OnChangeSelectionEvent | null>(null);
+  const [onLinkPressEnabled, setOnLinkPressEnabled] = useState(false);
+  const [lastOnLinkPress, setLastOnLinkPress] =
+    useState<OnLinkPressEvent | null>(null);
+
+  useEffect(() => {
+    setLinkRegexError('');
+    if (linkRegexMode === 'default') {
+      setAppliedLinkRegex(undefined);
+      return;
+    }
+    if (linkRegexMode === 'disabled') {
+      setAppliedLinkRegex(null);
+      return;
+    }
+    try {
+      setAppliedLinkRegex(new RegExp(linkRegexPattern, 'g'));
+    } catch (e) {
+      setLinkRegexError(e instanceof Error ? e.message : 'Invalid regex');
+    }
+  }, [linkRegexMode, linkRegexPattern]);
 
   return (
     <div data-testid="test-links-root">
@@ -43,7 +75,60 @@ export function TestLinks() {
           onLinkDetected={(e) => {
             setLastOnLinkDetected(e);
           }}
+          onChangeSelection={(e) => {
+            setLastSelection(e.nativeEvent);
+          }}
+          onLinkPress={
+            onLinkPressEnabled
+              ? (e) => {
+                  setLastOnLinkPress(e);
+                }
+              : undefined
+          }
+          linkRegex={appliedLinkRegex}
         />
+      </div>
+
+      <div>
+        <label>
+          onLinkPress enabled{' '}
+          <input
+            data-testid="test-links-onlinkpress-enabled"
+            type="checkbox"
+            checked={onLinkPressEnabled}
+            onChange={(e) => {
+              setOnLinkPressEnabled(e.target.checked);
+            }}
+          />
+        </label>
+      </div>
+
+      <div>
+        <label>
+          Autolink regex mode{' '}
+          <select
+            data-testid="test-links-link-regex-mode"
+            value={linkRegexMode}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+              setLinkRegexMode(e.target.value as LinkRegexMode);
+            }}
+          >
+            <option value="default">default</option>
+            <option value="disabled">disabled</option>
+            <option value="custom">custom</option>
+          </select>
+        </label>
+        {linkRegexMode === 'custom' ? (
+          <input
+            data-testid="test-links-link-regex-pattern"
+            value={linkRegexPattern}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+              setLinkRegexPattern(e.target.value);
+            }}
+            aria-label="Custom link regex pattern"
+          />
+        ) : null}
+        <span data-testid="test-links-link-regex-error">{linkRegexError}</span>
       </div>
 
       <textarea
@@ -169,10 +254,33 @@ export function TestLinks() {
         >
           setSelection
         </button>
+        <button
+          type="button"
+          data-testid="test-links-apply-setlink-from-selection-button"
+          onClick={() => {
+            if (!lastSelection) return;
+            ref.current?.setLink(
+              lastSelection.start,
+              lastSelection.end,
+              lastSelection.text,
+              linkUrlInput
+            );
+          }}
+        >
+          setLink from selection
+        </button>
       </div>
+
+      <pre data-testid="test-links-selection-payload">
+        {JSON.stringify(lastSelection)}
+      </pre>
 
       <pre data-testid="on-link-detected-payload">
         {JSON.stringify(lastOnLinkDetected)}
+      </pre>
+
+      <pre data-testid="on-link-press-payload">
+        {JSON.stringify(lastOnLinkPress)}
       </pre>
 
       <pre data-testid="test-links-html-output">{editorHtml}</pre>

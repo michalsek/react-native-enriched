@@ -1,14 +1,16 @@
 #import "HtmlParser.h"
-#import "AlignmentEntry.h"
-#import "AlignmentUtils.h"
-#import "ColorExtension.h"
-#import "ImageData.h"
-#import "LinkData.h"
-#import "MentionParams.h"
-#import "ParagraphMarginEntry.h"
-#import "StringExtension.h"
-#import "StyleHeaders.h"
-#import "StylePair.h"
+#import "config/EnrichedConfig.h"
+#import "extensions/ColorExtension.h"
+#import "extensions/StringExtension.h"
+#import "interfaces/AlignmentEntry.h"
+#import "interfaces/CustomStyleData.h"
+#import "interfaces/ImageData.h"
+#import "interfaces/LinkData.h"
+#import "interfaces/MentionParams.h"
+#import "interfaces/ParagraphMarginEntry.h"
+#import "interfaces/StyleHeaders.h"
+#import "interfaces/StylePair.h"
+#import "utils/AlignmentUtils.h"
 
 #include "GumboParser.hpp"
 
@@ -141,9 +143,6 @@
                                   leading:(BOOL)leading
                                  trailing:(BOOL)trailing {
   NSString *str = [html copy];
-  // Only <br> can sit next to itself (<br><br>); a plain replacement would
-  // consume the shared '>' / '<' and skip every second tag, so it uses
-  // zero-width lookarounds instead.
   BOOL canNeighbourItself = [tag isEqualToString:@"<br>"];
   if (leading) {
     if (canNeighbourItself) {
@@ -322,8 +321,6 @@
     fixedHtml = [fixedHtml stringByReplacingOccurrencesOfString:@"<br/>"
                                                      withString:@"<br>"];
 
-    // styled empty paragraphs keep their tags (and the styles they carry), so
-    // only the <br> placeholder is dropped; plain <p><br></p> is handled below
     fixedHtml = [[self
         cachedRegexForPattern:
             @"<p(\\s[^>]*)>((?:<span(?:\\s[^>]*)?>)*)<br>((?:</span>)*)</p>"]
@@ -477,239 +474,9 @@
   return fixedHtml;
 }
 
-+ (BOOL)isTextStyleType:(NSNumber *)style {
-  NSInteger value = [style integerValue];
-  return value == [FontFamilyStyle getType] ||
-         value == [FontSizeStyle getType] ||
-         value == [LetterSpacingStyle getType] ||
-         value == [LineHeightStyle getType] ||
-         value == [ForegroundColorStyle getType];
-}
-
-// Strips quotes from a CSS font-family value and keeps the first entry of a
-// font stack.
-+ (NSString *)parseCssFontFamily:(NSString *)value {
-  NSString *firstFamily = [value componentsSeparatedByString:@","].firstObject;
-  firstFamily = [firstFamily
-      stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-  firstFamily = [firstFamily stringByReplacingOccurrencesOfString:@"\""
-                                                       withString:@""];
-  firstFamily = [firstFamily stringByReplacingOccurrencesOfString:@"'"
-                                                       withString:@""];
-  firstFamily = [firstFamily
-      stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-  return firstFamily.length > 0 ? firstFamily : nullptr;
-}
-
-// Parses a CSS dimension value (e.g. "16px", "1.5") ignoring the unit.
-+ (NSString *)parseCssDimension:(NSString *)value {
-  NSScanner *scanner = [NSScanner scannerWithString:value];
-  double number = 0;
-  if (![scanner scanDouble:&number]) {
-    return nullptr;
-  }
-  return [NSString stringWithFormat:@"%g", number];
-}
-
-+ (NSDictionary<NSString *, NSNumber *> *)paragraphMarginsFromStyleParams:
-    (NSString *)params {
-  NSMutableDictionary<NSString *, NSNumber *> *result =
-      [[NSMutableDictionary alloc] init];
-
-  NSRegularExpression *styleRegex =
-      [NSRegularExpression regularExpressionWithPattern:@"style=([\"'])(.*?)\\1"
-                                                options:0
-                                                  error:nullptr];
-  NSTextCheckingResult *match =
-      [styleRegex firstMatchInString:params
-                             options:0
-                               range:NSMakeRange(0, params.length)];
-  if (match == nullptr || match.numberOfRanges < 3) {
-    return result;
-  }
-
-  NSString *cssContent = [params substringWithRange:[match rangeAtIndex:2]];
-  for (NSString *declaration in [cssContent componentsSeparatedByString:@";"]) {
-    NSRange colonRange = [declaration rangeOfString:@":"];
-    if (colonRange.location == NSNotFound) {
-      continue;
-    }
-
-    NSString *property =
-        [[declaration substringToIndex:colonRange.location]
-            stringByTrimmingCharactersInSet:[NSCharacterSet
-                                                whitespaceCharacterSet]]
-            .lowercaseString;
-    NSString *value = [[declaration substringFromIndex:colonRange.location + 1]
-        stringByTrimmingCharactersInSet:[NSCharacterSet
-                                            whitespaceCharacterSet]];
-    if (value.length == 0) {
-      continue;
-    }
-
-    if ([property isEqualToString:@"margin-top"]) {
-      NSString *marginTop = [self parseCssDimension:value];
-      if (marginTop != nullptr) {
-        result[@"top"] = @([marginTop floatValue]);
-      }
-    } else if ([property isEqualToString:@"margin-bottom"]) {
-      NSString *marginBottom = [self parseCssDimension:value];
-      if (marginBottom != nullptr) {
-        result[@"bottom"] = @([marginBottom floatValue]);
-      }
-    } else if ([property isEqualToString:@"margin"]) {
-      NSArray<NSString *> *parts = [value
-          componentsSeparatedByCharactersInSet:[NSCharacterSet
-                                                   whitespaceCharacterSet]];
-      NSMutableArray<NSString *> *values = [[NSMutableArray alloc] init];
-
-      for (NSString *part in parts) {
-        if (part.length > 0) {
-          [values addObject:part];
-        }
-      }
-
-      if (values.count == 0) {
-        continue;
-      }
-
-      NSString *marginTop = [self parseCssDimension:values[0]];
-      NSString *marginBottom =
-          [self parseCssDimension:values.count >= 3 ? values[2] : values[0]];
-
-      if (marginTop != nullptr && result[@"top"] == nil) {
-        result[@"top"] = @([marginTop floatValue]);
-      }
-      if (marginBottom != nullptr && result[@"bottom"] == nil) {
-        result[@"bottom"] = @([marginBottom floatValue]);
-      }
-    }
-  }
-
-  return result;
-}
-
-// Validates a CSS color value - only hex notations are supported. The value is
-// kept as the attribute's string and converted to UIColor at styling time.
-+ (NSString *)parseCssColor:(NSString *)value {
-  UIColor *color = [UIColor colorFromHexString:value];
-  if (color == nullptr) {
-    return nullptr;
-  }
-  return [value uppercaseString];
-}
-
-// Extracts the supported inline text styles from a span tag's parameters into
-// a StyleType -> value dictionary.
-+ (NSDictionary<NSNumber *, NSString *> *)textStylesFromSpanParams:
-    (NSString *)params {
-  NSMutableDictionary<NSNumber *, NSString *> *result =
-      [[NSMutableDictionary alloc] init];
-
-  NSRegularExpression *styleRegex =
-      [NSRegularExpression regularExpressionWithPattern:@"style=([\"'])(.*?)\\1"
-                                                options:0
-                                                  error:nullptr];
-  NSTextCheckingResult *match =
-      [styleRegex firstMatchInString:params
-                             options:0
-                               range:NSMakeRange(0, params.length)];
-  if (match == nullptr || match.numberOfRanges < 3) {
-    return result;
-  }
-
-  NSString *cssContent = [params substringWithRange:[match rangeAtIndex:2]];
-  for (NSString *declaration in [cssContent componentsSeparatedByString:@";"]) {
-    NSRange colonRange = [declaration rangeOfString:@":"];
-    if (colonRange.location == NSNotFound) {
-      continue;
-    }
-
-    NSString *property =
-        [[declaration substringToIndex:colonRange.location]
-            stringByTrimmingCharactersInSet:[NSCharacterSet
-                                                whitespaceCharacterSet]]
-            .lowercaseString;
-    NSString *value = [[declaration substringFromIndex:colonRange.location + 1]
-        stringByTrimmingCharactersInSet:[NSCharacterSet
-                                            whitespaceCharacterSet]];
-    if (value.length == 0) {
-      continue;
-    }
-
-    if ([property isEqualToString:@"font-family"]) {
-      NSString *family = [self parseCssFontFamily:value];
-      if (family != nullptr) {
-        result[@([FontFamilyStyle getType])] = family;
-      }
-    } else if ([property isEqualToString:@"font-size"]) {
-      NSString *fontSize = [self parseCssDimension:value];
-      if (fontSize != nullptr) {
-        result[@([FontSizeStyle getType])] = fontSize;
-      }
-    } else if ([property isEqualToString:@"letter-spacing"]) {
-      NSString *letterSpacing = [self parseCssDimension:value];
-      if (letterSpacing != nullptr) {
-        result[@([LetterSpacingStyle getType])] = letterSpacing;
-      }
-    } else if ([property isEqualToString:@"line-height"]) {
-      NSString *lineHeight = [self parseCssDimension:value];
-      if (lineHeight != nullptr) {
-        result[@([LineHeightStyle getType])] = lineHeight;
-      }
-    } else if ([property isEqualToString:@"color"]) {
-      NSString *color = [self parseCssColor:value];
-      if (color != nullptr) {
-        result[@([ForegroundColorStyle getType])] = color;
-      }
-    }
-  }
-
-  return result;
-}
-
-// Builds the combined CSS declaration string for all inline text styles
-// present at the given location, e.g. "font-family: Arial; font-size: 16px".
-+ (NSString *)textStyleCssAt:(NSInteger)location
-                        host:(id<EnrichedViewHost>)host {
-  return [self
-      textStyleCssWithValues:^NSString *(TextStyleBase *style) {
-        return [style getValueAt:location];
-      }
-                        host:host];
-}
-
-+ (NSString *)textStyleCssWithValues:(NSString * (^)(TextStyleBase *))valueFor
-                                host:(id<EnrichedViewHost>)host {
-  // style type -> css property name and unit
-  static NSDictionary<NSNumber *, NSArray<NSString *> *> *cssProperties;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    cssProperties = @{
-      @([FontFamilyStyle getType]) : @[ @"font-family", @"" ],
-      @([FontSizeStyle getType]) : @[ @"font-size", @"px" ],
-      @([LetterSpacingStyle getType]) : @[ @"letter-spacing", @"px" ],
-      @([LineHeightStyle getType]) : @[ @"line-height", @"px" ],
-      @([ForegroundColorStyle getType]) : @[ @"color", @"" ],
-    };
-  });
-
-  NSMutableArray<NSString *> *declarations = [[NSMutableArray alloc] init];
-  for (NSNumber *type in [TextStyleBase textStyleTypes]) {
-    TextStyleBase *style = (TextStyleBase *)host.stylesDict[type];
-    NSString *value = style != nullptr ? valueFor(style) : nullptr;
-    NSArray<NSString *> *cssProperty = cssProperties[type];
-    if (value != nullptr && cssProperty != nullptr) {
-      [declarations
-          addObject:[NSString stringWithFormat:@"%@: %@%@", cssProperty[0],
-                                               value, cssProperty[1]]];
-    }
-  }
-
-  return [declarations componentsJoinedByString:@"; "];
-}
-
-+ (NSArray *_Nonnull)getTextAndStylesFromHtml:(NSString *_Nonnull)fixedHtml {
++ (NSArray *_Nonnull)getTextAndStylesFromHtml:(NSString *_Nonnull)fixedHtml
+                                       config:
+                                           (EnrichedConfig *_Nullable)config {
   NSMutableString *plainText = [[NSMutableString alloc] initWithString:@""];
   NSMutableDictionary *ongoingTags = [[NSMutableDictionary alloc] init];
   NSMutableArray *initiallyProcessedTags = [[NSMutableArray alloc] init];
@@ -773,7 +540,12 @@
           // Track checkbox state if we're inside a checkbox list
           if (insideCheckboxList) {
             BOOL isChecked = [currentTagParams containsString:@"checked"];
-            checkboxStates[@(plainText.length)] = @(isChecked);
+            // Key by the position in the final NSTextStorage, which holds one
+            // placeholder per preceding image that 'plainText' doesn't have
+            // yet. This matches the image-shifted list range the states are
+            // later filtered by in prepareCheckboxListStyleValue:.
+            checkboxStates[@(plainText.length + precedingImageCount)] =
+                @(isChecked);
           }
           // Record the start location so we can check if it's empty when
           // closing
@@ -901,9 +673,6 @@
           blockDepth--;
         }
 
-        // An empty top-level paragraph is represented by the newline that
-        // follows it, so its styles have to cover that newline. The last one
-        // has no newline, so its styles are returned separately.
         NSInteger minimumLength = 0;
         if ([currentTagName isEqualToString:@"p"]) {
           BOOL isEmptyParagraph =
@@ -995,6 +764,10 @@
 
   // process tags into proper StyleType + StylePair values
   NSMutableArray *processedStyles = [[NSMutableArray alloc] init];
+  // Tracks the number of processed images to remove their pre-generated
+  // placeholder offsets from tag ranges when reading from plainText
+  // (which does not contain those placeholders).
+  NSInteger secondPassImageCount = 0;
 
   for (NSArray *arr in initiallyProcessedTags) {
     NSString *tagName = (NSString *)arr[0];
@@ -1013,7 +786,7 @@
       [styleArr addObject:@([ItalicStyle getType])];
     } else if ([tagName isEqualToString:@"img"]) {
       NSRegularExpression *srcRegex =
-          [NSRegularExpression regularExpressionWithPattern:@"src=\"([^\"]+)\""
+          [NSRegularExpression regularExpressionWithPattern:@"src=\"([^\"]*)\""
                                                     options:0
                                                       error:nullptr];
       NSTextCheckingResult *match =
@@ -1065,6 +838,7 @@
       }
 
       stylePair.styleValue = imageData;
+      secondPassImageCount++;
     } else if ([tagName isEqualToString:@"u"]) {
       [styleArr addObject:@([UnderlineStyle getType])];
     } else if ([tagName isEqualToString:@"s"]) {
@@ -1092,12 +866,21 @@
       NSString *url =
           [params substringWithRange:NSMakeRange(hrefRange.location + 6,
                                                  hrefRange.length - 7)];
-      NSString *text = [plainText substringWithRange:tagRangeValue.rangeValue];
+
+      // tagRange location includes one extra offset per preceding image
+      // placeholder, which don't exist in plainText. Subtract them to map
+      // back to the correct plainText index.
+      NSRange adjustedRange = tagRangeValue.rangeValue;
+      NSRange plainTextRange = NSMakeRange(
+          adjustedRange.location - secondPassImageCount, adjustedRange.length);
+      NSString *text = [plainText substringWithRange:plainTextRange];
 
       LinkData *linkData = [[LinkData alloc] init];
       linkData.url = url;
       linkData.text = text;
-      linkData.isManual = ![text isEqualToString:url];
+      linkData.isManual = ![text isEqualToString:url] ||
+                          ![LinkStyle matchesLinkRegexWithConfig:url
+                                                          config:config];
 
       stylePair.styleValue = linkData;
     } else if ([tagName isEqualToString:@"mention"]) {
@@ -1168,23 +951,14 @@
     } else if ([tagName isEqualToString:@"codeblock"]) {
       [styleArr addObject:@([CodeBlockStyle getType])];
     } else if ([tagName isEqualToString:@"span"]) {
-      // a span tag can carry up to four inline text styles in its style
-      // attribute - each of them becomes a separate processed style entry
-      NSDictionary<NSNumber *, NSString *> *textStyles =
-          [self textStylesFromSpanParams:params];
-      for (NSNumber *styleType in textStyles) {
-        StylePair *textStylePair = [[StylePair alloc] init];
-        textStylePair.rangeValue = tagRangeValue;
-        textStylePair.styleValue = textStyles[styleType];
-
-        NSMutableArray *textStyleArr = [[NSMutableArray alloc] init];
-        [textStyleArr addObject:styleType];
-        [textStyleArr addObject:textStylePair];
-        [processedStyles addObject:textStyleArr];
+      CustomStyleData *data = [self parseCustomStyleDataFromSpanParams:params];
+      if (data == nil || data.isEmpty) {
+        continue;
       }
-      continue;
+      [styleArr addObject:@([CustomStyle getType])];
+      stylePair.styleValue = data;
     } else {
-      // some other external tags just don't get put into the processed styles
+      // some other external tags don't get put into the processed styles
       continue;
     }
 
@@ -1223,6 +997,7 @@
   BOOL inCodeBlock = NO;
   BOOL inCheckboxList = NO;
   unichar lastCharacter = 0;
+  CustomStyleData *lastCustomStyleData = nil;
 
   for (int i = 0; i < text.length; i++) {
     NSRange currentRange = NSMakeRange(offset + i, 1);
@@ -1234,8 +1009,7 @@
     // check each existing style existence
     for (NSNumber *type in host.stylesDict) {
       StyleBase *style = host.stylesDict[type];
-      // Alignment and paragraph margins are serialized as CSS on the enclosing
-      // paragraph, not as wrapper tags.
+      // we do not want to add <></> tags for alignment
       if ([style isKindOfClass:[AlignmentStyle class]] ||
           [style isKindOfClass:[ParagraphMarginStyle class]]) {
         continue;
@@ -1328,17 +1102,8 @@
                                                         ascending:NO] ]];
 
         // append closing tags
-        BOOL newlineTextStyleSpanClosed = NO;
         for (NSNumber *style in sortedEndedStyles) {
           if ([style isEqualToNumber:@([ImageStyle getType])]) {
-            continue;
-          }
-          if ([self isTextStyleType:style]) {
-            // all inline text styles share a single span tag
-            if (!newlineTextStyleSpanClosed) {
-              [result appendString:@"</span>"];
-              newlineTextStyleSpanClosed = YES;
-            }
             continue;
           }
           NSString *tagContent = [self tagContentForStyle:style
@@ -1374,6 +1139,7 @@
 
       // clear the previous styles
       previousActiveStyles = [[NSSet<NSNumber *> alloc] init];
+      lastCustomStyleData = nil;
 
       // next character opens new paragraph
       newLine = YES;
@@ -1525,77 +1291,42 @@
       NSMutableSet *stillActiveStyles = [previousActiveStyles mutableCopy];
       [stillActiveStyles intersectSet:currentActiveStyles];
 
-      // The four inline text styles share a single <span> tag. Whenever the
-      // set of active text styles changes (a style joins or leaves) or any of
-      // their values changes while the tag stays open, the tag has to be
-      // closed and reopened with the new css.
-      NSMutableSet *textStylesPrev = [[NSMutableSet alloc] init];
-      for (NSNumber *style in previousActiveStyles) {
-        if ([self isTextStyleType:style]) {
-          [textStylesPrev addObject:style];
-        }
-      }
-      NSMutableSet *textStylesNow = [[NSMutableSet alloc] init];
-      for (NSNumber *style in currentActiveStyles) {
-        if ([self isTextStyleType:style]) {
-          [textStylesNow addObject:style];
-        }
-      }
-
-      if (textStylesPrev.count > 0 && textStylesNow.count > 0) {
-        BOOL configurationChanged =
-            ![textStylesPrev isEqualToSet:textStylesNow];
-
-        if (!configurationChanged) {
-          // same set of styles - check whether any value changed
-          for (NSNumber *style in textStylesNow) {
-            TextStyleBase *textStyle = (TextStyleBase *)host.stylesDict[style];
-            NSString *previousValue =
-                [textStyle getValueAt:currentRange.location - 1];
-            NSString *currentValue =
-                [textStyle getValueAt:currentRange.location];
-            BOOL valueChanged =
-                (previousValue != nullptr) != (currentValue != nullptr) ||
-                (previousValue != nullptr &&
-                 ![previousValue isEqualToString:currentValue]);
-            if (valueChanged) {
-              configurationChanged = YES;
-              break;
-            }
-          }
-        }
-
-        if (configurationChanged) {
-          // close and reopen the text styles that stay active (ended ones are
-          // already part of endedStyles, new ones are already in newStyles)
-          for (NSNumber *style in textStylesNow) {
-            if ([previousActiveStyles containsObject:style]) {
-              [fixedEndedStyles addObject:style];
-              [stylesToBeReAdded addObject:style];
-            }
-          }
-
-          // styles nested inside the reopened span tag have to be closed and
-          // reopened as well to keep the tags properly nested
-          for (NSNumber *ongoingStyle in stillActiveStyles) {
-            if ([self isTextStyleType:ongoingStyle]) {
-              continue;
-            }
-            if ([ongoingStyle integerValue] >
-                [@([FontFamilyStyle getType]) integerValue]) {
-              [fixedEndedStyles addObject:ongoingStyle];
-              [stylesToBeReAdded addObject:ongoingStyle];
-            }
-          }
-        }
-      }
-
       for (NSNumber *style in newStyles) {
         for (NSNumber *ongoingStyle in stillActiveStyles) {
           if ([ongoingStyle integerValue] > [style integerValue]) {
             // the prev style is inner; needs to be closed and re-added later
             [fixedEndedStyles addObject:ongoingStyle];
             [stylesToBeReAdded addObject:ongoingStyle];
+          }
+        }
+      }
+
+      // Force close+reopen if CustomStyle is continuously active but its data
+      // changed, so adjacent runs with different styles produce separate <span>
+      // tags instead of being merged into one.
+      NSNumber *customType = @([CustomStyle getType]);
+      if (![endedStyles member:customType] &&
+          [currentActiveStyles member:customType] &&
+          [previousActiveStyles member:customType]) {
+        CustomStyle *customStyleObj =
+            (CustomStyle *)host.stylesDict[customType];
+        CustomStyleData *currentData =
+            [customStyleObj getStoredCustomStyleDataAt:currentRange.location];
+        if (![currentData isEqual:lastCustomStyleData]) {
+          [fixedEndedStyles addObject:customType];
+          [stylesToBeReAdded addObject:customType];
+
+          // Inner styles (e.g. bold) must also close before the span ends and
+          // reopen inside the new span, otherwise tags cross span boundaries.
+          for (NSNumber *activeStyle in currentActiveStyles) {
+            if ([activeStyle isEqualToNumber:customType] ||
+                [activeStyle isEqualToNumber:@([ImageStyle getType])]) {
+              continue;
+            }
+            if ([activeStyle integerValue] > [customType integerValue]) {
+              [fixedEndedStyles addObject:activeStyle];
+              [stylesToBeReAdded addObject:activeStyle];
+            }
           }
         }
       }
@@ -1607,17 +1338,8 @@
                                                       ascending:NO] ]];
 
       // append closing tags
-      BOOL textStyleSpanClosed = NO;
       for (NSNumber *style in sortedEndedStyles) {
         if ([style isEqualToNumber:@([ImageStyle getType])]) {
-          continue;
-        }
-        if ([self isTextStyleType:style]) {
-          // all inline text styles share a single span tag
-          if (!textStyleSpanClosed) {
-            [result appendString:@"</span>"];
-            textStyleSpanClosed = YES;
-          }
           continue;
         }
         NSString *tagContent = [self tagContentForStyle:style
@@ -1637,21 +1359,7 @@
                                                       ascending:YES] ]];
 
       // append opening tags
-      BOOL textStyleSpanOpened = NO;
       for (NSNumber *style in sortedNewStyles) {
-        if ([self isTextStyleType:style]) {
-          // all inline text styles share a single span tag with the combined
-          // css of the styles present at this location
-          if (!textStyleSpanOpened) {
-            NSString *css = [self textStyleCssAt:currentRange.location
-                                            host:host];
-            [result
-                appendString:[NSString
-                                 stringWithFormat:@"<span style=\"%@\">", css]];
-            textStyleSpanOpened = YES;
-          }
-          continue;
-        }
         NSString *tagContent = [self tagContentForStyle:style
                                              openingTag:YES
                                                location:currentRange.location
@@ -1667,6 +1375,11 @@
 
       // append the letter and escape it if needed
       [result appendString:[NSString stringByEscapingHtml:currentCharacterStr]];
+
+      // track CustomStyleData for the next character's data-change check
+      lastCustomStyleData =
+          [(CustomStyle *)host.stylesDict[@([CustomStyle getType])]
+              getStoredCustomStyleDataAt:currentRange.location];
 
       // save current styles for next character's checks
       previousActiveStyles = currentActiveStyles;
@@ -1685,17 +1398,8 @@
                                                     ascending:NO] ]];
 
     // append closing tags
-    BOOL finalTextStyleSpanClosed = NO;
     for (NSNumber *style in sortedEndedStyles) {
       if ([style isEqualToNumber:@([ImageStyle getType])]) {
-        continue;
-      }
-      if ([self isTextStyleType:style]) {
-        // all inline text styles share a single span tag
-        if (!finalTextStyleSpanClosed) {
-          [result appendString:@"</span>"];
-          finalTextStyleSpanClosed = YES;
-        }
         continue;
       }
       NSString *tagContent =
@@ -1754,7 +1458,6 @@
       inCheckboxList = NO;
       [result appendString:@"\n</ul>"];
     }
-    // the empty last line of the document has no character of its own
     if (NSMaxRange(range) == host.textView.textStorage.string.length) {
       [result appendString:[self trailingParagraphHtmlForHost:host]];
     }
@@ -1789,12 +1492,15 @@
       [host.textView.textStorage attribute:NSParagraphStyleAttributeName
                                    atIndex:location
                             effectiveRange:nil];
-  NSString *paragraphCss = [self cssStyleStringForParagraphStyle:pStyle];
-  NSString *textCss = [self textStyleCssAt:location host:host];
-  return [self emptyParagraphHtmlWithParagraphCss:paragraphCss textCss:textCss];
+  CustomStyle *customStyle =
+      (CustomStyle *)host.stylesDict[@([CustomStyle getType])];
+  NSString *textCss = [self
+      customStyleCssForData:[customStyle getStoredCustomStyleDataAt:location]];
+  return [self emptyParagraphHtmlWithParagraphCss:
+                   [self cssStyleStringForParagraphStyle:pStyle]
+                                          textCss:textCss];
 }
 
-// The empty last paragraph has no character, its styles are stored aside.
 + (NSString *)trailingParagraphHtmlForHost:(id<EnrichedViewHost>)host {
   NSDictionary *attributes = nil;
   if ([host respondsToSelector:@selector(attributesManager)]) {
@@ -1804,13 +1510,12 @@
     return @"\n<br>";
   }
 
+  CustomStyle *customStyle =
+      (CustomStyle *)host.stylesDict[@([CustomStyle getType])];
   NSString *paragraphCss = [self cssStyleStringForParagraphStyle:
                                      attributes[NSParagraphStyleAttributeName]];
-  NSString *textCss = [self
-      textStyleCssWithValues:^NSString *(TextStyleBase *style) {
-        return attributes[[style getKey]];
-      }
-                        host:host];
+  NSString *textCss =
+      [self customStyleCssForData:attributes[[customStyle getKey]]];
   return [self emptyParagraphHtmlWithParagraphCss:paragraphCss textCss:textCss];
 }
 
@@ -1825,6 +1530,63 @@
   return
       [NSString stringWithFormat:@"\n<p%@><span style=\"%@\"><br></span></p>",
                                  paragraphCss, textCss];
+}
+
++ (NSString *)customStyleCssForData:(CustomStyleData *)data {
+  if (![data isKindOfClass:[CustomStyleData class]] || data.isEmpty) {
+    return @"";
+  }
+
+  NSMutableString *cssProps = [NSMutableString string];
+  NSString *fg = [[data foregroundColor] hexString];
+  NSString *bg = [[data backgroundColor] hexString];
+  if (fg.length > 0) {
+    [cssProps appendFormat:@"color: %@;", fg];
+  }
+  if (bg.length > 0) {
+    if (cssProps.length > 0)
+      [cssProps appendString:@" "];
+    [cssProps appendFormat:@"background-color: %@;", bg];
+  }
+  if (data.fontSize != nil) {
+    if (cssProps.length > 0)
+      [cssProps appendString:@" "];
+    [cssProps appendFormat:@"font-size: %gpx;", [data.fontSize doubleValue]];
+  }
+  if (data.fontFamily.length > 0) {
+    if (cssProps.length > 0)
+      [cssProps appendString:@" "];
+    if ([data.fontFamily rangeOfString:@" "].location != NSNotFound ||
+        [data.fontFamily rangeOfString:@","].location != NSNotFound) {
+      [cssProps appendFormat:@"font-family: '%@';", data.fontFamily];
+    } else {
+      [cssProps appendFormat:@"font-family: %@;", data.fontFamily];
+    }
+  }
+  if (data.letterSpacing != nil) {
+    if (cssProps.length > 0)
+      [cssProps appendString:@" "];
+    [cssProps appendFormat:@"letter-spacing: %gpx;",
+                           [data.letterSpacing doubleValue]];
+  }
+  if (data.lineHeight != nil) {
+    if (cssProps.length > 0)
+      [cssProps appendString:@" "];
+    [cssProps
+        appendFormat:@"line-height: %gpx;", [data.lineHeight doubleValue]];
+  }
+  if (cssProps.length == 0) {
+    return @"";
+  }
+
+  NSString *escapedStyle =
+      [cssProps stringByReplacingOccurrencesOfString:@"&" withString:@"&amp;"];
+  escapedStyle = [escapedStyle stringByReplacingOccurrencesOfString:@"<"
+                                                         withString:@"&lt;"];
+  escapedStyle = [escapedStyle stringByReplacingOccurrencesOfString:@">"
+                                                         withString:@"&gt;"];
+  return [escapedStyle stringByReplacingOccurrencesOfString:@"\""
+                                                 withString:@"&quot;"];
 }
 
 + (NSString *)tagContentForStyle:(NSNumber *)style
@@ -1846,8 +1608,9 @@
         ImageData *data = [imageStyle getImageDataAt:location];
         if (data != nullptr && data.uri != nullptr) {
           return [NSString
-              stringWithFormat:@"img src=\"%@\" width=\"%f\" height=\"%f\"",
-                               data.uri, data.width, data.height];
+              stringWithFormat:@"img src=\"%@\" width=\"%d\" height=\"%d\"",
+                               data.uri, (int)floor(data.width),
+                               (int)floor(data.height)];
         }
       }
       return @"img";
@@ -1944,6 +1707,20 @@
              [style isEqualToNumber:@([CodeBlockStyle getType])]) {
     // blockquotes and codeblock use <p> tags the same way lists use <li>
     return [NSString stringWithFormat:@"p%@", cssStyleString];
+  } else if ([style isEqualToNumber:@([CustomStyle getType])]) {
+    if (openingTag) {
+      CustomStyle *customStyle =
+          (CustomStyle *)host.stylesDict[@([CustomStyle getType])];
+      NSString *css =
+          [self customStyleCssForData:[customStyle
+                                          getStoredCustomStyleDataAt:location]];
+      if (css.length > 0) {
+        return [NSString stringWithFormat:@"span style=\"%@\"", css];
+      }
+      return @"span";
+    } else {
+      return @"span";
+    }
   }
   return @"";
 }
@@ -1996,16 +1773,271 @@
   return @"";
 }
 
-// Removes the (empty) span entries of the empty last paragraph and returns
-// its styles: "textStyles" (StyleType -> value), "alignment", "marginTop" and
-// "marginBottom".
++ (NSString *)parseCssDimension:(NSString *)value {
+  NSScanner *scanner = [NSScanner scannerWithString:value];
+  double number = 0;
+  if (![scanner scanDouble:&number]) {
+    return nullptr;
+  }
+  return [NSString stringWithFormat:@"%g", number];
+}
+
++ (NSDictionary<NSString *, NSNumber *> *)paragraphMarginsFromStyleParams:
+    (NSString *)params {
+  NSMutableDictionary<NSString *, NSNumber *> *result =
+      [[NSMutableDictionary alloc] init];
+
+  NSRegularExpression *styleRegex =
+      [NSRegularExpression regularExpressionWithPattern:@"style=([\"'])(.*?)\\1"
+                                                options:0
+                                                  error:nullptr];
+  NSTextCheckingResult *match =
+      [styleRegex firstMatchInString:params
+                             options:0
+                               range:NSMakeRange(0, params.length)];
+  if (match == nullptr || match.numberOfRanges < 3) {
+    return result;
+  }
+
+  NSString *cssContent = [params substringWithRange:[match rangeAtIndex:2]];
+  for (NSString *declaration in [cssContent componentsSeparatedByString:@";"]) {
+    NSRange colonRange = [declaration rangeOfString:@":"];
+    if (colonRange.location == NSNotFound) {
+      continue;
+    }
+
+    NSString *property =
+        [[declaration substringToIndex:colonRange.location]
+            stringByTrimmingCharactersInSet:[NSCharacterSet
+                                                whitespaceCharacterSet]]
+            .lowercaseString;
+    NSString *value = [[declaration substringFromIndex:colonRange.location + 1]
+        stringByTrimmingCharactersInSet:[NSCharacterSet
+                                            whitespaceCharacterSet]];
+    if (value.length == 0) {
+      continue;
+    }
+
+    if ([property isEqualToString:@"margin-top"]) {
+      NSString *marginTop = [self parseCssDimension:value];
+      if (marginTop != nullptr) {
+        result[@"top"] = @([marginTop floatValue]);
+      }
+    } else if ([property isEqualToString:@"margin-bottom"]) {
+      NSString *marginBottom = [self parseCssDimension:value];
+      if (marginBottom != nullptr) {
+        result[@"bottom"] = @([marginBottom floatValue]);
+      }
+    } else if ([property isEqualToString:@"margin"]) {
+      NSArray<NSString *> *parts = [value
+          componentsSeparatedByCharactersInSet:[NSCharacterSet
+                                                   whitespaceCharacterSet]];
+      NSMutableArray<NSString *> *values = [[NSMutableArray alloc] init];
+
+      for (NSString *part in parts) {
+        if (part.length > 0) {
+          [values addObject:part];
+        }
+      }
+
+      if (values.count == 0) {
+        continue;
+      }
+
+      NSString *marginTop = [self parseCssDimension:values[0]];
+      NSString *marginBottom =
+          [self parseCssDimension:values.count >= 3 ? values[2] : values[0]];
+
+      if (marginTop != nullptr && result[@"top"] == nil) {
+        result[@"top"] = @([marginTop floatValue]);
+      }
+      if (marginBottom != nullptr && result[@"bottom"] == nil) {
+        result[@"bottom"] = @([marginBottom floatValue]);
+      }
+    }
+  }
+
+  return result;
+}
+
++ (NSString *)firstInFontFamilyString:(NSString *)value {
+  unichar quote = 0;
+  for (NSUInteger i = 0; i < value.length; i++) {
+    unichar c = [value characterAtIndex:i];
+    if (quote != 0) {
+      if (c == quote)
+        quote = 0;
+    } else if (c == '\'' || c == '"') {
+      quote = c;
+    } else if (c == ',') {
+      return [value substringToIndex:i];
+    }
+  }
+  return value;
+}
+
++ (CustomStyleData *_Nullable)parseCustomStyleDataFromSpanParams:
+    (NSString *)params {
+  static NSRegularExpression *styleAttrRegex;
+  static NSRegularExpression *fgRegex;
+  static NSRegularExpression *bgRegex;
+  static NSRegularExpression *fontSizeRegex;
+  static NSRegularExpression *fontFamilyRegex;
+  static NSRegularExpression *letterSpacingRegex;
+  static NSRegularExpression *lineHeightRegex;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    styleAttrRegex = [NSRegularExpression
+        regularExpressionWithPattern:
+            @"style\\s*=\\s*[\"']((?<=\")[^\"]*(?=\")|(?<=')[^']*(?='))[\"']"
+                             options:NSRegularExpressionCaseInsensitive
+                               error:nil];
+    // Captures everything after "color:" until a semicolon or end of string
+    fgRegex = [NSRegularExpression
+        regularExpressionWithPattern:@"(?:^|;)\\s*color\\s*:\\s*([^;]+)"
+                             options:NSRegularExpressionCaseInsensitive
+                               error:nil];
+
+    // Captures everything after "background-color:" until a semicolon or end of
+    // string
+    bgRegex = [NSRegularExpression
+        regularExpressionWithPattern:@"background-color\\s*:\\s*([^;]+)"
+                             options:NSRegularExpressionCaseInsensitive
+                               error:nil];
+
+    fontSizeRegex = [NSRegularExpression
+        regularExpressionWithPattern:
+            @"font-size\\s*:\\s*([0-9.]+)(?:\\s*px)?(?=\\s*;|\\s*$)"
+                             options:NSRegularExpressionCaseInsensitive
+                               error:nil];
+
+    fontFamilyRegex = [NSRegularExpression
+        regularExpressionWithPattern:@"font-family\\s*:\\s*([^;]+)"
+                             options:NSRegularExpressionCaseInsensitive
+                               error:nil];
+
+    letterSpacingRegex = [NSRegularExpression
+        regularExpressionWithPattern:
+            @"letter-spacing\\s*:\\s*(-?[0-9.]+)(?:\\s*px)?(?=\\s*;|\\s*$)"
+                             options:NSRegularExpressionCaseInsensitive
+                               error:nil];
+
+    lineHeightRegex = [NSRegularExpression
+        regularExpressionWithPattern:
+            @"line-height\\s*:\\s*([0-9.]+)(?:\\s*px)?(?=\\s*;|\\s*$)"
+                             options:NSRegularExpressionCaseInsensitive
+                               error:nil];
+  });
+
+  NSTextCheckingResult *attrMatch =
+      [styleAttrRegex firstMatchInString:params
+                                 options:0
+                                   range:NSMakeRange(0, params.length)];
+  if (!attrMatch)
+    return nil;
+
+  NSString *css = [params substringWithRange:[attrMatch rangeAtIndex:1]];
+  // decode entities escaped by the serializers
+  for (NSArray<NSString *> *entity in @[
+         @[ @"&quot;", @"\"" ], @[ @"&#39;", @"'" ], @[ @"&lt;", @"<" ],
+         @[ @"&gt;", @">" ], @[ @"&amp;", @"&" ]
+       ]) {
+    css = [css stringByReplacingOccurrencesOfString:entity[0]
+                                         withString:entity[1]];
+  }
+  CustomStyleData *data = [[CustomStyleData alloc] init];
+
+  NSTextCheckingResult *fgMatch =
+      [fgRegex firstMatchInString:css
+                          options:0
+                            range:NSMakeRange(0, css.length)];
+  if (fgMatch) {
+    data.foregroundColor = [UIColor
+        colorFromCSSString:[css substringWithRange:[fgMatch rangeAtIndex:1]]];
+  }
+
+  NSTextCheckingResult *bgMatch =
+      [bgRegex firstMatchInString:css
+                          options:0
+                            range:NSMakeRange(0, css.length)];
+  if (bgMatch) {
+    data.backgroundColor = [UIColor
+        colorFromCSSString:[css substringWithRange:[bgMatch rangeAtIndex:1]]];
+  }
+
+  NSTextCheckingResult *fontSizeMatch =
+      [fontSizeRegex firstMatchInString:css
+                                options:0
+                                  range:NSMakeRange(0, css.length)];
+  if (fontSizeMatch) {
+    NSString *fontSizeString =
+        [css substringWithRange:[fontSizeMatch rangeAtIndex:1]];
+    double parsedFontSize = [fontSizeString doubleValue];
+    if (parsedFontSize > 0) {
+      data.fontSize = @(parsedFontSize);
+    }
+  }
+
+  NSTextCheckingResult *letterSpacingMatch =
+      [letterSpacingRegex firstMatchInString:css
+                                     options:0
+                                       range:NSMakeRange(0, css.length)];
+  if (letterSpacingMatch) {
+    double parsedLetterSpacing = [[css
+        substringWithRange:[letterSpacingMatch rangeAtIndex:1]] doubleValue];
+    if (parsedLetterSpacing != 0) {
+      data.letterSpacing = @(parsedLetterSpacing);
+    }
+  }
+
+  NSTextCheckingResult *lineHeightMatch =
+      [lineHeightRegex firstMatchInString:css
+                                  options:0
+                                    range:NSMakeRange(0, css.length)];
+  if (lineHeightMatch) {
+    double parsedLineHeight =
+        [[css substringWithRange:[lineHeightMatch rangeAtIndex:1]] doubleValue];
+    if (parsedLineHeight > 0) {
+      data.lineHeight = @(parsedLineHeight);
+    }
+  }
+
+  NSTextCheckingResult *fontFamilyMatch =
+      [fontFamilyRegex firstMatchInString:css
+                                  options:0
+                                    range:NSMakeRange(0, css.length)];
+  if (fontFamilyMatch) {
+    NSString *fontFamilyString = [[css
+        substringWithRange:[fontFamilyMatch rangeAtIndex:1]]
+        stringByTrimmingCharactersInSet:[NSCharacterSet
+                                            whitespaceAndNewlineCharacterSet]];
+
+    // If font family contains a comma, use the first part e.g. "Nunito,
+    // sans-serif" -> "Nunito"
+    fontFamilyString = [[self firstInFontFamilyString:fontFamilyString]
+        stringByTrimmingCharactersInSet:[NSCharacterSet
+                                            whitespaceAndNewlineCharacterSet]];
+    if (fontFamilyString.length >= 2 &&
+        (([fontFamilyString hasPrefix:@"'"] &&
+          [fontFamilyString hasSuffix:@"'"]) ||
+         ([fontFamilyString hasPrefix:@"\""] &&
+          [fontFamilyString hasSuffix:@"\""]))) {
+      fontFamilyString = [fontFamilyString
+          substringWithRange:NSMakeRange(1, fontFamilyString.length - 2)];
+    }
+    if (fontFamilyString.length > 0) {
+      data.fontFamily = fontFamilyString;
+    }
+  }
+
+  return data.isEmpty ? nil : data;
+}
+
 + (NSDictionary *)takeTrailingParagraphFrom:(NSMutableArray *)processedTags
                                   fromIndex:(NSUInteger)fromIndex
                                    location:(NSInteger)location
                                     tagData:(NSArray *)tagData {
   NSMutableDictionary *paragraph = [[NSMutableDictionary alloc] init];
-  NSMutableDictionary<NSNumber *, NSString *> *textStyles =
-      [[NSMutableDictionary alloc] init];
   NSMutableIndexSet *spanIndexes = [[NSMutableIndexSet alloc] init];
 
   for (NSUInteger index = fromIndex; index < processedTags.count; index++) {
@@ -2015,14 +2047,14 @@
         (NSInteger)range.location != location) {
       continue;
     }
-    [textStyles
-        addEntriesFromDictionary:[self textStylesFromSpanParams:entry.count > 2
-                                                                    ? entry[2]
-                                                                    : @""]];
+    CustomStyleData *data = [self
+        parseCustomStyleDataFromSpanParams:entry.count > 2 ? entry[2] : @""];
+    if (data != nil) {
+      paragraph[@"customStyle"] = data;
+    }
     [spanIndexes addIndex:index];
   }
   [processedTags removeObjectsAtIndexes:spanIndexes];
-  paragraph[@"textStyles"] = textStyles;
 
   NSString *params = tagData.count > 2 ? tagData[2] : nil;
   if (params != nil) {

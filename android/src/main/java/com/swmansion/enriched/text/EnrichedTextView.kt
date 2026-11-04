@@ -23,6 +23,7 @@ import com.facebook.react.views.text.ReactTypefaceUtils.applyStyles
 import com.facebook.react.views.text.ReactTypefaceUtils.parseFontStyle
 import com.facebook.react.views.text.ReactTypefaceUtils.parseFontWeight
 import com.swmansion.enriched.common.EnrichedConstants
+import com.swmansion.enriched.common.EnrichedSpanFlags
 import com.swmansion.enriched.common.GumboNormalizer
 import com.swmansion.enriched.common.SpaceKerning
 import com.swmansion.enriched.common.SpaceKerningTable
@@ -30,10 +31,10 @@ import com.swmansion.enriched.common.TrailingLetterSpacing
 import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
-import com.swmansion.enriched.text.spans.EnrichedTextDefaultLineHeightSpan
 import com.swmansion.enriched.text.spans.EnrichedTextImageSpan
 import com.swmansion.enriched.text.spans.interfaces.EnrichedTextClickableSpan
 import com.swmansion.enriched.text.spans.interfaces.EnrichedTextSpan
+import com.swmansion.enriched.textinput.spans.EnrichedLineHeightSpan
 import kotlin.math.ceil
 
 class EnrichedTextView : AppCompatTextView {
@@ -43,9 +44,9 @@ class EnrichedTextView : AppCompatTextView {
   private var fontFamily: String? = null
   private var fontStyle: Int = ReactConstants.UNSET
   private var fontWeight: Int = ReactConstants.UNSET
-  private var lineHeight: Float? = null
   private var fontSize: Float = EnrichedConstants.TEXT_DEFAULT_FONT_SIZE
   private var fontSizeRaw: Float? = null
+  private var lineHeight: Float? = null
   private var htmlStyleMap: ReadableMap? = null
   private var spaceKerningJson: String? = null
   private var spaceKerning: SpaceKerningTable? = null
@@ -53,13 +54,18 @@ class EnrichedTextView : AppCompatTextView {
     set(value) {
       if (field == value) return
       field = value
+      // Invalidate the spannable factory so that it is recreated with the new allowFontScaling value
+      cachedSpannableFactory = null
       fontSizeRaw?.let { setFontSize(it) }
       htmlStyleMap?.let { setHtmlStyle(it) }
-      if (lineHeight != null) valueDirty = true
+      applyLineSpacing()
     }
 
   private var enrichedStyle: EnrichedTextStyle? = null
-  private val spannableFactory = EnrichedTextSpanFactory()
+
+  private var cachedSpannableFactory: EnrichedTextSpanFactory? = null
+  private val spannableFactory: EnrichedTextSpanFactory
+    get() = cachedSpannableFactory ?: EnrichedTextSpanFactory(context.assets, allowFontScaling).also { cachedSpannableFactory = it }
 
   // We keep the parsedText around so that when an async image finishes loading we can re-call
   // setText with the same instance and force the TextView to rebuild its layout.
@@ -201,36 +207,20 @@ class EnrichedTextView : AppCompatTextView {
 
     val parsed = parseText(text, style)
     if (parsed != null) {
-      parsedText = applySpaceKerning(applyDefaultLineHeight(parsed))
+      parsedText = applySpaceKerning(parsed)
       setText(parsedText, BufferType.NORMAL)
       observeAsyncImages()
     } else {
-      parsedText = applySpaceKerning(applyDefaultLineHeight(text))
-      setText(parsedText, BufferType.NORMAL)
+      parsedText = null
+      this.text = applySpaceKerning(text)
     }
+    applyLineSpacing()
   }
 
   private fun applySpaceKerning(text: CharSequence): CharSequence {
     val table = spaceKerning ?: return text
     val spannable = text as? Spannable ?: SpannableString(text)
     SpaceKerning.update(spannable, table, fontFamily, paint)
-    return spannable
-  }
-
-  private fun applyDefaultLineHeight(text: CharSequence): CharSequence {
-    val lineHeight = lineHeight ?: return text
-    if (text.isEmpty()) return text
-
-    val spannable = if (text is Spannable) text else SpannableString(text)
-    spannable
-      .getSpans(0, spannable.length, EnrichedTextDefaultLineHeightSpan::class.java)
-      .forEach { spannable.removeSpan(it) }
-    spannable.setSpan(
-      EnrichedTextDefaultLineHeightSpan(lineHeight, allowFontScaling),
-      0,
-      spannable.length,
-      Spannable.SPAN_INCLUSIVE_INCLUSIVE,
-    )
     return spannable
   }
 
@@ -325,7 +315,7 @@ class EnrichedTextView : AppCompatTextView {
 
       spannable.removeSpan(span)
       val newSpan = span.rebuildWithStyle(enrichedStyle)
-      spannable.setSpan(newSpan, start, end, flags)
+      spannable.setSpan(newSpan, start, end, EnrichedSpanFlags.forSpan(newSpan, flags))
       modified = true
     }
 
@@ -354,11 +344,30 @@ class EnrichedTextView : AppCompatTextView {
   }
 
   fun setLineHeight(height: Float) {
-    val newLineHeight = height.takeIf { it != 0f }
-    if (lineHeight == newLineHeight) return
+    lineHeight = if (height <= 0f) null else height
+    applyLineSpacing()
+  }
 
-    lineHeight = newLineHeight
-    valueDirty = true
+  private fun applyLineSpacing() {
+    val currentText = text ?: return
+    val spannable =
+      currentText as? Spannable ?: SpannableString(currentText)
+    spannable
+      .getSpans(0, spannable.length, EnrichedLineHeightSpan::class.java)
+      .forEach { spannable.removeSpan(it) }
+
+    lineHeight?.let {
+      spannable.setSpan(
+        EnrichedLineHeightSpan(it, allowFontScaling),
+        0,
+        spannable.length,
+        Spannable.SPAN_INCLUSIVE_INCLUSIVE,
+      )
+    }
+
+    if (spannable !== currentText) {
+      setText(spannable, BufferType.NORMAL)
+    }
   }
 
   fun setFontFamily(family: String?) {

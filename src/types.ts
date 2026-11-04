@@ -2,7 +2,10 @@ import type { RefObject } from 'react';
 import type {
   ColorValue,
   DimensionValue,
-  NativeMethods,
+  HostInstance,
+  MeasureInWindowOnSuccessCallback,
+  MeasureLayoutOnSuccessCallback,
+  MeasureOnSuccessCallback,
   NativeSyntheticEvent,
   ReturnKeyTypeOptions,
   TargetedEvent,
@@ -34,7 +37,7 @@ export interface EnrichedInputStyle {
   display?: TextStyle['display'];
   end?: DimensionValue;
   flex?: number;
-  flexBasis?: DimensionValue;
+  flexBasis?: string | number;
   flexGrow?: number;
   flexShrink?: number;
   height?: DimensionValue;
@@ -219,6 +222,8 @@ export interface HtmlStyle {
   a?: {
     color?: ColorValue;
     textDecorationLine?: 'underline' | 'none';
+    /** @platform web */
+    pressColor?: ColorValue;
   };
   mention?: Record<string, MentionStyleProperties> | MentionStyleProperties;
   ol?: {
@@ -239,6 +244,42 @@ export interface HtmlStyle {
     marginLeft?: number;
     boxColor?: ColorValue;
   };
+}
+
+export type TextShortcutStyle =
+  | 'bold'
+  | 'italic'
+  | 'underline'
+  | 'strikethrough'
+  | 'inline_code'
+  | 'h1'
+  | 'h2'
+  | 'h3'
+  | 'h4'
+  | 'h5'
+  | 'h6'
+  | 'blockquote'
+  | 'codeblock'
+  | 'unordered_list'
+  | 'ordered_list'
+  | 'checkbox_list'
+  | 'left'
+  | 'center'
+  | 'right'
+  | 'justify';
+
+/**
+ * Defines a single text shortcut: a character sequence that, when typed is replaced by the corresponding paragraph or inline style.
+ *
+ * @example
+ * // Typing "- " at the start of a line converts it to an unordered list item.
+ * { trigger: '- ', style: 'unordered_list' }
+ */
+export interface TextShortcut {
+  /** The character sequence that activates the shortcut (e.g. `'- '`, `'1. '`). */
+  trigger: string;
+  /** The formatting style applied when the trigger is matched. */
+  style: TextShortcutStyle;
 }
 
 // Event types
@@ -359,41 +400,15 @@ export interface OnChangeStateEvent {
     isConflicting: boolean;
     isBlocking: boolean;
   };
-  fontFamily: {
-    isActive: boolean;
-    isConflicting: boolean;
-    isBlocking: boolean;
-  };
-  fontSize: {
-    isActive: boolean;
-    isConflicting: boolean;
-    isBlocking: boolean;
-  };
-  letterSpacing: {
-    isActive: boolean;
-    isConflicting: boolean;
-    isBlocking: boolean;
-  };
-  lineHeight: {
-    isActive: boolean;
-    isConflicting: boolean;
-    isBlocking: boolean;
-  };
-  foregroundColor: {
-    isActive: boolean;
-    isConflicting: boolean;
-    isBlocking: boolean;
-  };
   alignment: string;
-  /**
-   * Values of the inline text styles at the current selection.
-   * An empty string / 0 means no custom value is applied.
-   */
-  fontFamilyValue: string;
-  fontSizeValue: number;
-  letterSpacingValue: number;
-  lineHeightValue: number;
-  foregroundColorValue: string;
+  customStyle: {
+    foregroundColor: string;
+    backgroundColor: string;
+    fontSize: number;
+    fontFamily: string;
+    letterSpacing: number;
+    lineHeight: number;
+  };
 }
 
 export interface TextStyleMutationOptions {
@@ -441,82 +456,175 @@ export interface OnSubmitEditing {
 export type FocusEvent = NativeSyntheticEvent<TargetedEvent>;
 export type BlurEvent = NativeSyntheticEvent<TargetedEvent>;
 
-export interface EnrichedTextInputInstance extends NativeMethods {
-  // General commands
+/**
+ * Imperative handle exposed via `ref` on `<EnrichedTextInput />`.
+ *
+ * Obtain a reference with `useRef<EnrichedTextInputInstance>(null)` and pass it
+ * to the component's `ref` prop. All methods are safe to call after the
+ * component has mounted.
+ */
+export interface EnrichedTextInputInstance {
+  measureInWindow: (callback: MeasureInWindowOnSuccessCallback) => void;
+  measure: (callback: MeasureOnSuccessCallback) => void;
+  measureLayout: (
+    relativeToNativeComponentRef: HostInstance | number,
+    onSuccess: MeasureLayoutOnSuccessCallback,
+    onFail?: () => void
+  ) => void;
+  setNativeProps: (nativeProps: object) => void;
+
+  /** Focuses the editor, opening the software keyboard on mobile. */
   focus: () => void;
+
+  /** Removes focus from the editor and dismisses the software keyboard. */
   blur: () => void;
+
+  /** Replaces the entire editor content with the supplied HTML/plain-text `value`. */
   setValue: (value: string) => void;
+
+  /** Moves the text cursor (or extends the selection) to the range `[start, end)`. */
   setSelection: (start: number, end: number) => void;
+
+  /**
+   * Returns the current editor content as an HTML string.
+   * The promise resolves once the native layer has completed HTML parsing.
+   */
   getHTML: () => Promise<string>;
 
-  // Text formatting commands
+  /** Toggles bold on the current selection (or toggles it for future typing if nothing is selected). */
   toggleBold: () => void;
+
+  /** Toggles italic on the current selection (or toggles it for future typing if nothing is selected). */
   toggleItalic: () => void;
+
+  /** Toggles underline on the current selection (or toggles it for future typing if nothing is selected). */
   toggleUnderline: () => void;
+
+  /** Toggles strikethrough on the current selection (or toggles it for future typing if nothing is selected). */
   toggleStrikeThrough: () => void;
+
+  /** Toggles inline code on the current selection (or toggles it for future typing if nothing is selected). */
   toggleInlineCode: () => void;
+
+  /** Toggles an H1 heading for the paragraph(s) at the current selection. */
   toggleH1: () => void;
+
+  /** Toggles an H2 heading for the paragraph(s) at the current selection. */
   toggleH2: () => void;
+
+  /** Toggles an H3 heading for the paragraph(s) at the current selection. */
   toggleH3: () => void;
+
+  /** Toggles an H4 heading for the paragraph(s) at the current selection. */
   toggleH4: () => void;
+
+  /** Toggles an H5 heading for the paragraph(s) at the current selection. */
   toggleH5: () => void;
+
+  /** Toggles an H6 heading for the paragraph(s) at the current selection. */
   toggleH6: () => void;
+
+  /** Toggles a code block for the paragraph(s) at the current selection. */
   toggleCodeBlock: () => void;
+
+  /** Toggles a block-quote for the paragraph(s) at the current selection. */
   toggleBlockQuote: () => void;
+
+  /**
+   * Toggles an ordered (numbered) list on the current selection or the
+   * focused paragraph.
+   */
   toggleOrderedList: () => void;
+
+  /**
+   * Toggles an unordered (bullet) list on the current selection or the
+   * focused paragraph.
+   */
   toggleUnorderedList: () => void;
+
+  /**
+   * Toggles a checkbox (task) list on the current selection or the focused
+   * paragraph. Pass `checked` as `true` to pre-check the inserted items.
+   */
   toggleCheckboxList: (checked: boolean) => void;
+
+  /**
+   * Inserts or updates a hyperlink over the character range `[start, end)`.
+   *
+   * @param start - Start offset of the linked text (inclusive).
+   * @param end   - End offset of the linked text (exclusive).
+   * @param text  - Display text for the link.
+   * @param url   - URL the link should navigate to.
+   */
   setLink: (start: number, end: number, text: string, url: string) => void;
+
+  /**
+   * Removes any hyperlink from the `[start, end)` range while
+   * preserving the underlying text.
+   *
+   * @param start - Start offset (inclusive).
+   * @param end   - End offset (exclusive).
+   */
   removeLink: (start: number, end: number) => void;
+
+  /**
+   * Inserts an image at the current cursor position.
+   *
+   * @param src    - URI of the image (remote URL or local asset path).
+   * @param width  - Width of the image.
+   * @param height - Height of the image.
+   */
   setImage: (src: string, width: number, height: number) => void;
+
+  /**
+   * Opens a mention flow by inserting the given `indicator` character (e.g.
+   * `"@"` or `"#"`) at the current cursor position and firing
+   * `onStartMention`.
+   */
   startMention: (indicator: string) => void;
+
+  /**
+   * Finalizes an in-progress mention by replacing the typed text with a
+   * specified mention value.
+   *
+   * @param indicator  - The trigger character (e.g. `"@"`).
+   * @param text       - Display text for the mention (e.g. the user's name).
+   * @param attributes - Optional key/value pairs attached to the mention tag (e.g. `{ id: "42" }`).
+   */
   setMention: (
     indicator: string,
     text: string,
     attributes?: Record<string, string>
   ) => void;
+
+  /**
+   * Sets the horizontal text alignment for the paragraph(s) at the current
+   * selection.
+   *
+   * @param alignment - One of `"left"`, `"center"`, `"right"`, `"justify"`, or `"auto"`.
+   */
   setTextAlignment: (
     alignment: 'left' | 'center' | 'right' | 'justify' | 'auto'
   ) => void;
+
   /**
-   * Applies the given font family to the current selection
-   * (or to the text typed next when the selection is empty).
-   * Passing `null` (or an empty string) restores the default font family.
+   * Sets the custom style (text and background colors, font size, font family) for
+   * the current text selection.
+   *
+   * @param customStyle - An object specifying the styles to apply.
+   * Provide `foregroundColor` to change the text color, `backgroundColor` to change
+   * the text highlight color, `fontSize` to change the font size, and `fontFamily`
+   * to change the font family. Passing `null` for a property will remove that specific style.
    */
-  setFontFamily: (
-    fontFamily: string | null,
-    options?: TextStyleMutationOptions
-  ) => void;
-  /**
-   * Applies the given font size to the current selection
-   * (or to the text typed next when the selection is empty).
-   * Passing `null` (or `0`) restores the default font size.
-   */
-  setFontSize: (
-    fontSize: number | null,
-    options?: TextStyleMutationOptions
-  ) => void;
-  /**
-   * Applies the given letter spacing to the current selection
-   * (or to the text typed next when the selection is empty).
-   * Passing `null` (or `0`) restores the default letter spacing.
-   */
-  setLetterSpacing: (
-    letterSpacing: number | null,
-    options?: TextStyleMutationOptions
-  ) => void;
-  /**
-   * Applies the given line height to the current selection
-   * (or to the text typed next when the selection is empty).
-   * Affects the lines that the selected text spans.
-   * Passing `null` (or `0`) restores the default line height.
-   */
-  setLineHeight: (
-    lineHeight: number | null,
-    options?: TextStyleMutationOptions
-  ) => void;
-  setForegroundColor: (
-    foregroundColor: string | null,
+  setStyle: (
+    customStyle: {
+      foregroundColor?: ColorValue | null;
+      backgroundColor?: ColorValue | null;
+      fontSize?: number | null;
+      fontFamily?: string | null;
+      letterSpacing?: number | null;
+      lineHeight?: number | null;
+    },
     options?: TextStyleMutationOptions
   ) => void;
 }
@@ -540,49 +648,215 @@ export interface OnChangeMentionEvent {
   text: string;
 }
 
+/**
+ * Web-only configuration for the HTML sanitization step.
+ *
+ * @platform web
+ */
+export interface SanitizationConfig {
+  /**
+   * Regular expression used to decide which link URIs survive sanitization.
+   * Maps directly to DOMPurify's `ALLOWED_URI_REGEXP`, so it fully replaces
+   * the default allow-list rather than extending it — include the standard
+   * protocols you still want to permit in addition to any custom ones.
+   *
+   * When omitted, DOMPurify's built-in default is used.
+   *
+   * @platform web
+   */
+  linkRegex?: RegExp;
+}
+
 export type SpaceKerning = Record<
   string,
   { before: Record<string, number>; after: Record<string, number> }
 >;
 
+/**
+ * Props for the `<EnrichedTextInput />` rich-text editor component.
+ */
 export interface EnrichedTextInputProps extends Omit<ViewProps, 'children'> {
+  /**
+   * Ref to the imperative handle that exposes editor commands.
+   * Create with `useRef<EnrichedTextInputInstance>(null)`.
+   */
   ref?: RefObject<EnrichedTextInputInstance | null>;
+
+  /** If `true`, the editor is focused automatically when it mounts. */
   autoFocus?: boolean;
+
+  /**
+   * If `false`, the editor becomes read-only and the keyboard will not appear.
+   * Defaults to `true`.
+   */
   editable?: boolean;
+
+  /**
+   * List of single-character strings that trigger the mention flow (e.g.
+   * `["@", "#"]`). When the user types one of these characters the
+   * `onStartMention` callback is fired.
+   */
   mentionIndicators?: string[];
+
+  /**
+   * Initial content rendered when the component mounts.
+   * Use `ref.setValue()` to update the content imperatively.
+   */
   defaultValue?: string;
+
+  /** Placeholder text shown when the editor is empty. */
   placeholder?: string;
+
+  /** Color of the placeholder text. */
   placeholderTextColor?: ColorValue;
+
+  /** Color of the cursor. */
   cursorColor?: ColorValue;
+
+  /** Highlight color for selected text. */
   selectionColor?: ColorValue;
+
+  /** Controls automatic capitalization of typed text. Defaults to `"sentences"`. */
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+
+  /** If false, disables auto-correct. Defaults `true`. */
+  autoCorrect?: boolean;
+
+  /** If false, disables spell-check style (i.e. red underlines). The default value is inherited from the `autoCorrect` prop.
+   *
+   * @platform ios
+   */
+  spellCheck?: boolean;
+
+  /** Style overrides applied to the rendered HTML content inside the editor. */
   htmlStyle?: HtmlStyle;
+
+  /** Style applied to the outer container view of the editor. */
   style?: EnrichedInputStyle;
+
+  /**
+   * If `false`, the editor's internal scroll view is disabled and the component
+   * expands to fit all content. Defaults to `true`.
+   */
   scrollEnabled?: boolean;
+
   verticalAlign?: 'top' | 'center' | 'bottom';
+
+  /**
+   * Regular expression used to auto-detect links as the user types. Set to
+   * `null` to disable automatic link detection. Defaults to a built-in URL
+   * pattern.
+   */
   linkRegex?: RegExp | null;
+
+  /** The label shown on the return key of the software keyboard. */
   returnKeyType?: ReturnKeyTypeOptions;
+
+  /** Custom text label for the return key (Android only). */
   returnKeyLabel?: string;
+
+  /**
+   * Controls what happens when the user presses the return key.
+   * - `"submit"` — fires `onSubmitEditing` without inserting a newline.
+   * - `"blurAndSubmit"` — blurs the editor and fires `onSubmitEditing`.
+   * - `"newline"` — inserts a newline (default).
+   */
   submitBehavior?: 'submit' | 'blurAndSubmit' | 'newline';
+
+  /** Called when the editor receives focus. */
   onFocus?: (e: FocusEvent) => void;
+
+  /** Called when the editor loses focus. */
   onBlur?: (e: BlurEvent) => void;
+
+  /** Called whenever the plain-text content of the editor changes. */
   onChangeText?: (e: NativeSyntheticEvent<OnChangeTextEvent>) => void;
+
+  /**
+   * Called whenever the HTML representation of the editor content changes.
+   *
+   * Note: parsing HTML on every keystroke is expensive and may cause
+   * performance issues. Consider calling `ref.getHTML()` on demand (e.g. on
+   * submit) instead.
+   */
   onChangeHtml?: (e: NativeSyntheticEvent<OnChangeHtmlEvent>) => void;
+
+  /**
+   * Called whenever the active formatting state changes (e.g. the cursor
+   * moves into a bold region). Use this to update toolbar toggle states.
+   */
   onChangeState?: (e: NativeSyntheticEvent<OnChangeStateEvent>) => void;
+
   onChangeContentSize?: (
     e: NativeSyntheticEvent<OnChangeContentSizeEvent>
   ) => void;
+
   onChangeCaretRect?: (e: NativeSyntheticEvent<OnChangeCaretRectEvent>) => void;
+
+  /** Called when the editor auto-detects a URL matching `linkRegex`. */
   onLinkDetected?: (e: OnLinkDetected) => void;
+
+  /**
+   * Web only. Called when the user clicks a link inside the editor. If not
+   * provided, clicking a link has no effect (the default, cross-platform
+   * behavior).
+   *
+   * @platform web
+   */
+  onLinkPress?: (event: OnLinkPressEvent) => void;
+
+  /** Called when the editor resolves a mention node. */
   onMentionDetected?: (e: OnMentionDetected) => void;
+
+  /**
+   * Called when a mention trigger character is typed. Use this to show a
+   * mention picker UI. `indicator` is the trigger character (e.g. `"@"`).
+   */
   onStartMention?: (indicator: string) => void;
+
+  /**
+   * Called as the user continues typing after the mention trigger. Use the
+   * `text` field to filter the mention picker list.
+   */
   onChangeMention?: (e: OnChangeMentionEvent) => void;
+
+  /**
+   * Called when the mention flow ends (e.g. the user presses Escape or the
+   * cursor leaves the mention token). `indicator` is the trigger character.
+   */
   onEndMention?: (indicator: string) => void;
+
+  /** Called when the text selection range changes. */
   onChangeSelection?: (e: NativeSyntheticEvent<OnChangeSelectionEvent>) => void;
+
+  /** Called when a key is pressed while the editor is focused. */
   onKeyPress?: (e: NativeSyntheticEvent<OnKeyPressEvent>) => void;
+
+  /** Called when the user presses the return key and `submitBehavior` triggers a submit. */
   onSubmitEditing?: (e: NativeSyntheticEvent<OnSubmitEditing>) => void;
+
+  /** Called when the user pastes one or more images into the editor.
+   * Web: each `images[].uri` is a `blob:` URL from `URL.createObjectURL`. If you keep
+   * URIs around (or replace them after upload), call `URL.revokeObjectURL(uri)` when done
+   * to avoid retaining blob memory. Native uses non-blob URIs; revoke does not apply.
+   */
   onPasteImages?: (e: NativeSyntheticEvent<OnPasteImagesEvent>) => void;
+
+  /**
+   * Additional items to inject into the native text-selection context menu
+   * (the popover that appears when the user long-presses selected text).
+   */
   contextMenuItems?: ContextMenuItem[];
+
+  /**
+   * List of text shortcuts that automatically apply a formatting style when
+   * the user types the trigger sequence.
+   *
+   * Defaults to `[{ trigger: '- ', style: 'unordered_list' }, { trigger: '1. ', style: 'ordered_list' }]`.
+   * Pass an empty array to disable all shortcuts.
+   */
+  textShortcuts?: TextShortcut[];
+
   /**
    * If true, Android will use experimental synchronous events.
    * This will prevent from input flickering when updating component size.
@@ -591,68 +865,137 @@ export interface EnrichedTextInputProps extends Omit<ViewProps, 'children'> {
    * Disabled by default.
    */
   androidExperimentalSynchronousEvents?: boolean;
+
   /**
    * If true, external HTML (e.g. from Google Docs, Word, web pages) will be
    * normalized through the HTML normalizer before being applied.
    * This converts arbitrary HTML into the canonical tag subset that the enriched
    * parser understands.
-   * Disabled by default.
+   * Enabled by default.
    */
   useHtmlNormalizer?: boolean;
+
+  /**
+   * Web-only configuration for the HTML sanitization step.
+   *
+   * @platform web
+   */
+  sanitizationConfig?: SanitizationConfig;
+
   /**
    * If true, fonts will scale to respect the system's accessibility text size.
    * Enabled by default.
    */
   allowFontScaling?: boolean;
-  /**
-   * Android only: kerning (in em) between U+0020 and its neighbours, per font
-   * family. Android lays text out word by word, so font kerning pairs that
-   * cross a space are never applied; this table adds them back. `before[c]` is
-   * the kerning for `c` followed by a space, `after[c]` for a space followed by
-   * `c`. Keys are font family names as passed in `fontFamily`. Ignored on iOS
-   * and web, which shape whole runs.
-   */
+
   spaceKerning?: SpaceKerning;
 }
 
-export interface EnrichedTextInstance extends NativeMethods {}
+/**
+ * Imperative handle exposed via `ref` on `<EnrichedText />`.
+ *
+ * Exposes native measurement helpers (`measure`, `measureInWindow`,
+ * `measureLayout`, `setNativeProps`, `focus`, `blur`).
+ * Obtain a reference with `useRef<EnrichedTextInstance>(null)`.
+ */
+export interface EnrichedTextInstance {
+  measureInWindow: (callback: MeasureInWindowOnSuccessCallback) => void;
+  measure: (callback: MeasureOnSuccessCallback) => void;
+  measureLayout: (
+    relativeToNativeComponentRef: HostInstance | number,
+    onSuccess: MeasureLayoutOnSuccessCallback,
+    onFail?: () => void
+  ) => void;
+  setNativeProps: (nativeProps: object) => void;
+  focus: () => void;
+  blur: () => void;
+}
 
+/**
+ * Props for the `<EnrichedText />` read-only rich-text rendering component.
+ */
 export interface EnrichedTextProps extends ViewProps {
+  /**
+   * Ref to the imperative handle that exposes native measurement and focus
+   * methods.
+   * Create with `useRef<EnrichedTextInstance>(null)`.
+   */
   ref?: RefObject<EnrichedTextInstance | null>;
+
+  /** HTML/plain-text string to render as rich text. */
   children: string;
+
+  /** Style applied to the container view. */
   style?: TextStyle;
+
+  /** Style overrides applied to the rendered HTML content. */
   htmlStyle?: EnrichedTextHtmlStyle;
+
+  /**
+   * If true, external HTML will be normalized through the HTML normalizer
+   * before being rendered. Enabled by default.
+   */
   useHtmlNormalizer?: boolean;
+
+  /**
+   * Web-only configuration for the HTML sanitization step.
+   *
+   * @platform web
+   */
+  sanitizationConfig?: SanitizationConfig;
+
+  /**
+   * How to truncate text when it overflows `numberOfLines`.
+   * - `"head"` — truncates the beginning.
+   * - `"middle"` — truncates the middle.
+   * - `"tail"` — truncates the end (default).
+   * - `"clip"` — clips at the boundary without an ellipsis.
+   */
   ellipsizeMode?: 'head' | 'middle' | 'tail' | 'clip';
+
+  /**
+   * Maximum number of lines to display. Text that exceeds this limit is
+   * truncated according to `ellipsizeMode`.
+   */
   numberOfLines?: number;
+
+  /** If `true`, the rendered text can be selected and copied by the user. */
   selectable?: boolean;
+
+  /** Highlight color for selected text. */
   selectionColor?: ColorValue;
+
   /**
    * If true, fonts will scale to respect the system's accessibility text size.
    * Enabled by default.
    */
   allowFontScaling?: boolean;
-  /**
-   * Android only: kerning (in em) between U+0020 and its neighbours, per font
-   * family. Android lays text out word by word, so font kerning pairs that
-   * cross a space are never applied; this table adds them back. `before[c]` is
-   * the kerning for `c` followed by a space, `after[c]` for a space followed by
-   * `c`. Keys are font family names as passed in `fontFamily`. Ignored on iOS
-   * and web, which shape whole runs.
-   */
+
   spaceKerning?: SpaceKerning;
+
+  /** Called when the user taps a hyperlink inside the rendered content. */
   onLinkPress?: (event: OnLinkPressEvent) => void;
+
+  /** Called when the user taps a mention node inside the rendered content. */
   onMentionPress?: (event: OnMentionPressEvent) => void;
+
+  /** Called when the user taps an inline image inside the rendered content. */
+  onImagePress?: (event: OnImagePressEvent) => void;
 }
 
-interface EnrichedTextMentionStyleProperties extends MentionStyleProperties {
+export interface EnrichedTextMentionStyleProperties extends MentionStyleProperties {
   pressColor?: ColorValue;
   pressBackgroundColor?: ColorValue;
 }
 
-export interface EnrichedTextHtmlStyle
-  extends Omit<HtmlStyle, 'a' | 'mention'> {
-  a?: HtmlStyle['a'] & {
+export interface EnrichedTextHtmlStyle extends Omit<
+  HtmlStyle,
+  'a' | 'mention'
+> {
+  a?: Omit<NonNullable<HtmlStyle['a']>, 'pressColor'> & {
+    // the documentation comment below is to suppress the base HtmlStyle's
+    // web-only note about pressColor, as in EnrichedText it is cross-platform
+    /***/
     pressColor?: ColorValue;
   };
   mention?:
@@ -668,4 +1011,12 @@ export interface OnMentionPressEvent {
   text: string;
   indicator: string;
   attributes: Record<string, string>;
+}
+
+export interface OnImagePressEvent {
+  image: {
+    uri: string;
+    width: number;
+    height: number;
+  };
 }

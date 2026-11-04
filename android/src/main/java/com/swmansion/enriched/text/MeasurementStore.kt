@@ -19,6 +19,7 @@ import com.facebook.react.views.text.ReactTypefaceUtils.parseFontWeight
 import com.facebook.yoga.YogaMeasureMode
 import com.facebook.yoga.YogaMeasureOutput
 import com.swmansion.enriched.common.EnrichedConstants
+import com.swmansion.enriched.common.GumboNormalizer
 import com.swmansion.enriched.common.SpaceKerning
 import com.swmansion.enriched.common.SpaceKerningTable
 import com.swmansion.enriched.common.TrailingLetterSpacing
@@ -26,15 +27,10 @@ import com.swmansion.enriched.common.allowFontScalingFromProps
 import com.swmansion.enriched.common.dropFinalParagraphTerminator
 import com.swmansion.enriched.common.parser.EnrichedParser
 import com.swmansion.enriched.common.pixelFromSpOrDp
-import com.swmansion.enriched.text.spans.EnrichedTextDefaultLineHeightSpan
+import com.swmansion.enriched.textinput.spans.EnrichedLineHeightSpan
 import kotlin.math.ceil
 
 object MeasurementStore {
-  private fun ReadableMap?.getDoubleOrNull(key: String): Double? {
-    if (this == null || !hasKey(key) || isNull(key)) return null
-    return getDouble(key)
-  }
-
   private fun measure(
     maxWidth: Float,
     spannable: CharSequence?,
@@ -119,26 +115,44 @@ object MeasurementStore {
     props: ReadableMap?,
   ): CharSequence {
     val text = props?.getString("text") ?: ""
+    val isInternalHtml = text.startsWith("<html>") && text.endsWith("</html>")
+    val useHtmlNormalizer = useHtmlNormalizerFromProps(props)
 
-    val isHtml = text.startsWith("<html>") && text.endsWith("</html>")
-    if (!isHtml) return text
+    if (!isInternalHtml && !useHtmlNormalizer) {
+      return text
+    }
 
     try {
+      val textToParse = if (isInternalHtml) text else GumboNormalizer.normalizeHtml(text)
       val style = props?.getMap("htmlStyle") ?: return text
       val allowFontScaling = allowFontScalingFromProps(props)
-      val enrichedStyle =
-        EnrichedTextStyle.fromReadableMap(context as ReactContext, fontSize, style, allowFontScaling)
-      val factory = EnrichedTextSpanFactory()
-      val parsed = EnrichedParser.fromHtml(text, enrichedStyle, factory)
-      return dropFinalParagraphTerminator(parsed)
+      val enrichedStyle = EnrichedTextStyle.fromReadableMap(context as ReactContext, fontSize, style, allowFontScaling)
+
+      val factory = EnrichedTextSpanFactory(context.assets, allowFontScaling)
+      val parsed = EnrichedParser.fromHtml(textToParse, enrichedStyle, factory)
+      return if (isInternalHtml) dropFinalParagraphTerminator(parsed) else parsed.trimEnd('\n')
     } catch (e: Exception) {
       Log.w("MeasurementStore", "Error parsing initial HTML text: ${e.message}")
       return text
     }
   }
 
+  private fun useHtmlNormalizerFromProps(props: ReadableMap?): Boolean {
+    if (props == null || !props.hasKey("useHtmlNormalizer") || props.isNull("useHtmlNormalizer")) {
+      return false
+    }
+    return props.getBoolean("useHtmlNormalizer")
+  }
+
+  private fun lineHeightFromProps(props: ReadableMap?): Float {
+    if (props == null || !props.hasKey("lineHeight") || props.isNull("lineHeight")) {
+      return 0f
+    }
+    return props.getDouble("lineHeight").toFloat()
+  }
+
   private fun getInitialFontSize(props: ReadableMap?): Float {
-    val propsFontSize = props.getDoubleOrNull("fontSize")?.toFloat() ?: EnrichedConstants.TEXT_DEFAULT_FONT_SIZE
+    val propsFontSize = props?.getDouble("fontSize")?.toFloat() ?: EnrichedConstants.TEXT_DEFAULT_FONT_SIZE
     val fontSize =
       when {
         propsFontSize > 0f -> propsFontSize
@@ -154,55 +168,50 @@ object MeasurementStore {
     props: ReadableMap?,
   ): Long {
     val fontSize = getInitialFontSize(props)
+    val rawText = getInitialText(context, fontSize.toInt(), props)
+    val lineHeight = lineHeightFromProps(props)
+    val allowFontScaling = allowFontScalingFromProps(props)
+
+    val measuredText: CharSequence =
+      if (lineHeight > 0f) {
+        val spannable = SpannableString(rawText)
+        spannable.setSpan(
+          EnrichedLineHeightSpan(lineHeight, allowFontScaling),
+          0,
+          spannable.length,
+          Spannable.SPAN_INCLUSIVE_INCLUSIVE,
+        )
+        spannable
+      } else {
+        rawText
+      }
+
     val fontFamily = props?.getString("fontFamily")
-    val numberOfLines = props.getDoubleOrNull("numberOfLines")?.toInt() ?: 0
+    val numberOfLines = props?.getInt("numberOfLines") ?: 0
     val ellipsizeMode = props?.getString("ellipsizeMode")
     val fontStyle = parseFontStyle(props?.getString("fontStyle"))
     val fontWeight = parseFontWeight(props?.getString("fontWeight"))
     val typeface = applyStyles(null, fontStyle, fontWeight, fontFamily, context.assets)
-    val text =
-      applySpaceKerning(
-        applyDefaultLineHeight(
-          getInitialText(context, fontSize.toInt(), props),
-          props,
-        ),
-        props,
-        fontFamily,
-        TextPaint().apply {
-          this.typeface = typeface
-          textSize = fontSize
-        },
-      )
-    val size = measure(width, text, typeface, fontSize, numberOfLines, ellipsizeMode)
+    val kernedText = applySpaceKerning(measuredText, props, fontFamily, typeface, fontSize)
+    val size = measure(width, kernedText, typeface, fontSize, numberOfLines, ellipsizeMode)
 
     return size
-  }
-
-  private fun applyDefaultLineHeight(
-    text: CharSequence,
-    props: ReadableMap?,
-  ): CharSequence {
-    val lineHeight = props.getDoubleOrNull("lineHeight")?.toFloat() ?: 0f
-    if (lineHeight == 0f || text.isEmpty()) return text
-
-    val spannable = if (text is Spannable) text else SpannableString(text)
-    spannable.setSpan(
-      EnrichedTextDefaultLineHeightSpan(lineHeight, allowFontScalingFromProps(props)),
-      0,
-      spannable.length,
-      Spannable.SPAN_INCLUSIVE_INCLUSIVE,
-    )
-    return spannable
   }
 
   private fun applySpaceKerning(
     text: CharSequence,
     props: ReadableMap?,
     fontFamily: String?,
-    paint: TextPaint,
+    typeface: Typeface,
+    fontSize: Float,
   ): CharSequence {
     val table = SpaceKerningTable.fromJson(props?.getString("spaceKerning")) ?: return text
     val spannable = text as? Spannable ?: SpannableString(text)
+    val paint =
+      TextPaint().apply {
+        this.typeface = typeface
+        textSize = fontSize
+      }
     SpaceKerning.update(spannable, table, fontFamily, paint)
     return spannable
   }

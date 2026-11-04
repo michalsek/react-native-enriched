@@ -1,5 +1,5 @@
 import { View, StyleSheet, Text, ScrollView } from 'react-native';
-import { EnrichedTextInput } from 'react-native-enriched';
+import { EnrichedTextInput } from 'react-native-enriched-html';
 import { Button } from '../components/Button';
 import { Toolbar } from '../components/Toolbar';
 import { LinkModal } from '../components/LinkModal';
@@ -73,7 +73,6 @@ export function DevScreen({ onSwitch }: DevScreenProps) {
               ANDROID_EXPERIMENTAL_SYNCHRONOUS_EVENTS
             }
             onPasteImages={(e) => editor.handlePasteImagesEvent(e.nativeEvent)}
-            useHtmlNormalizer
             testID="editor-input"
           />
           <Toolbar

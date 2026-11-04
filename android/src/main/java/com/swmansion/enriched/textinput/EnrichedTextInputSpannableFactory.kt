@@ -1,17 +1,15 @@
 package com.swmansion.enriched.textinput
 
-import android.text.Layout
+import android.content.res.AssetManager
 import com.swmansion.enriched.common.parser.EnrichedSpanFactory
-import com.swmansion.enriched.common.spans.EnrichedCheckboxListSpan
+import com.swmansion.enriched.common.spans.EnrichedCustomStyleSpan
 import com.swmansion.enriched.common.spans.EnrichedImageSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputBlockQuoteSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputBoldSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputCheckboxListSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputCodeBlockSpan
-import com.swmansion.enriched.textinput.spans.EnrichedInputFontFamilySpan
-import com.swmansion.enriched.textinput.spans.EnrichedInputFontSizeSpan
-import com.swmansion.enriched.textinput.spans.EnrichedInputForegroundColorSpan
+import com.swmansion.enriched.textinput.spans.EnrichedInputCustomStyleSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputH1Span
 import com.swmansion.enriched.textinput.spans.EnrichedInputH2Span
 import com.swmansion.enriched.textinput.spans.EnrichedInputH3Span
@@ -21,8 +19,6 @@ import com.swmansion.enriched.textinput.spans.EnrichedInputH6Span
 import com.swmansion.enriched.textinput.spans.EnrichedInputImageSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputInlineCodeSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputItalicSpan
-import com.swmansion.enriched.textinput.spans.EnrichedInputLetterSpacingSpan
-import com.swmansion.enriched.textinput.spans.EnrichedInputLineHeightSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputLinkSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputMentionSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputOrderedListSpan
@@ -32,7 +28,12 @@ import com.swmansion.enriched.textinput.spans.EnrichedInputUnderlineSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputUnorderedListSpan
 import com.swmansion.enriched.textinput.styles.HtmlStyle
 
-class EnrichedTextInputSpannableFactory : EnrichedSpanFactory<HtmlStyle> {
+class EnrichedTextInputSpannableFactory(
+  private val assets: AssetManager,
+  private val allowFontScaling: Boolean,
+) : EnrichedSpanFactory<HtmlStyle> {
+  override fun createAlignmentSpan(cssValue: String) = EnrichedInputAlignmentSpan(cssValue)
+
   override fun createBoldSpan(style: HtmlStyle) = EnrichedInputBoldSpan(style)
 
   override fun createItalicSpan(style: HtmlStyle) = EnrichedInputItalicSpan(style)
@@ -46,7 +47,8 @@ class EnrichedTextInputSpannableFactory : EnrichedSpanFactory<HtmlStyle> {
   override fun createLinkSpan(
     url: String,
     style: HtmlStyle,
-  ) = EnrichedInputLinkSpan(url, style, true)
+    isManual: Boolean,
+  ) = EnrichedInputLinkSpan(url, style, isManual)
 
   override fun createMentionSpan(
     text: String,
@@ -89,39 +91,28 @@ class EnrichedTextInputSpannableFactory : EnrichedSpanFactory<HtmlStyle> {
 
   override fun createCodeBlockSpan(style: HtmlStyle) = EnrichedInputCodeBlockSpan(style)
 
-  override fun createFontFamilySpan(
-    fontFamily: String,
-    style: HtmlStyle,
-  ) = EnrichedInputFontFamilySpan(fontFamily, style)
-
-  override fun createFontSizeSpan(
-    fontSize: Float,
-    style: HtmlStyle,
-  ) = EnrichedInputFontSizeSpan(fontSize, style)
-
-  override fun createLetterSpacingSpan(
-    letterSpacing: Float,
-    style: HtmlStyle,
-  ) = EnrichedInputLetterSpacingSpan(letterSpacing, style)
-
-  override fun createInlineLineHeightSpan(
-    lineHeight: Float,
-    style: HtmlStyle,
-  ) = EnrichedInputLineHeightSpan(lineHeight, style)
-
-  override fun createForegroundColorSpan(
-    color: Int,
-    style: HtmlStyle,
-  ) = EnrichedInputForegroundColorSpan(color)
-
-  override fun createAlignmentSpan(
-    alignment: Layout.Alignment,
-    style: HtmlStyle,
-  ) = EnrichedInputAlignmentSpan(alignment, style)
-
   override fun createParagraphMarginSpan(
     marginTop: Float?,
     marginBottom: Float?,
     style: HtmlStyle,
   ) = EnrichedInputParagraphMarginSpan(marginTop, marginBottom, style)
+
+  override fun createCustomStyleSpan(
+    foregroundColor: Int?,
+    backgroundColor: Int?,
+    fontSize: Float?,
+    fontFamily: String?,
+    letterSpacing: Float?,
+    lineHeight: Float?,
+  ): EnrichedCustomStyleSpan =
+    EnrichedInputCustomStyleSpan.create(
+      foregroundColor,
+      backgroundColor,
+      fontSize,
+      fontFamily,
+      letterSpacing,
+      lineHeight,
+      assets,
+      allowFontScaling,
+    )
 }

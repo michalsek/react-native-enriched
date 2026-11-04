@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { View, StyleSheet, ScrollView, Text } from 'react-native';
-import { EnrichedTextInput } from 'react-native-enriched';
+import { View, StyleSheet, ScrollView } from 'react-native';
+import { EnrichedTextInput } from 'react-native-enriched-html';
 import { Button } from '../components/Button';
 import { Toolbar } from '../components/Toolbar';
 import { LinkModal } from '../components/LinkModal';
@@ -8,6 +8,7 @@ import { MentionPopup } from '../components/MentionPopup';
 import { ImageModal } from '../components/ImageModal';
 import { ValueModal } from '../components/ValueModal';
 import { useEditorState } from '../hooks/useEditorState';
+import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 import {
   LINK_REGEX,
   htmlStyle,
@@ -25,12 +26,17 @@ export function TestScreen({
 }: TestScreenProps) {
   const editor = useEditorState();
   const [sizeMode, setSizeMode] = useState<'base' | 'max'>('base');
+  const keyboardHeight = useKeyboardHeight();
 
   return (
-    <>
+    <View style={styles.container}>
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
+        style={styles.scrollContainer}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: styles.scrollContent.padding + keyboardHeight },
+        ]}
+        testID="full-screen"
       >
         <View style={styles.buttonStack}>
           <Button
@@ -95,7 +101,6 @@ export function TestScreen({
               ANDROID_EXPERIMENTAL_SYNCHRONOUS_EVENTS
             }
             onPasteImages={(e) => editor.handlePasteImagesEvent(e.nativeEvent)}
-            useHtmlNormalizer
             testID="editor-input"
           />
           <Toolbar
@@ -128,14 +133,6 @@ export function TestScreen({
             testID="toggle-enriched-text-screen-button"
           />
         </View>
-        <Text style={styles.debugOutput} testID="html-output">
-          {editor.currentHtml.replace(/\n/g, '')}
-        </Text>
-        <Text style={styles.debugOutput} testID="selection-output">
-          {editor.selection
-            ? `${editor.selection.start}:${editor.selection.end}`
-            : ''}
-        </Text>
       </ScrollView>
       <LinkModal
         avoidKeyboard
@@ -173,7 +170,7 @@ export function TestScreen({
         isOpen={editor.isChannelPopupOpen}
         onItemPress={editor.handleChannelMentionSelected}
       />
-    </>
+    </View>
   );
 }
 
@@ -181,11 +178,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'white',
+    paddingTop: 100,
   },
-  content: {
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
     flexGrow: 1,
     padding: 16,
-    paddingTop: 100,
     alignItems: 'center',
   },
   editor: {
@@ -220,10 +220,5 @@ const styles = StyleSheet.create({
   },
   editorInputMax: {
     maxHeight: 400,
-  },
-  debugOutput: {
-    width: '100%',
-    fontSize: 10,
-    color: 'dimgray',
   },
 });

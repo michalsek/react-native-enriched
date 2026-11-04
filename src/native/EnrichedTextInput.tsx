@@ -1,11 +1,11 @@
 import {
-  type Component,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
+  type ComponentRef,
 } from 'react';
-import { useCallback } from 'react';
 import EnrichedTextInputNativeComponent, {
   Commands,
   type NativeProps,
@@ -14,13 +14,15 @@ import EnrichedTextInputNativeComponent, {
   type OnMentionDetectedInternal,
   type OnRequestHtmlResultEvent,
 } from '../spec/EnrichedTextInputNativeComponent';
-import type {
-  HostInstance,
-  MeasureInWindowOnSuccessCallback,
-  MeasureLayoutOnSuccessCallback,
-  MeasureOnSuccessCallback,
-  NativeMethods,
-  NativeSyntheticEvent,
+import {
+  processColor,
+  type ColorValue,
+  type HostComponent,
+  type HostInstance,
+  type MeasureInWindowOnSuccessCallback,
+  type MeasureLayoutOnSuccessCallback,
+  type MeasureOnSuccessCallback,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { normalizeHtmlStyle } from '../utils/normalizeHtmlStyle';
 import { toNativeRegexConfig } from '../utils/regexParser';
@@ -31,6 +33,7 @@ import type {
   EnrichedTextInputProps,
   OnLinkDetected,
   OnMentionDetected,
+  TextStyleMutationOptions,
 } from '../types';
 
 const warnMentionIndicators = (indicator: string) => {
@@ -39,7 +42,20 @@ const warnMentionIndicators = (indicator: string) => {
   );
 };
 
-type ComponentType = (Component<NativeProps, {}, any> & NativeMethods) | null;
+const getSafeColorInt = (
+  color: ColorValue | null | undefined
+): number | null => {
+  if (color == null) return null;
+
+  const processed = processColor(color);
+  if (typeof processed === 'number') {
+    return processed;
+  }
+
+  return null;
+};
+
+type ComponentType = ComponentRef<HostComponent<NativeProps>>;
 
 type HtmlRequest = {
   resolve: (html: string) => void;
@@ -48,7 +64,7 @@ type HtmlRequest = {
 
 export const EnrichedTextInput = ({
   ref,
-  autoFocus,
+  autoFocus = false,
   editable = ENRICHED_TEXT_INPUT_DEFAULT_PROPS.editable,
   mentionIndicators = ENRICHED_TEXT_INPUT_DEFAULT_PROPS.mentionIndicators.slice(),
   defaultValue,
@@ -58,6 +74,8 @@ export const EnrichedTextInput = ({
   selectionColor,
   style,
   autoCapitalize = ENRICHED_TEXT_INPUT_DEFAULT_PROPS.autoCapitalize,
+  autoCorrect = true,
+  spellCheck,
   htmlStyle = ENRICHED_TEXT_INPUT_DEFAULT_PROPS.htmlStyle,
   linkRegex: _linkRegex,
   onFocus,
@@ -79,6 +97,7 @@ export const EnrichedTextInput = ({
   returnKeyLabel,
   submitBehavior,
   contextMenuItems,
+  textShortcuts = ENRICHED_TEXT_INPUT_DEFAULT_PROPS.textShortcuts,
   androidExperimentalSynchronousEvents = ENRICHED_TEXT_INPUT_DEFAULT_PROPS.androidExperimentalSynchronousEvents,
   useHtmlNormalizer = ENRICHED_TEXT_INPUT_DEFAULT_PROPS.useHtmlNormalizer,
   scrollEnabled = ENRICHED_TEXT_INPUT_DEFAULT_PROPS.scrollEnabled,
@@ -284,38 +303,46 @@ export const EnrichedTextInput = ({
     ) => {
       Commands.setTextAlignment(nullthrows(nativeRef.current), alignment);
     },
-    setFontFamily: (fontFamily, options) => {
-      Commands.setSelectionFontFamily(
+    setStyle: (
+      customStyle: {
+        foregroundColor?: ColorValue | null;
+        backgroundColor?: ColorValue | null;
+        fontSize?: number | null;
+        fontFamily?: string | null;
+        letterSpacing?: number | null;
+        lineHeight?: number | null;
+      },
+      options?: TextStyleMutationOptions
+    ) => {
+      const payload: {
+        foregroundColor?: number | null;
+        backgroundColor?: number | null;
+        fontSize?: number | null;
+        fontFamily?: string | null;
+        letterSpacing?: number | null;
+        lineHeight?: number | null;
+      } = {};
+      if (customStyle.foregroundColor !== undefined) {
+        payload.foregroundColor = getSafeColorInt(customStyle.foregroundColor);
+      }
+      if (customStyle.backgroundColor !== undefined) {
+        payload.backgroundColor = getSafeColorInt(customStyle.backgroundColor);
+      }
+      if (customStyle.fontSize !== undefined) {
+        payload.fontSize = customStyle.fontSize;
+      }
+      if (customStyle.fontFamily !== undefined) {
+        payload.fontFamily = customStyle.fontFamily;
+      }
+      if (customStyle.letterSpacing !== undefined) {
+        payload.letterSpacing = customStyle.letterSpacing;
+      }
+      if (customStyle.lineHeight !== undefined) {
+        payload.lineHeight = customStyle.lineHeight;
+      }
+      Commands.setStyle(
         nullthrows(nativeRef.current),
-        fontFamily ?? '',
-        options?.collapsedSelectionMode ?? 'typing'
-      );
-    },
-    setFontSize: (fontSize, options) => {
-      Commands.setSelectionFontSize(
-        nullthrows(nativeRef.current),
-        fontSize ?? 0,
-        options?.collapsedSelectionMode ?? 'typing'
-      );
-    },
-    setLetterSpacing: (letterSpacing, options) => {
-      Commands.setSelectionLetterSpacing(
-        nullthrows(nativeRef.current),
-        letterSpacing ?? 0,
-        options?.collapsedSelectionMode ?? 'typing'
-      );
-    },
-    setLineHeight: (lineHeight, options) => {
-      Commands.setSelectionLineHeight(
-        nullthrows(nativeRef.current),
-        lineHeight ?? 0,
-        options?.collapsedSelectionMode ?? 'typing'
-      );
-    },
-    setForegroundColor: (foregroundColor, options) => {
-      Commands.setSelectionForegroundColor(
-        nullthrows(nativeRef.current),
-        foregroundColor ?? '',
+        JSON.stringify(payload),
         options?.collapsedSelectionMode ?? 'typing'
       );
     },
@@ -382,6 +409,8 @@ export const EnrichedTextInput = ({
       selectionColor={selectionColor}
       style={style}
       autoCapitalize={autoCapitalize}
+      autoCorrect={autoCorrect}
+      spellCheck={spellCheck ?? autoCorrect}
       htmlStyle={normalizedHtmlStyle}
       linkRegex={linkRegex}
       onInputFocus={onFocus}
@@ -402,6 +431,7 @@ export const EnrichedTextInput = ({
       onRequestHtmlResult={handleRequestHtmlResult}
       onInputKeyPress={onKeyPress}
       contextMenuItems={nativeContextMenuItems}
+      textShortcuts={textShortcuts}
       onContextMenuItemPress={handleContextMenuItemPress}
       onSubmitEditing={onSubmitEditing}
       returnKeyType={returnKeyType}

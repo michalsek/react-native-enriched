@@ -1,12 +1,10 @@
 #import "ParagraphAttributesUtils.h"
+#import "AlignmentUtils.h"
 #import "EnrichedTextInputView.h"
 #import "RangeUtils.h"
-#import "StyleHeaders.h"
 #import "StyleUtils.h"
 #import "TextInsertionUtils.h"
-#import "TextListsUtils.h"
-
-static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
+#import "interfaces/StyleHeaders.h"
 
 @implementation ParagraphAttributesUtils
 
@@ -19,6 +17,13 @@ static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
                          input:(id)input {
   EnrichedTextInputView *typedInput = (EnrichedTextInputView *)input;
   if (typedInput == nullptr) {
+    return NO;
+  }
+
+  // Do not manually intervene if the user is in the middle of IME
+  // composition. Let the iOS system handle the backspace natively to prevent
+  // state desync.
+  if (typedInput->textView.markedTextRange != nullptr) {
     return NO;
   }
 
@@ -52,8 +57,8 @@ static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
         typedInput->textView.typingAttributes[NSParagraphStyleAttributeName];
     NSTextAlignment savedAlignment =
         currentParaStyle ? currentParaStyle.alignment : NSTextAlignmentNatural;
-    NSDictionary *savedTextStyles =
-        [typedInput->attributesManager textStyleValuesAt:range.location];
+    CustomStyleData *savedCustomStyleData =
+        [typedInput->attributesManager customStyleDataAt:range.location];
 
     // for styles that need ZWS (lists, quotes, etc.) we do the following:
     // - manually do the removing
@@ -95,21 +100,19 @@ static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
                                host:typedInput
                       withSelection:YES];
     [self resetTypingAttributes:typedInput preservingAlignment:savedAlignment];
-    [self restoreTextStyles:savedTextStyles
-         onEmptyParagraphAt:range.location
-                      input:typedInput];
+    [self restoreCustomStyleData:savedCustomStyleData
+              onEmptyParagraphAt:range.location
+                           input:typedInput];
     return YES;
   }
 
   return NO;
 }
 
-// The emptied paragraph keeps the text styles of its removed content: they go
-// to its newline (or the stored trailing paragraph) and the typing attributes.
-+ (void)restoreTextStyles:(NSDictionary *)textStyles
-       onEmptyParagraphAt:(NSUInteger)location
-                    input:(EnrichedTextInputView *)input {
-  if (textStyles.count == 0) {
++ (void)restoreCustomStyleData:(CustomStyleData *)data
+            onEmptyParagraphAt:(NSUInteger)location
+                         input:(EnrichedTextInputView *)input {
+  if (data == nullptr) {
     return;
   }
 
@@ -126,22 +129,11 @@ static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
     return;
   }
 
-  for (NSNumber *type in input->stylesDict) {
-    StyleBase *style = input->stylesDict[type];
-    NSString *value = textStyles[[style getKey]];
-    if (value == nullptr) {
-      continue;
-    }
-    if (hasNewline) {
-      [style add:NSMakeRange(location, 1)
-               withValue:value
-              withTyping:YES
-          withDirtyRange:YES];
-    } else {
-      [style addTypingWithValue:value];
-    }
-  }
-
+  CustomStyle *customStyle = input->stylesDict[@([CustomStyle getType])];
+  [customStyle setCustomStyleData:data
+                            range:NSMakeRange(location, hasNewline ? 1 : 0)
+                       withTyping:YES
+                   withDirtyRange:YES];
   [input->attributesManager storeTrailingParagraphAttributesIfNeeded];
 }
 
@@ -315,9 +307,9 @@ static NSString *const EnrichedAlignmentMarkerPrefix = @"EnrichedAlignment";
   NSMutableParagraphStyle *paraStyle =
       [resetAttrs[NSParagraphStyleAttributeName] mutableCopy]
           ?: [[NSMutableParagraphStyle alloc] init];
-  paraStyle.textLists =
-      [TextListsUtils textListsByRemovingPrefix:EnrichedAlignmentMarkerPrefix
-                                      fromArray:paraStyle.textLists];
+  paraStyle.textLists = @[ [[NSTextList alloc]
+      initWithMarkerFormat:[AlignmentUtils alignmentToMarker:alignment]
+                   options:0] ];
   paraStyle.alignment = alignment;
   resetAttrs[NSParagraphStyleAttributeName] = paraStyle;
 

@@ -1,21 +1,19 @@
 package com.swmansion.enriched.common.parser;
 
 import android.text.Editable;
-import android.text.Layout;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.ParagraphStyle;
-import com.swmansion.enriched.common.EnrichedAlignmentMapping;
+import com.swmansion.enriched.common.CustomStyle;
 import com.swmansion.enriched.common.EnrichedConstants;
+import com.swmansion.enriched.common.EnrichedSpanFlags;
 import com.swmansion.enriched.common.spans.EnrichedAlignmentSpan;
 import com.swmansion.enriched.common.spans.EnrichedBoldSpan;
 import com.swmansion.enriched.common.spans.EnrichedCheckboxListSpan;
 import com.swmansion.enriched.common.spans.EnrichedCodeBlockSpan;
-import com.swmansion.enriched.common.spans.EnrichedFontFamilySpan;
-import com.swmansion.enriched.common.spans.EnrichedFontSizeSpan;
-import com.swmansion.enriched.common.spans.EnrichedForegroundColorSpan;
+import com.swmansion.enriched.common.spans.EnrichedCustomStyleSpan;
 import com.swmansion.enriched.common.spans.EnrichedH1Span;
 import com.swmansion.enriched.common.spans.EnrichedH2Span;
 import com.swmansion.enriched.common.spans.EnrichedH3Span;
@@ -24,9 +22,7 @@ import com.swmansion.enriched.common.spans.EnrichedH5Span;
 import com.swmansion.enriched.common.spans.EnrichedH6Span;
 import com.swmansion.enriched.common.spans.EnrichedImageSpan;
 import com.swmansion.enriched.common.spans.EnrichedInlineCodeSpan;
-import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan;
 import com.swmansion.enriched.common.spans.EnrichedItalicSpan;
-import com.swmansion.enriched.common.spans.EnrichedLetterSpacingSpan;
 import com.swmansion.enriched.common.spans.EnrichedLinkSpan;
 import com.swmansion.enriched.common.spans.EnrichedMentionSpan;
 import com.swmansion.enriched.common.spans.EnrichedOrderedListSpan;
@@ -37,6 +33,7 @@ import com.swmansion.enriched.common.spans.EnrichedUnorderedListSpan;
 import com.swmansion.enriched.common.spans.interfaces.EnrichedBlockSpan;
 import com.swmansion.enriched.common.spans.interfaces.EnrichedInlineSpan;
 import com.swmansion.enriched.common.spans.interfaces.EnrichedParagraphSpan;
+import com.swmansion.enriched.common.spans.interfaces.EnrichedSpan;
 import com.swmansion.enriched.common.spans.interfaces.EnrichedZeroWidthSpaceSpan;
 import java.io.IOException;
 import java.io.StringReader;
@@ -75,6 +72,11 @@ public class EnrichedParser {
   }
 
   public static <T> Spanned fromHtml(String source, T style, EnrichedSpanFactory<T> spanFactory) {
+    return fromHtml(source, style, spanFactory, null);
+  }
+
+  public static <T> Spanned fromHtml(
+      String source, T style, EnrichedSpanFactory<T> spanFactory, Pattern linkRegex) {
     Parser parser = new Parser();
     try {
       parser.setProperty(Parser.schemaProperty, HtmlParser.schema);
@@ -83,7 +85,7 @@ public class EnrichedParser {
       throw new RuntimeException(e);
     }
     HtmlToSpannedConverter converter =
-        new HtmlToSpannedConverter(source, style, parser, spanFactory);
+        new HtmlToSpannedConverter(source, style, parser, spanFactory, linkRegex);
     return converter.convert();
   }
 
@@ -97,7 +99,6 @@ public class EnrichedParser {
     String normalizedBlockQuote =
         normalizedCodeBlock.replaceAll("</blockquote>\\n<br>", "</blockquote>");
 
-    // replace empty <p></p> into <br> in the very end
     String normalizedHtml = normalizedBlockQuote.replaceAll("<p></p>", "<br>");
 
     return "<html>\n" + normalizedHtml + "</html>";
@@ -145,6 +146,39 @@ public class EnrichedParser {
         out.append("</").append(tag).append(">\n");
       }
     }
+  }
+
+  private static String getAlignmentStyleAttr(Spanned text, int start, int end) {
+    EnrichedAlignmentSpan[] spans = text.getSpans(start, end, EnrichedAlignmentSpan.class);
+    if (spans.length == 0) return "";
+    String cssValue = spans[0].getCssValue();
+    if (cssValue.equals("auto")) return "";
+    return " style=\"text-align: " + cssValue + "\"";
+  }
+
+  private static String getParagraphStyleAttr(Spanned text, int start, int end) {
+    ArrayList<String> declarations = new ArrayList<>();
+
+    EnrichedAlignmentSpan[] alignmentSpans = text.getSpans(start, end, EnrichedAlignmentSpan.class);
+    if (alignmentSpans.length > 0 && !alignmentSpans[0].getCssValue().equals("auto")) {
+      declarations.add("text-align: " + alignmentSpans[0].getCssValue());
+    }
+
+    EnrichedParagraphMarginSpan[] marginSpans =
+        text.getSpans(start, end, EnrichedParagraphMarginSpan.class);
+    if (marginSpans.length > 0) {
+      Float marginTop = marginSpans[0].getMarginTop();
+      Float marginBottom = marginSpans[0].getMarginBottom();
+      if (marginTop != null && marginTop > 0) {
+        declarations.add("margin-top: " + formatCssFontSizeValue(marginTop) + "px");
+      }
+      if (marginBottom != null && marginBottom > 0) {
+        declarations.add("margin-bottom: " + formatCssFontSizeValue(marginBottom) + "px");
+      }
+    }
+
+    if (declarations.isEmpty()) return "";
+    return " style=\"" + TextUtils.join("; ", declarations) + "\"";
   }
 
   private static String getBlockTag(EnrichedParagraphSpan[] spans) {
@@ -202,10 +236,7 @@ public class EnrichedParser {
         if (isTopLevel && i < end && startsParagraph(text, i)) {
           appendEmptyParagraph(out, text, i, i + 1);
         } else if (isTopLevel && i == text.length() && i > 0 && text.charAt(i - 1) == '\n') {
-          // The empty last paragraph has no newline of its own, it types with the text styles of
-          // the newline before it.
-          appendEmptyParagraph(
-              out, "", getTextStyleCss(text.getSpans(i - 1, i, EnrichedInlineSpan.class)));
+          appendEmptyParagraph(out, "", getCustomStyleCss(text, i - 1, i));
         } else {
           out.append("<br>\n");
         }
@@ -243,15 +274,17 @@ public class EnrichedParser {
         if (isUlListItem && !isInUlList) {
           // Current paragraph is the first item in a list
           isInUlList = true;
-          out.append("<ul").append(">\n");
+          out.append("<ul").append(getAlignmentStyleAttr(text, i, next)).append(">\n");
         } else if (isOlListItem && !isInOlList) {
           // Current paragraph is the first item in a list
           isInOlList = true;
-          out.append("<ol").append(">\n");
+          out.append("<ol").append(getAlignmentStyleAttr(text, i, next)).append(">\n");
         } else if (isCheckboxListItem && !isInCheckboxList) {
           // Current paragraph is the first item in a list
           isInCheckboxList = true;
-          out.append("<ul data-type=\"checkbox\">\n");
+          out.append("<ul data-type=\"checkbox\"")
+              .append(getAlignmentStyleAttr(text, i, next))
+              .append(">\n");
         }
 
         boolean isList = isUlListItem || isOlListItem || isCheckboxListItem;
@@ -260,6 +293,11 @@ public class EnrichedParser {
         out.append("<");
         out.append(tagType);
 
+        // Add alignment style to non-list paragraph/heading tags
+        if (!isList) {
+          out.append(getParagraphStyleAttr(text, i, next));
+        }
+
         if (isCheckboxListItem) {
           EnrichedCheckboxListSpan[] checkboxSpans =
               text.getSpans(i, next, EnrichedCheckboxListSpan.class);
@@ -267,12 +305,6 @@ public class EnrichedParser {
             boolean isChecked = checkboxSpans[0].isChecked();
             if (isChecked) out.append(" checked");
           }
-        }
-
-        // Mirrors iOS: list items don't carry paragraph style attributes
-        String paragraphCss = isList ? "" : getParagraphCss(text, i, next);
-        if (!paragraphCss.isEmpty()) {
-          out.append(" style=\"").append(paragraphCss).append("\"");
         }
 
         out.append(">");
@@ -295,34 +327,6 @@ public class EnrichedParser {
     }
   }
 
-  private static String getParagraphCss(Spanned text, int start, int end) {
-    ArrayList<String> cssDeclarations = new ArrayList<>();
-
-    EnrichedAlignmentSpan[] alignmentSpans = text.getSpans(start, end, EnrichedAlignmentSpan.class);
-    if (alignmentSpans.length > 0) {
-      String alignmentCss =
-          EnrichedAlignmentMapping.alignmentToCss(alignmentSpans[0].getAlignment());
-      if (alignmentCss != null) {
-        cssDeclarations.add("text-align: " + alignmentCss);
-      }
-    }
-
-    EnrichedParagraphMarginSpan[] marginSpans =
-        text.getSpans(start, end, EnrichedParagraphMarginSpan.class);
-    if (marginSpans.length > 0) {
-      EnrichedParagraphMarginSpan margin = marginSpans[0];
-      if (margin.getMarginTop() != null && margin.getMarginTop() > 0) {
-        cssDeclarations.add("margin-top: " + formatCssNumber(margin.getMarginTop()) + "px");
-      }
-      if (margin.getMarginBottom() != null && margin.getMarginBottom() > 0) {
-        cssDeclarations.add("margin-bottom: " + formatCssNumber(margin.getMarginBottom()) + "px");
-      }
-    }
-
-    return TextUtils.join("; ", cssDeclarations);
-  }
-
-  // A run that follows a block starts at the block's own paragraph terminator.
   private static boolean startsParagraph(CharSequence text, int index) {
     return index == 0 || text.charAt(index - 1) == '\n';
   }
@@ -336,110 +340,88 @@ public class EnrichedParser {
     return true;
   }
 
-  /**
-   * Serializes an empty top-level paragraph. Its styles live on the paragraph's newline (or on its
-   * zero-width space placeholder), so they are emitted around a single &lt;br&gt;.
-   */
   private static void appendEmptyParagraph(StringBuilder out, Spanned text, int start, int end) {
     appendEmptyParagraph(
-        out,
-        getParagraphCss(text, start, end),
-        getTextStyleCss(text.getSpans(start, end, EnrichedInlineSpan.class)));
+        out, getParagraphStyleAttr(text, start, end), getCustomStyleCss(text, start, end));
   }
 
-  private static void appendEmptyParagraph(StringBuilder out, String paragraphCss, String textCss) {
-    if (paragraphCss.isEmpty() && textCss.isEmpty()) {
+  private static void appendEmptyParagraph(
+      StringBuilder out, String paragraphStyleAttr, String customStyleCss) {
+    if (paragraphStyleAttr.isEmpty() && customStyleCss.isEmpty()) {
       out.append("<br>\n");
       return;
     }
 
-    out.append("<p");
-    if (!paragraphCss.isEmpty()) {
-      out.append(" style=\"").append(paragraphCss).append("\"");
-    }
-    out.append(">");
-    if (textCss.isEmpty()) {
+    out.append("<p").append(paragraphStyleAttr).append(">");
+    if (customStyleCss.isEmpty()) {
       out.append("<br>");
     } else {
-      out.append("<span style=\"").append(textCss).append("\"><br></span>");
+      out.append("<span style=\"").append(customStyleCss).append("\"><br></span>");
     }
     out.append("</p>\n");
   }
 
-  /** Checks whether the span is one of the inline text style (value) spans. */
-  private static boolean isTextStyleSpan(EnrichedInlineSpan span) {
-    return span instanceof EnrichedFontFamilySpan
-        || span instanceof EnrichedFontSizeSpan
-        || span instanceof EnrichedLetterSpacingSpan
-        || span instanceof EnrichedInlineLineHeightSpan
-        || span instanceof EnrichedForegroundColorSpan;
-  }
-
-  /** Formats a float omitting the trailing ".0" so the HTML output stays clean. */
-  private static String formatCssNumber(float value) {
-    if (value == (long) value) {
-      return String.valueOf((long) value);
-    }
-    return String.valueOf(value);
-  }
-
-  /** Serializes an ARGB color int back to a CSS hex color. */
-  private static String cssFromColor(int color) {
-    int alpha = (color >>> 24) & 0xFF;
-    int rgb = color & 0xFFFFFF;
-    if (alpha == 0xFF) {
-      return String.format("#%06X", rgb);
-    }
-    return String.format("#%06X%02X", rgb, alpha);
-  }
-
-  /**
-   * Combines all inline text style spans present in the run into a single CSS declaration string,
-   * e.g. "font-family: Arial; font-size: 16px".
-   */
-  private static String getTextStyleCss(EnrichedInlineSpan[] spans) {
-    String fontFamily = null;
-    Float fontSize = null;
-    Float letterSpacing = null;
-    Float lineHeight = null;
-    Integer foregroundColor = null;
-
-    for (EnrichedInlineSpan span : spans) {
-      if (span instanceof EnrichedFontFamilySpan) {
-        fontFamily = ((EnrichedFontFamilySpan) span).getFontFamily();
-      } else if (span instanceof EnrichedFontSizeSpan) {
-        fontSize = ((EnrichedFontSizeSpan) span).getFontSize();
-      } else if (span instanceof EnrichedLetterSpacingSpan) {
-        letterSpacing = ((EnrichedLetterSpacingSpan) span).getLetterSpacing();
-      } else if (span instanceof EnrichedInlineLineHeightSpan) {
-        lineHeight = ((EnrichedInlineLineHeightSpan) span).getLineHeight();
-      } else if (span instanceof EnrichedForegroundColorSpan) {
-        foregroundColor = ((EnrichedForegroundColorSpan) span).getColor();
+  private static String getCustomStyleCss(Spanned text, int start, int end) {
+    for (EnrichedCustomStyleSpan span : text.getSpans(start, end, EnrichedCustomStyleSpan.class)) {
+      String css = getCustomStyleCss(span);
+      if (css != null && !css.isEmpty()) {
+        return css;
       }
     }
+    return "";
+  }
 
-    StringBuilder css = new StringBuilder();
-    if (fontFamily != null) {
-      css.append("font-family: ").append(fontFamily);
+  private static String getCustomStyleCss(EnrichedCustomStyleSpan cs) {
+    if (cs.toCustomStyle().isEmpty()) {
+      return null;
+    }
+
+    Integer fgColor = cs.getForegroundColor();
+    Integer bgColor = cs.getBackgroundColor();
+    Float fontSize = cs.getFontSize();
+    String fontFamily = cs.getFontFamily();
+    Float letterSpacing = cs.getLetterSpacing();
+    Float lineHeight = cs.getLineHeight();
+    StringBuilder cssProps = new StringBuilder();
+    if (fgColor != null) {
+      cssProps.append("color: ").append(EnrichedColorParser.colorToHex(fgColor)).append(";");
+    }
+    if (bgColor != null) {
+      if (cssProps.length() > 0) cssProps.append(" ");
+      cssProps
+          .append("background-color: ")
+          .append(EnrichedColorParser.colorToHex(bgColor))
+          .append(";");
     }
     if (fontSize != null) {
-      if (css.length() > 0) css.append("; ");
-      css.append("font-size: ").append(formatCssNumber(fontSize)).append("px");
+      if (cssProps.length() > 0) cssProps.append(" ");
+      cssProps.append("font-size: ").append(formatCssFontSizeValue(fontSize)).append("px;");
+    }
+    if (fontFamily != null && !fontFamily.isEmpty()) {
+      if (cssProps.length() > 0) cssProps.append(" ");
+      if (fontFamily.indexOf(' ') >= 0 || fontFamily.indexOf(',') >= 0) {
+        cssProps.append("font-family: '").append(fontFamily).append("';");
+      } else {
+        cssProps.append("font-family: ").append(fontFamily).append(";");
+      }
     }
     if (letterSpacing != null) {
-      if (css.length() > 0) css.append("; ");
-      css.append("letter-spacing: ").append(formatCssNumber(letterSpacing)).append("px");
+      if (cssProps.length() > 0) cssProps.append(" ");
+      cssProps
+          .append("letter-spacing: ")
+          .append(formatCssFontSizeValue(letterSpacing))
+          .append("px;");
     }
     if (lineHeight != null) {
-      if (css.length() > 0) css.append("; ");
-      css.append("line-height: ").append(formatCssNumber(lineHeight)).append("px");
+      if (cssProps.length() > 0) cssProps.append(" ");
+      cssProps.append("line-height: ").append(formatCssFontSizeValue(lineHeight)).append("px;");
     }
-    if (foregroundColor != null) {
-      if (css.length() > 0) css.append("; ");
-      css.append("color: ").append(cssFromColor(foregroundColor));
-    }
-
-    return css.toString();
+    return cssProps
+        .toString()
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;");
   }
 
   private static void withinParagraph(StringBuilder out, Spanned text, int start, int end) {
@@ -447,24 +429,7 @@ public class EnrichedParser {
     for (int i = start; i < end; i = next) {
       next = text.nextSpanTransition(i, end, EnrichedInlineSpan.class);
       EnrichedInlineSpan[] style = text.getSpans(i, next, EnrichedInlineSpan.class);
-
-      // All inline text style spans of a run are emitted as a single <span> tag
-      // with a combined style attribute. The tag is opened (and closed) at the
-      // position of the first such span to keep the tags properly nested.
-      int firstTextStyleIndex = -1;
       for (int j = 0; j < style.length; j++) {
-        if (isTextStyleSpan(style[j])) {
-          firstTextStyleIndex = j;
-          break;
-        }
-      }
-
-      for (int j = 0; j < style.length; j++) {
-        if (j == firstTextStyleIndex) {
-          out.append("<span style=\"");
-          out.append(getTextStyleCss(style));
-          out.append("\">");
-        }
         if (style[j] instanceof EnrichedBoldSpan) {
           out.append("<b>");
         }
@@ -521,12 +486,17 @@ public class EnrichedParser {
           // Don't output the placeholder character underlying the image.
           i = next;
         }
+        if (style[j] instanceof EnrichedCustomStyleSpan) {
+          String css = getCustomStyleCss((EnrichedCustomStyleSpan) style[j]);
+          if (css != null) {
+            out.append("<span style=\"").append(css).append("\">");
+          } else {
+            out.append("<span>");
+          }
+        }
       }
       withinStyle(out, text, i, next);
       for (int j = style.length - 1; j >= 0; j--) {
-        if (j == firstTextStyleIndex) {
-          out.append("</span>");
-        }
         if (style[j] instanceof EnrichedLinkSpan) {
           out.append("</a>");
         }
@@ -547,6 +517,9 @@ public class EnrichedParser {
         }
         if (style[j] instanceof EnrichedItalicSpan) {
           out.append("</i>");
+        }
+        if (style[j] instanceof EnrichedCustomStyleSpan) {
+          out.append("</span>");
         }
       }
     }
@@ -586,588 +559,78 @@ public class EnrichedParser {
       }
     }
   }
+
+  private static String formatCssFontSizeValue(float fontSize) {
+    if (fontSize == Math.rint(fontSize) && !Float.isInfinite(fontSize)) {
+      return String.valueOf((int) fontSize);
+    }
+    return String.valueOf(fontSize);
+  }
 }
 
 class HtmlToSpannedConverter<T> implements ContentHandler {
-  private static final Pattern TEXT_ALIGN_PATTERN =
-      Pattern.compile("text-align\\s*:\\s*(left|center|right|justify)", Pattern.CASE_INSENSITIVE);
-
   private final EnrichedSpanFactory<T> mSpanFactory;
   private final T mStyle;
   private final String mSource;
   private final XMLReader mReader;
   private final SpannableStringBuilder mSpannableStringBuilder;
+  private final Pattern mLinkRegex;
   private static Integer currentOrderedListItemIndex = 0;
   private static Boolean isInOrderedList = false;
   private static Boolean isInCheckboxList = false;
   private static Boolean isEmptyTag = false;
+  private static String currentListAlignmentCssValue = null;
   private int mBlockDepth = 0;
-  // Start of the currently open top-level paragraph, -1 otherwise.
   private int mParagraphStart = -1;
   private boolean mIsParagraphStyled = false;
 
-  public HtmlToSpannedConverter(
-      String source, T style, Parser parser, EnrichedSpanFactory<T> spanFactory) {
-    mStyle = style;
-    mSource = source;
-    mSpannableStringBuilder = new SpannableStringBuilder();
-    mReader = parser;
-    mSpanFactory = spanFactory;
+  private static final Pattern CSS_ALIGNMENT_PATTERN =
+      Pattern.compile("text-align\\s*:\\s*(left|center|right)", Pattern.CASE_INSENSITIVE);
+
+  private static final Pattern CSS_FG_PATTERN =
+      Pattern.compile("(?:^|;)\\s*(?<!background-)color\\s*:\\s*([^;]+)", Pattern.CASE_INSENSITIVE);
+
+  private static final Pattern CSS_BG_PATTERN =
+      Pattern.compile("background-color\\s*:\\s*([^;]+)", Pattern.CASE_INSENSITIVE);
+
+  private static final Pattern CSS_FONT_SIZE_PATTERN =
+      Pattern.compile(
+          "font-size\\s*:\\s*([0-9.]+)(?:\\s*px)?(?=\\s*;|\\s*$)", Pattern.CASE_INSENSITIVE);
+
+  private static final Pattern CSS_FONT_FAMILY_PATTERN =
+      Pattern.compile("font-family\\s*:\\s*([^;]+)", Pattern.CASE_INSENSITIVE);
+
+  private static final Pattern CSS_LETTER_SPACING_PATTERN =
+      Pattern.compile(
+          "letter-spacing\\s*:\\s*(-?[0-9.]+)(?:\\s*px)?(?=\\s*;|\\s*$)", Pattern.CASE_INSENSITIVE);
+
+  private static final Pattern CSS_LINE_HEIGHT_PATTERN =
+      Pattern.compile(
+          "line-height\\s*:\\s*([0-9.]+)(?:\\s*px)?(?=\\s*;|\\s*$)", Pattern.CASE_INSENSITIVE);
+
+  private static String parseCssAlignmentValue(Attributes attributes) {
+    String style = attributes.getValue("", "style");
+    if (style == null) return null;
+    Matcher m = CSS_ALIGNMENT_PATTERN.matcher(style);
+    return m.find() ? m.group(1).toLowerCase() : null;
   }
 
-  public Spanned convert() {
-    mReader.setContentHandler(this);
-    try {
-      mReader.parse(new InputSource(new StringReader(mSource)));
-    } catch (IOException e) {
-      // We are reading from a string. There should not be IO problems.
-      throw new RuntimeException(e);
-    } catch (SAXException e) {
-      // TagSoup doesn't throw parse exceptions.
-      throw new RuntimeException(e);
-    }
-    // Fix flags and range for paragraph-type markup.
-    Object[] obj =
-        mSpannableStringBuilder.getSpans(0, mSpannableStringBuilder.length(), ParagraphStyle.class);
-    for (int i = 0; i < obj.length; i++) {
-      int start = mSpannableStringBuilder.getSpanStart(obj[i]);
-      int end = mSpannableStringBuilder.getSpanEnd(obj[i]);
-      // If the last line of the range is blank, back off by one.
-      if (end - 2 >= 0) {
-        if (mSpannableStringBuilder.charAt(end - 1) == '\n'
-            && mSpannableStringBuilder.charAt(end - 2) == '\n') {
-          end--;
-        }
-      }
-      boolean isAlignmentSpan = obj[i] instanceof EnrichedAlignmentSpan;
-      if (isAlignmentSpan && end < mSpannableStringBuilder.length()) {
-        if (mSpannableStringBuilder.charAt(end) == '\n') {
-          end++;
-        }
-      }
-
-      if (end == start) {
-        mSpannableStringBuilder.removeSpan(obj[i]);
-      } else {
-        // TODO: verify if Spannable.SPAN_EXCLUSIVE_EXCLUSIVE does not break anything.
-        // Previously it was SPAN_PARAGRAPH. I've changed that in order to fix ranges for list
-        // items.
-        int flags = isAlignmentSpan ? Spannable.SPAN_PARAGRAPH : Spannable.SPAN_EXCLUSIVE_EXCLUSIVE;
-        mSpannableStringBuilder.setSpan(obj[i], start, end, flags);
-      }
-    }
-
-    // Assign zero-width space character to the proper spans.
-    EnrichedZeroWidthSpaceSpan[] zeroWidthSpaceSpans =
-        mSpannableStringBuilder.getSpans(
-            0, mSpannableStringBuilder.length(), EnrichedZeroWidthSpaceSpan.class);
-    for (EnrichedZeroWidthSpaceSpan zeroWidthSpaceSpan : zeroWidthSpaceSpans) {
-      int start = mSpannableStringBuilder.getSpanStart(zeroWidthSpaceSpan);
-      int end = mSpannableStringBuilder.getSpanEnd(zeroWidthSpaceSpan);
-
-      if (mSpannableStringBuilder.charAt(start) != EnrichedConstants.ZWS) {
-        // Insert zero-width space character at the start if it's not already present.
-        mSpannableStringBuilder.insert(start, EnrichedConstants.ZWS_STRING);
-        end++; // Adjust end position due to insertion.
-      }
-
-      mSpannableStringBuilder.removeSpan(zeroWidthSpaceSpan);
-      mSpannableStringBuilder.setSpan(
-          zeroWidthSpaceSpan, start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-    }
-
-    return mSpannableStringBuilder;
-  }
-
-  private static boolean isBlockTag(String tag) {
-    return tag.equalsIgnoreCase("ul")
-        || tag.equalsIgnoreCase("ol")
-        || tag.equalsIgnoreCase("blockquote")
-        || tag.equalsIgnoreCase("codeblock");
-  }
-
-  /**
-   * Spans need a character to anchor on, so an empty styled top-level paragraph gets a zero-width
-   * space placeholder, the same way the input anchors an empty styled paragraph. It also keeps the
-   * styles of the empty last paragraph, which has no newline of its own.
-   */
-  private void anchorEmptyStyledParagraph() {
-    int length = mSpannableStringBuilder.length();
-    if (mParagraphStart >= 0
-        && mParagraphStart == length
-        && (mIsParagraphStyled || hasOpenTextStyle(length))) {
-      mSpannableStringBuilder.append(EnrichedConstants.ZWS);
-      isEmptyTag = false;
-    }
-    mParagraphStart = -1;
-  }
-
-  private boolean hasOpenTextStyle(int position) {
-    for (TextStyle textStyle :
-        mSpannableStringBuilder.getSpans(position, position, TextStyle.class)) {
-      if (textStyle.mFontFamily != null
-          || textStyle.mFontSize != null
-          || textStyle.mLetterSpacing != null
-          || textStyle.mLineHeight != null
-          || textStyle.mForegroundColor != null) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private void handleStartTag(String tag, Attributes attributes) {
-    if (isBlockTag(tag)) {
-      mBlockDepth++;
-    }
-
-    if (tag.equalsIgnoreCase("br")) {
-      // We don't need to handle this. TagSoup will ensure that there's a </br> for each <br>
-      // so we can safely emit the linebreaks when we handle the close tag.
-    } else if (tag.equalsIgnoreCase("p")) {
-      isEmptyTag = true;
-      startBlockElement(mSpannableStringBuilder);
-      boolean hasAlignment = startAlignment(mSpannableStringBuilder, attributes);
-      boolean hasMargin = startParagraphMargin(mSpannableStringBuilder, attributes);
-      mParagraphStart = mBlockDepth == 0 ? mSpannableStringBuilder.length() : -1;
-      mIsParagraphStyled = hasAlignment || hasMargin;
-    } else if (tag.equalsIgnoreCase("ul")) {
-      isInOrderedList = false;
-      String dataType = attributes.getValue("", "data-type");
-      isInCheckboxList = "checkbox".equals(dataType);
-      startBlockElement(mSpannableStringBuilder);
-    } else if (tag.equalsIgnoreCase("ol")) {
-      isInOrderedList = true;
-      currentOrderedListItemIndex = 0;
-      startBlockElement(mSpannableStringBuilder);
-    } else if (tag.equalsIgnoreCase("li")) {
-      isEmptyTag = true;
-      startLi(mSpannableStringBuilder, attributes);
-    } else if (tag.equalsIgnoreCase("b")) {
-      start(mSpannableStringBuilder, new Bold());
-    } else if (tag.equalsIgnoreCase("i")) {
-      start(mSpannableStringBuilder, new Italic());
-    } else if (tag.equalsIgnoreCase("blockquote")) {
-      isEmptyTag = true;
-      startBlockquote(mSpannableStringBuilder);
-    } else if (tag.equalsIgnoreCase("codeblock")) {
-      isEmptyTag = true;
-      startCodeBlock(mSpannableStringBuilder);
-    } else if (tag.equalsIgnoreCase("a")) {
-      startA(mSpannableStringBuilder, attributes);
-    } else if (tag.equalsIgnoreCase("u")) {
-      start(mSpannableStringBuilder, new Underline());
-    } else if (tag.equalsIgnoreCase("s")) {
-      start(mSpannableStringBuilder, new Strikethrough());
-    } else if (tag.equalsIgnoreCase("strike")) {
-      start(mSpannableStringBuilder, new Strikethrough());
-    } else if (tag.equalsIgnoreCase("h1")) {
-      startHeading(mSpannableStringBuilder, 1, attributes);
-    } else if (tag.equalsIgnoreCase("h2")) {
-      startHeading(mSpannableStringBuilder, 2, attributes);
-    } else if (tag.equalsIgnoreCase("h3")) {
-      startHeading(mSpannableStringBuilder, 3, attributes);
-    } else if (tag.equalsIgnoreCase("h4")) {
-      startHeading(mSpannableStringBuilder, 4, attributes);
-    } else if (tag.equalsIgnoreCase("h5")) {
-      startHeading(mSpannableStringBuilder, 5, attributes);
-    } else if (tag.equalsIgnoreCase("h6")) {
-      startHeading(mSpannableStringBuilder, 6, attributes);
-    } else if (tag.equalsIgnoreCase("img")) {
-      // Image content means the current tag is not empty (e.g. <li><img .../></li>).
-      isEmptyTag = false;
-      startImg(mSpannableStringBuilder, attributes, mSpanFactory);
-    } else if (tag.equalsIgnoreCase("code")) {
-      start(mSpannableStringBuilder, new Code());
-    } else if (tag.equalsIgnoreCase("mention")) {
-      startMention(mSpannableStringBuilder, attributes);
-    } else if (tag.equalsIgnoreCase("span")) {
-      startSpan(mSpannableStringBuilder, attributes);
-    }
-  }
-
-  private void handleEndTag(String tag) {
-    if (isBlockTag(tag) && mBlockDepth > 0) {
-      mBlockDepth--;
-    }
-
-    if (tag.equalsIgnoreCase("br")) {
-      anchorEmptyStyledParagraph();
-      handleBr(mSpannableStringBuilder);
-    } else if (tag.equalsIgnoreCase("p")) {
-      anchorEmptyStyledParagraph();
-      endBlockElement(mSpannableStringBuilder, mStyle, mSpanFactory);
-    } else if (tag.equalsIgnoreCase("ul")) {
-      endBlockElement(mSpannableStringBuilder, mStyle, mSpanFactory);
-    } else if (tag.equalsIgnoreCase("li")) {
-      endLi(mSpannableStringBuilder, mStyle, mSpanFactory);
-    } else if (tag.equalsIgnoreCase("b")) {
-      end(mSpannableStringBuilder, Bold.class, mSpanFactory.createBoldSpan(mStyle));
-    } else if (tag.equalsIgnoreCase("i")) {
-      end(mSpannableStringBuilder, Italic.class, mSpanFactory.createItalicSpan(mStyle));
-    } else if (tag.equalsIgnoreCase("blockquote")) {
-      endBlockquote(mSpannableStringBuilder, mStyle, mSpanFactory);
-    } else if (tag.equalsIgnoreCase("codeblock")) {
-      endCodeBlock(mSpannableStringBuilder, mStyle, mSpanFactory);
-    } else if (tag.equalsIgnoreCase("a")) {
-      endA(mSpannableStringBuilder, mStyle, mSpanFactory);
-    } else if (tag.equalsIgnoreCase("u")) {
-      end(mSpannableStringBuilder, Underline.class, mSpanFactory.createUnderlineSpan(mStyle));
-    } else if (tag.equalsIgnoreCase("s")) {
-      end(
-          mSpannableStringBuilder,
-          Strikethrough.class,
-          mSpanFactory.createStrikeThroughSpan(mStyle));
-    } else if (tag.equalsIgnoreCase("h1")) {
-      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 1);
-    } else if (tag.equalsIgnoreCase("h2")) {
-      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 2);
-    } else if (tag.equalsIgnoreCase("h3")) {
-      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 3);
-    } else if (tag.equalsIgnoreCase("h4")) {
-      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 4);
-    } else if (tag.equalsIgnoreCase("h5")) {
-      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 5);
-    } else if (tag.equalsIgnoreCase("h6")) {
-      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 6);
-    } else if (tag.equalsIgnoreCase("code")) {
-      end(mSpannableStringBuilder, Code.class, mSpanFactory.createInlineCodeSpan(mStyle));
-    } else if (tag.equalsIgnoreCase("mention")) {
-      endMention(mSpannableStringBuilder, mStyle, mSpanFactory);
-    } else if (tag.equalsIgnoreCase("span")) {
-      endSpan(mSpannableStringBuilder, mStyle, mSpanFactory);
-    }
-  }
-
-  private static void appendNewlines(Editable text, int minNewline) {
-    final int len = text.length();
-    if (len == 0) {
-      return;
-    }
-    int existingNewlines = 0;
-    for (int i = len - 1; i >= 0 && text.charAt(i) == '\n'; i--) {
-      existingNewlines++;
-    }
-    for (int j = existingNewlines; j < minNewline; j++) {
-      text.append("\n");
-    }
-  }
-
-  private static void startBlockElement(Editable text) {
-    appendNewlines(text, 1);
-    start(text, new Newline(1));
-  }
-
-  private static <T> void endBlockElement(
-      Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    Newline n = getLast(text, Newline.class);
-    if (n != null) {
-      appendNewlines(text, n.mNumNewlines);
-      text.removeSpan(n);
-    }
-    Alignment a = getLast(text, Alignment.class);
-    if (a != null) {
-      int where = text.getSpanStart(a);
-      text.removeSpan(a);
-      int len = text.length();
-
-      // Keep the span within the paragraph - exclude the trailing newline
-      if (len > 0 && text.charAt(len - 1) == '\n') {
-        len--;
-      }
-
-      if (where >= 0 && where < len) {
-        text.setSpan(
-            spanFactory.createAlignmentSpan(a.mAlignment, style),
-            where,
-            len,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-      }
-    }
-    ParagraphMargin margin = getLast(text, ParagraphMargin.class);
-    if (margin != null) {
-      int where = text.getSpanStart(margin);
-      text.removeSpan(margin);
-      int len = text.length();
-
-      if (len > 0 && text.charAt(len - 1) == '\n') {
-        len--;
-      }
-
-      if (where >= 0 && where < len) {
-        text.setSpan(
-            spanFactory.createParagraphMarginSpan(margin.mTop, margin.mBottom, style),
-            where,
-            len,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-      }
-    }
-  }
-
-  private boolean startAlignment(Editable text, Attributes attributes) {
-    String styleAttribute = attributes.getValue("", "style");
-    if (styleAttribute == null) {
+  private static boolean pushAlignmentMark(Editable text, Attributes attributes) {
+    String cssValue = parseCssAlignmentValue(attributes);
+    if (cssValue == null) {
       return false;
     }
-
-    Matcher matcher = TEXT_ALIGN_PATTERN.matcher(styleAttribute);
-    if (!matcher.find()) {
-      return false;
-    }
-
-    Layout.Alignment alignment = EnrichedAlignmentMapping.cssToAlignment(matcher.group(1));
-    if (alignment == null) {
-      return false;
-    }
-
-    start(text, new Alignment(alignment));
+    start(text, new Alignment(cssValue));
     return true;
   }
 
-  private boolean startParagraphMargin(Editable text, Attributes attributes) {
+  private static boolean pushParagraphMarginMark(Editable text, Attributes attributes) {
     ParagraphMargin margin = parseParagraphMargin(attributes);
     if (margin == null) {
       return false;
     }
-
     start(text, margin);
     return true;
-  }
-
-  private static void handleBr(Editable text) {
-    text.append('\n');
-  }
-
-  private void startLi(Editable text, Attributes attributes) {
-    startBlockElement(text);
-
-    if (isInOrderedList) {
-      currentOrderedListItemIndex++;
-      start(text, new List("ordered", currentOrderedListItemIndex, false));
-    } else if (isInCheckboxList) {
-      String isChecked = attributes.getValue("", "checked");
-      start(text, new List("checked", 0, "checked".equals(isChecked)));
-    } else {
-      start(text, new List("unordered", 0, false));
-    }
-  }
-
-  private static <T> void endLi(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    endBlockElement(text, style, spanFactory);
-
-    List l = getLast(text, List.class);
-    if (l != null) {
-      if (l.mType.equals("ordered")) {
-        setParagraphSpanFromMark(text, l, spanFactory.createOrderedListSpan(l.mIndex, style));
-      } else if (l.mType.equals("checked")) {
-        setParagraphSpanFromMark(text, l, spanFactory.createCheckboxListSpan(l.mChecked, style));
-      } else {
-        setParagraphSpanFromMark(text, l, spanFactory.createUnorderedListSpan(style));
-      }
-    }
-
-    endBlockElement(text, style, spanFactory);
-  }
-
-  private void startBlockquote(Editable text) {
-    startBlockElement(text);
-    start(text, new Blockquote());
-  }
-
-  private static <T> void endBlockquote(
-      Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    endBlockElement(text, style, spanFactory);
-    Blockquote last = getLast(text, Blockquote.class);
-    setParagraphSpanFromMark(text, last, spanFactory.createBlockQuoteSpan(style));
-  }
-
-  private void startCodeBlock(Editable text) {
-    startBlockElement(text);
-    start(text, new CodeBlock());
-  }
-
-  private static <T> void endCodeBlock(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    endBlockElement(text, style, spanFactory);
-    CodeBlock last = getLast(text, CodeBlock.class);
-    setParagraphSpanFromMark(text, last, spanFactory.createCodeBlockSpan(style));
-  }
-
-  private void startHeading(Editable text, int level, Attributes attributes) {
-    startBlockElement(text);
-    startAlignment(text, attributes);
-    startParagraphMargin(text, attributes);
-
-    switch (level) {
-      case 1:
-        start(text, new H1());
-        break;
-      case 2:
-        start(text, new H2());
-        break;
-      case 3:
-        start(text, new H3());
-        break;
-      case 4:
-        start(text, new H4());
-        break;
-      case 5:
-        start(text, new H5());
-        break;
-      case 6:
-        start(text, new H6());
-        break;
-      default:
-        throw new IllegalArgumentException("Unsupported heading level: " + level);
-    }
-  }
-
-  private static <T> void endHeading(
-      Editable text, T style, EnrichedSpanFactory<T> spanFactory, int level) {
-    endBlockElement(text, style, spanFactory);
-
-    switch (level) {
-      case 1:
-        H1 lastH1 = getLast(text, H1.class);
-        setParagraphSpanFromMark(text, lastH1, spanFactory.createH1Span(style));
-        break;
-      case 2:
-        H2 lastH2 = getLast(text, H2.class);
-        setParagraphSpanFromMark(text, lastH2, spanFactory.createH2Span(style));
-        break;
-      case 3:
-        H3 lastH3 = getLast(text, H3.class);
-        setParagraphSpanFromMark(text, lastH3, spanFactory.createH3Span(style));
-        break;
-      case 4:
-        H4 lastH4 = getLast(text, H4.class);
-        setParagraphSpanFromMark(text, lastH4, spanFactory.createH4Span(style));
-        break;
-      case 5:
-        H5 lastH5 = getLast(text, H5.class);
-        setParagraphSpanFromMark(text, lastH5, spanFactory.createH5Span(style));
-        break;
-      case 6:
-        H6 lastH6 = getLast(text, H6.class);
-        setParagraphSpanFromMark(text, lastH6, spanFactory.createH6Span(style));
-        break;
-      default:
-        throw new IllegalArgumentException("Unsupported heading level: " + level);
-    }
-  }
-
-  private static <T> T getLast(Spanned text, Class<T> kind) {
-    /*
-     * This knows that the last returned object from getSpans()
-     * will be the most recently added.
-     */
-    T[] objs = text.getSpans(0, text.length(), kind);
-    if (objs.length == 0) {
-      return null;
-    } else {
-      return objs[objs.length - 1];
-    }
-  }
-
-  private static void setSpanFromMark(Spannable text, Object mark, Object... spans) {
-    int where = text.getSpanStart(mark);
-    text.removeSpan(mark);
-    int len = text.length();
-    if (where != len) {
-      for (Object span : spans) {
-        text.setSpan(span, where, len, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-      }
-    }
-  }
-
-  private static void setParagraphSpanFromMark(Editable text, Object mark, Object... spans) {
-    int where = text.getSpanStart(mark);
-    text.removeSpan(mark);
-    int len = text.length();
-
-    // Block spans require at least one character to be applied.
-    if (isEmptyTag) {
-      text.append(EnrichedConstants.ZWS);
-      len++;
-    }
-
-    // Adjust the end position to exclude the newline character, if present
-    if (len > 0 && text.charAt(len - 1) == '\n') {
-      len--;
-    }
-
-    if (where != len) {
-      for (Object span : spans) {
-        text.setSpan(span, where, len, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-      }
-    }
-  }
-
-  private static void start(Editable text, Object mark) {
-    int len = text.length();
-    text.setSpan(mark, len, len, Spannable.SPAN_INCLUSIVE_EXCLUSIVE);
-  }
-
-  private static void end(Editable text, Class kind, Object repl) {
-    Object obj = getLast(text, kind);
-    if (obj != null) {
-      setSpanFromMark(text, obj, repl);
-    }
-  }
-
-  private static <T> void startImg(
-      Editable text, Attributes attributes, EnrichedSpanFactory<T> spanFactory) {
-    String src = attributes.getValue("", "src");
-    String width = attributes.getValue("", "width");
-    String height = attributes.getValue("", "height");
-
-    int len = text.length();
-    text.append("￼");
-    text.setSpan(
-        spanFactory.createImageSpan(src, Integer.parseInt(width), Integer.parseInt(height)),
-        len,
-        text.length(),
-        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-  }
-
-  private static void startA(Editable text, Attributes attributes) {
-    String href = attributes.getValue("", "href");
-    start(text, new Href(href));
-  }
-
-  private static <T> void endA(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    Href h = getLast(text, Href.class);
-    if (h != null) {
-      if (h.mHref != null) {
-        setSpanFromMark(text, h, spanFactory.createLinkSpan(h.mHref, style));
-      }
-    }
-  }
-
-  /** Strips quotes from a CSS font-family value and keeps the first entry of a font stack. */
-  private static String parseCssFontFamily(String value) {
-    String firstFamily = value.split(",")[0].trim();
-    firstFamily = firstFamily.replace("\"", "").replace("'", "").trim();
-    return firstFamily.isEmpty() ? null : firstFamily;
-  }
-
-  /** Parses a CSS dimension value (e.g. "16px", "1.5") into a float, ignoring the unit. */
-  private static Float parseCssDimension(String value) {
-    String numeric = value.trim();
-    int end = 0;
-    while (end < numeric.length()
-        && (Character.isDigit(numeric.charAt(end))
-            || numeric.charAt(end) == '.'
-            || numeric.charAt(end) == '-')) {
-      end++;
-    }
-    if (end == 0) {
-      return null;
-    }
-    try {
-      return Float.parseFloat(numeric.substring(0, end));
-    } catch (NumberFormatException e) {
-      return null;
-    }
   }
 
   private static ParagraphMargin parseParagraphMargin(Attributes attributes) {
@@ -1220,118 +683,554 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
         : null;
   }
 
-  /**
-   * Parses a CSS hex color ("#RGB", "#RRGGBB" or "#RRGGBBAA") into an ARGB color int. Other CSS
-   * color notations are not supported.
-   */
-  private static Integer parseCssColor(String value) {
-    String hex = value.trim();
-    if (!hex.startsWith("#")) {
+  private static Float parseCssDimension(String value) {
+    String numeric = value.trim();
+    int end = 0;
+    while (end < numeric.length()
+        && (Character.isDigit(numeric.charAt(end))
+            || numeric.charAt(end) == '.'
+            || numeric.charAt(end) == '-')) {
+      end++;
+    }
+    if (end == 0) {
       return null;
     }
-    hex = hex.substring(1);
-
-    if (hex.length() == 3) {
-      StringBuilder expanded = new StringBuilder();
-      for (int i = 0; i < hex.length(); i++) {
-        expanded.append(hex.charAt(i)).append(hex.charAt(i));
-      }
-      hex = expanded.toString();
-    }
-
-    if (hex.length() != 6 && hex.length() != 8) {
-      return null;
-    }
-
     try {
-      long parsed = Long.parseLong(hex, 16);
-      long alpha = 0xFF;
-      if (hex.length() == 8) {
-        alpha = parsed & 0xFF;
-        parsed >>= 8;
-      }
-      return (int) ((alpha << 24) | parsed);
+      return Float.parseFloat(numeric.substring(0, end));
     } catch (NumberFormatException e) {
       return null;
     }
   }
 
-  private static void startSpan(Editable text, Attributes attributes) {
-    String cssStyle = attributes.getValue("", "style");
-    String fontFamily = null;
-    Float fontSize = null;
-    Float letterSpacing = null;
-    Float lineHeight = null;
-    Integer foregroundColor = null;
+  public HtmlToSpannedConverter(
+      String source,
+      T style,
+      Parser parser,
+      EnrichedSpanFactory<T> spanFactory,
+      Pattern linkRegex) {
+    mStyle = style;
+    mSource = source;
+    mSpannableStringBuilder = new SpannableStringBuilder();
+    mReader = parser;
+    mSpanFactory = spanFactory;
+    mLinkRegex = linkRegex;
+  }
 
-    if (cssStyle != null) {
-      for (String declaration : cssStyle.split(";")) {
-        int colonIndex = declaration.indexOf(':');
-        if (colonIndex < 0) {
-          continue;
+  public Spanned convert() {
+    mReader.setContentHandler(this);
+    try {
+      mReader.parse(new InputSource(new StringReader(mSource)));
+    } catch (IOException e) {
+      // We are reading from a string. There should not be IO problems.
+      throw new RuntimeException(e);
+    } catch (SAXException e) {
+      // TagSoup doesn't throw parse exceptions.
+      throw new RuntimeException(e);
+    }
+    // Fix flags and range for paragraph-type markup.
+    Object[] obj =
+        mSpannableStringBuilder.getSpans(0, mSpannableStringBuilder.length(), ParagraphStyle.class);
+    for (int i = 0; i < obj.length; i++) {
+      int start = mSpannableStringBuilder.getSpanStart(obj[i]);
+      int end = mSpannableStringBuilder.getSpanEnd(obj[i]);
+      // If the last line of the range is blank, back off by one.
+      if (end - 2 >= 0) {
+        if (mSpannableStringBuilder.charAt(end - 1) == '\n'
+            && mSpannableStringBuilder.charAt(end - 2) == '\n') {
+          end--;
         }
-        String property = declaration.substring(0, colonIndex).trim().toLowerCase(Locale.US);
-        String value = declaration.substring(colonIndex + 1).trim();
-        if (value.isEmpty()) {
-          continue;
-        }
-
-        switch (property) {
-          case "font-family":
-            fontFamily = parseCssFontFamily(value);
-            break;
-          case "font-size":
-            fontSize = parseCssDimension(value);
-            break;
-          case "letter-spacing":
-            letterSpacing = parseCssDimension(value);
-            break;
-          case "line-height":
-            lineHeight = parseCssDimension(value);
-            break;
-          case "color":
-            foregroundColor = parseCssColor(value);
-            break;
-          default:
-            break;
-        }
+      }
+      if (end == start) {
+        mSpannableStringBuilder.removeSpan(obj[i]);
+      } else {
+        mSpannableStringBuilder.setSpan(obj[i], start, end, EnrichedSpanFlags.forSpan(obj[i]));
       }
     }
 
-    // A mark is pushed for every <span> tag (even without supported styles),
-    // so that each closing </span> pops the matching mark.
-    start(text, new TextStyle(fontFamily, fontSize, letterSpacing, lineHeight, foregroundColor));
+    // Assign zero-width space character to the proper spans.
+    EnrichedZeroWidthSpaceSpan[] zeroWidthSpaceSpans =
+        mSpannableStringBuilder.getSpans(
+            0, mSpannableStringBuilder.length(), EnrichedZeroWidthSpaceSpan.class);
+    for (EnrichedZeroWidthSpaceSpan zeroWidthSpaceSpan : zeroWidthSpaceSpans) {
+      int start = mSpannableStringBuilder.getSpanStart(zeroWidthSpaceSpan);
+      int end = mSpannableStringBuilder.getSpanEnd(zeroWidthSpaceSpan);
+
+      if (mSpannableStringBuilder.charAt(start) != EnrichedConstants.ZWS) {
+        // Collect spans before inserting ZWS. SPAN_EXCLUSIVE_EXCLUSIVE spans will
+        // shift to start+1. We must re-anchor them back to `start` to prevent
+        // the loop from processing them again and inserting duplicate ZWS.
+        EnrichedSpan[] colocated =
+            mSpannableStringBuilder.getSpans(start, start + 1, EnrichedSpan.class);
+
+        mSpannableStringBuilder.insert(start, EnrichedConstants.ZWS_STRING);
+        end++;
+
+        for (EnrichedSpan span : colocated) {
+          if (span == zeroWidthSpaceSpan) continue;
+          // Only re-anchor spans that actually shifted.
+          // Skip overlapping or INCLUSIVE spans that kept their original start.
+          if (mSpannableStringBuilder.getSpanStart(span) != start + 1) continue;
+          int spanEnd = mSpannableStringBuilder.getSpanEnd(span);
+          mSpannableStringBuilder.removeSpan(span);
+          mSpannableStringBuilder.setSpan(span, start, spanEnd, EnrichedSpanFlags.forSpan(span));
+        }
+      }
+
+      mSpannableStringBuilder.removeSpan(zeroWidthSpaceSpan);
+      mSpannableStringBuilder.setSpan(
+          zeroWidthSpaceSpan, start, end, EnrichedSpanFlags.forSpan(zeroWidthSpaceSpan));
+    }
+
+    return mSpannableStringBuilder;
   }
 
-  private static <T> void endSpan(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
-    TextStyle textStyle = getLast(text, TextStyle.class);
-    if (textStyle == null) {
+  private static boolean isBlockTag(String tag) {
+    return tag.equalsIgnoreCase("ul")
+        || tag.equalsIgnoreCase("ol")
+        || tag.equalsIgnoreCase("blockquote")
+        || tag.equalsIgnoreCase("codeblock");
+  }
+
+  private void anchorEmptyParagraph(boolean isLineBreak) {
+    int length = mSpannableStringBuilder.length();
+    if (mParagraphStart == length) {
+      if (mIsParagraphStyled
+          || mSpannableStringBuilder.getSpans(length, length, CustomStyleMark.class).length > 0) {
+        mSpannableStringBuilder.append(EnrichedConstants.ZWS);
+        isEmptyTag = false;
+      } else if (isLineBreak) {
+        isEmptyTag = false;
+      }
+    }
+    mParagraphStart = -1;
+  }
+
+  private void handleStartTag(String tag, Attributes attributes) {
+    if (isBlockTag(tag)) {
+      mBlockDepth++;
+    }
+
+    if (tag.equalsIgnoreCase("br")) {
+      // We don't need to handle this. TagSoup will ensure that there's a </br> for each <br>
+      // so we can safely emit the linebreaks when we handle the close tag.
+    } else if (tag.equalsIgnoreCase("p")) {
+      isEmptyTag = true;
+      startBlockElement(mSpannableStringBuilder);
+      boolean hasAlignment = pushAlignmentMark(mSpannableStringBuilder, attributes);
+      boolean hasMargin = pushParagraphMarginMark(mSpannableStringBuilder, attributes);
+      mParagraphStart = mBlockDepth == 0 ? mSpannableStringBuilder.length() : -1;
+      mIsParagraphStyled = hasAlignment || hasMargin;
+    } else if (tag.equalsIgnoreCase("ul")) {
+      isInOrderedList = false;
+      String dataType = attributes.getValue("", "data-type");
+      isInCheckboxList = "checkbox".equals(dataType);
+      currentListAlignmentCssValue = parseCssAlignmentValue(attributes);
+      startBlockElement(mSpannableStringBuilder);
+    } else if (tag.equalsIgnoreCase("ol")) {
+      isInOrderedList = true;
+      currentOrderedListItemIndex = 0;
+      currentListAlignmentCssValue = parseCssAlignmentValue(attributes);
+      startBlockElement(mSpannableStringBuilder);
+    } else if (tag.equalsIgnoreCase("li")) {
+      isEmptyTag = true;
+      startLi(mSpannableStringBuilder, attributes);
+    } else if (tag.equalsIgnoreCase("b")) {
+      start(mSpannableStringBuilder, new Bold());
+    } else if (tag.equalsIgnoreCase("i")) {
+      start(mSpannableStringBuilder, new Italic());
+    } else if (tag.equalsIgnoreCase("blockquote")) {
+      isEmptyTag = true;
+      startBlockquote(mSpannableStringBuilder);
+    } else if (tag.equalsIgnoreCase("codeblock")) {
+      isEmptyTag = true;
+      startCodeBlock(mSpannableStringBuilder);
+    } else if (tag.equalsIgnoreCase("a")) {
+      startA(mSpannableStringBuilder, attributes);
+    } else if (tag.equalsIgnoreCase("u")) {
+      start(mSpannableStringBuilder, new Underline());
+    } else if (tag.equalsIgnoreCase("s")) {
+      start(mSpannableStringBuilder, new Strikethrough());
+    } else if (tag.equalsIgnoreCase("strike")) {
+      start(mSpannableStringBuilder, new Strikethrough());
+    } else if (tag.equalsIgnoreCase("h1")) {
+      startHeading(mSpannableStringBuilder, 1);
+      pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
+    } else if (tag.equalsIgnoreCase("h2")) {
+      startHeading(mSpannableStringBuilder, 2);
+      pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
+    } else if (tag.equalsIgnoreCase("h3")) {
+      startHeading(mSpannableStringBuilder, 3);
+      pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
+    } else if (tag.equalsIgnoreCase("h4")) {
+      startHeading(mSpannableStringBuilder, 4);
+      pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
+    } else if (tag.equalsIgnoreCase("h5")) {
+      startHeading(mSpannableStringBuilder, 5);
+      pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
+    } else if (tag.equalsIgnoreCase("h6")) {
+      startHeading(mSpannableStringBuilder, 6);
+      pushAlignmentMark(mSpannableStringBuilder, attributes);
+      pushParagraphMarginMark(mSpannableStringBuilder, attributes);
+    } else if (tag.equalsIgnoreCase("img")) {
+      // Image content means the current tag is not empty (e.g. <li><img .../></li>).
+      isEmptyTag = false;
+      startImg(mSpannableStringBuilder, attributes, mSpanFactory);
+    } else if (tag.equalsIgnoreCase("code")) {
+      start(mSpannableStringBuilder, new Code());
+    } else if (tag.equalsIgnoreCase("mention")) {
+      startMention(mSpannableStringBuilder, attributes);
+    } else if (tag.equalsIgnoreCase("span")) {
+      startSpan(mSpannableStringBuilder, attributes);
+    }
+  }
+
+  private void handleEndTag(String tag) {
+    if (isBlockTag(tag) && mBlockDepth > 0) {
+      mBlockDepth--;
+    }
+
+    if (tag.equalsIgnoreCase("br")) {
+      anchorEmptyParagraph(true);
+      handleBr(mSpannableStringBuilder);
+    } else if (tag.equalsIgnoreCase("p")) {
+      anchorEmptyParagraph(false);
+      boolean empty = isEmptyTag;
+      Alignment pendingAlignment = empty ? getLast(mSpannableStringBuilder, Alignment.class) : null;
+      endBlockElement(mSpannableStringBuilder, mSpanFactory);
+      endParagraphMargin(mSpannableStringBuilder, mStyle, mSpanFactory);
+      // Plain empty paragraphs never reach setParagraphSpanFromMark (no ZWS).
+      // Represent them as a blank line so they round-trip as <br>.
+      if (empty && pendingAlignment == null) {
+        handleBr(mSpannableStringBuilder);
+      }
+    } else if (tag.equalsIgnoreCase("ul")) {
+      currentListAlignmentCssValue = null;
+      endBlockElement(mSpannableStringBuilder, mSpanFactory);
+    } else if (tag.equalsIgnoreCase("ol")) {
+      currentListAlignmentCssValue = null;
+      endBlockElement(mSpannableStringBuilder, mSpanFactory);
+    } else if (tag.equalsIgnoreCase("li")) {
+      endLi(mSpannableStringBuilder, mStyle, mSpanFactory);
+    } else if (tag.equalsIgnoreCase("b")) {
+      end(mSpannableStringBuilder, Bold.class, mSpanFactory.createBoldSpan(mStyle));
+    } else if (tag.equalsIgnoreCase("i")) {
+      end(mSpannableStringBuilder, Italic.class, mSpanFactory.createItalicSpan(mStyle));
+    } else if (tag.equalsIgnoreCase("blockquote")) {
+      endBlockquote(mSpannableStringBuilder, mStyle, mSpanFactory);
+    } else if (tag.equalsIgnoreCase("codeblock")) {
+      endCodeBlock(mSpannableStringBuilder, mStyle, mSpanFactory);
+    } else if (tag.equalsIgnoreCase("a")) {
+      endA(mSpannableStringBuilder, mStyle, mSpanFactory, mLinkRegex);
+    } else if (tag.equalsIgnoreCase("u")) {
+      end(mSpannableStringBuilder, Underline.class, mSpanFactory.createUnderlineSpan(mStyle));
+    } else if (tag.equalsIgnoreCase("s")) {
+      end(
+          mSpannableStringBuilder,
+          Strikethrough.class,
+          mSpanFactory.createStrikeThroughSpan(mStyle));
+    } else if (tag.equalsIgnoreCase("h1")) {
+      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 1);
+    } else if (tag.equalsIgnoreCase("h2")) {
+      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 2);
+    } else if (tag.equalsIgnoreCase("h3")) {
+      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 3);
+    } else if (tag.equalsIgnoreCase("h4")) {
+      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 4);
+    } else if (tag.equalsIgnoreCase("h5")) {
+      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 5);
+    } else if (tag.equalsIgnoreCase("h6")) {
+      endHeading(mSpannableStringBuilder, mStyle, mSpanFactory, 6);
+    } else if (tag.equalsIgnoreCase("code")) {
+      end(mSpannableStringBuilder, Code.class, mSpanFactory.createInlineCodeSpan(mStyle));
+    } else if (tag.equalsIgnoreCase("mention")) {
+      endMention(mSpannableStringBuilder, mStyle, mSpanFactory);
+    } else if (tag.equalsIgnoreCase("span")) {
+      endSpan(mSpannableStringBuilder, mStyle, mSpanFactory);
+    }
+  }
+
+  private static void appendNewlines(Editable text, int minNewline) {
+    final int len = text.length();
+    if (len == 0) {
+      return;
+    }
+    int existingNewlines = 0;
+    for (int i = len - 1; i >= 0 && text.charAt(i) == '\n'; i--) {
+      existingNewlines++;
+    }
+    for (int j = existingNewlines; j < minNewline; j++) {
+      text.append("\n");
+    }
+  }
+
+  private static void startBlockElement(Editable text) {
+    appendNewlines(text, 1);
+    start(text, new Newline(1));
+  }
+
+  private static <T> void endBlockElement(Editable text, EnrichedSpanFactory<T> spanFactory) {
+    Newline n = getLast(text, Newline.class);
+    if (n != null) {
+      appendNewlines(text, n.mNumNewlines);
+      text.removeSpan(n);
+    }
+    Alignment a = getLast(text, Alignment.class);
+    if (a != null) {
+      setParagraphSpanFromMark(text, a, spanFactory.createAlignmentSpan(a.mCssValue));
+    }
+  }
+
+  private static <T> void endParagraphMargin(
+      Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
+    ParagraphMargin margin = getLast(text, ParagraphMargin.class);
+    if (margin == null) {
       return;
     }
 
-    ArrayList<Object> spans = new ArrayList<>();
-    if (textStyle.mFontFamily != null) {
-      spans.add(spanFactory.createFontFamilySpan(textStyle.mFontFamily, style));
-    }
-    if (textStyle.mFontSize != null) {
-      spans.add(spanFactory.createFontSizeSpan(textStyle.mFontSize, style));
-    }
-    if (textStyle.mLetterSpacing != null) {
-      spans.add(spanFactory.createLetterSpacingSpan(textStyle.mLetterSpacing, style));
-    }
-    if (textStyle.mLineHeight != null) {
-      spans.add(spanFactory.createInlineLineHeightSpan(textStyle.mLineHeight, style));
-    }
-    if (textStyle.mForegroundColor != null) {
-      spans.add(spanFactory.createForegroundColorSpan(textStyle.mForegroundColor, style));
+    int where = text.getSpanStart(margin);
+    text.removeSpan(margin);
+    int len = text.length();
+
+    if (len > 0 && text.charAt(len - 1) == '\n') {
+      len--;
     }
 
-    if (spans.isEmpty()) {
-      text.removeSpan(textStyle);
-      return;
+    if (where >= 0 && where < len) {
+      Object span = spanFactory.createParagraphMarginSpan(margin.mTop, margin.mBottom, style);
+      text.setSpan(span, where, len, EnrichedSpanFlags.forSpan(span));
+    }
+  }
+
+  private static void handleBr(Editable text) {
+    text.append('\n');
+  }
+
+  private void startLi(Editable text, Attributes attributes) {
+    startBlockElement(text);
+
+    if (currentListAlignmentCssValue != null) {
+      start(text, new Alignment(currentListAlignmentCssValue));
     }
 
-    setSpanFromMark(text, textStyle, spans.toArray());
+    if (isInOrderedList) {
+      currentOrderedListItemIndex++;
+      start(text, new List("ordered", currentOrderedListItemIndex, false));
+    } else if (isInCheckboxList) {
+      String isChecked = attributes.getValue("", "checked");
+      start(text, new List("checked", 0, "checked".equals(isChecked)));
+    } else {
+      start(text, new List("unordered", 0, false));
+    }
+  }
+
+  private static <T> void endLi(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
+    endBlockElement(text, spanFactory);
+
+    List l = getLast(text, List.class);
+    if (l != null) {
+      if (l.mType.equals("ordered")) {
+        setParagraphSpanFromMark(text, l, spanFactory.createOrderedListSpan(l.mIndex, style));
+      } else if (l.mType.equals("checked")) {
+        setParagraphSpanFromMark(text, l, spanFactory.createCheckboxListSpan(l.mChecked, style));
+      } else {
+        setParagraphSpanFromMark(text, l, spanFactory.createUnorderedListSpan(style));
+      }
+    }
+
+    endBlockElement(text, spanFactory);
+  }
+
+  private void startBlockquote(Editable text) {
+    startBlockElement(text);
+    start(text, new Blockquote());
+  }
+
+  private static <T> void endBlockquote(
+      Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
+    endBlockElement(text, spanFactory);
+    Blockquote last = getLast(text, Blockquote.class);
+    setParagraphSpanFromMark(text, last, spanFactory.createBlockQuoteSpan(style));
+  }
+
+  private void startCodeBlock(Editable text) {
+    startBlockElement(text);
+    start(text, new CodeBlock());
+  }
+
+  private static <T> void endCodeBlock(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
+    endBlockElement(text, spanFactory);
+    CodeBlock last = getLast(text, CodeBlock.class);
+    setParagraphSpanFromMark(text, last, spanFactory.createCodeBlockSpan(style));
+  }
+
+  private void startHeading(Editable text, int level) {
+    startBlockElement(text);
+
+    switch (level) {
+      case 1:
+        start(text, new H1());
+        break;
+      case 2:
+        start(text, new H2());
+        break;
+      case 3:
+        start(text, new H3());
+        break;
+      case 4:
+        start(text, new H4());
+        break;
+      case 5:
+        start(text, new H5());
+        break;
+      case 6:
+        start(text, new H6());
+        break;
+      default:
+        throw new IllegalArgumentException("Unsupported heading level: " + level);
+    }
+  }
+
+  private static <T> void endHeading(
+      Editable text, T style, EnrichedSpanFactory<T> spanFactory, int level) {
+    endBlockElement(text, spanFactory);
+    endParagraphMargin(text, style, spanFactory);
+
+    switch (level) {
+      case 1:
+        H1 lastH1 = getLast(text, H1.class);
+        setParagraphSpanFromMark(text, lastH1, spanFactory.createH1Span(style));
+        break;
+      case 2:
+        H2 lastH2 = getLast(text, H2.class);
+        setParagraphSpanFromMark(text, lastH2, spanFactory.createH2Span(style));
+        break;
+      case 3:
+        H3 lastH3 = getLast(text, H3.class);
+        setParagraphSpanFromMark(text, lastH3, spanFactory.createH3Span(style));
+        break;
+      case 4:
+        H4 lastH4 = getLast(text, H4.class);
+        setParagraphSpanFromMark(text, lastH4, spanFactory.createH4Span(style));
+        break;
+      case 5:
+        H5 lastH5 = getLast(text, H5.class);
+        setParagraphSpanFromMark(text, lastH5, spanFactory.createH5Span(style));
+        break;
+      case 6:
+        H6 lastH6 = getLast(text, H6.class);
+        setParagraphSpanFromMark(text, lastH6, spanFactory.createH6Span(style));
+        break;
+      default:
+        throw new IllegalArgumentException("Unsupported heading level: " + level);
+    }
+  }
+
+  private static <T> T getLast(Spanned text, Class<T> kind) {
+    /*
+     * This knows that the last returned object from getSpans()
+     * will be the most recently added.
+     */
+    T[] objs = text.getSpans(0, text.length(), kind);
+    if (objs.length == 0) {
+      return null;
+    } else {
+      return objs[objs.length - 1];
+    }
+  }
+
+  private static void setSpanFromMark(Spannable text, Object mark, Object... spans) {
+    int where = text.getSpanStart(mark);
+    text.removeSpan(mark);
+    int len = text.length();
+    if (where != len) {
+      for (Object span : spans) {
+        text.setSpan(span, where, len, EnrichedSpanFlags.forSpan(span));
+      }
+    }
+  }
+
+  private static void setParagraphSpanFromMark(Editable text, Object mark, Object... spans) {
+    int where = text.getSpanStart(mark);
+    text.removeSpan(mark);
+    int len = text.length();
+
+    // Block spans require at least one character to be applied.
+    if (isEmptyTag) {
+      text.append(EnrichedConstants.ZWS);
+      len++;
+    }
+
+    // Adjust the end position to exclude the newline character, if present
+    if (len > 0 && text.charAt(len - 1) == '\n') {
+      len--;
+    }
+
+    if (where != len) {
+      for (Object span : spans) {
+        text.setSpan(span, where, len, EnrichedSpanFlags.forSpan(span));
+      }
+    }
+  }
+
+  private static void start(Editable text, Object mark) {
+    int len = text.length();
+    text.setSpan(
+        mark, len, len, EnrichedSpanFlags.forSpan(mark, Spannable.SPAN_INCLUSIVE_EXCLUSIVE));
+  }
+
+  private static void end(Editable text, Class kind, Object repl) {
+    Object obj = getLast(text, kind);
+    if (obj != null) {
+      setSpanFromMark(text, obj, repl);
+    }
+  }
+
+  private static <T> void startImg(
+      Editable text, Attributes attributes, EnrichedSpanFactory<T> spanFactory) {
+    String src = attributes.getValue("", "src");
+    String width = attributes.getValue("", "width");
+    String height = attributes.getValue("", "height");
+
+    int len = text.length();
+    text.append("￼");
+    Object imageSpan =
+        spanFactory.createImageSpan(src, parseDimension(width), parseDimension(height));
+    text.setSpan(imageSpan, len, text.length(), EnrichedSpanFlags.forSpan(imageSpan));
+  }
+
+  private static int parseDimension(String value) {
+    if (value == null) return 0;
+    try {
+      int parsed = (int) Math.floor(Float.parseFloat(value));
+      return Math.max(parsed, 0);
+    } catch (NumberFormatException e) {
+      return 0;
+    }
+  }
+
+  private static void startA(Editable text, Attributes attributes) {
+    String href = attributes.getValue("", "href");
+    start(text, new Href(href));
+  }
+
+  private static boolean urlMatchesLinkRegex(String url, Pattern linkRegex) {
+    if (linkRegex == null) return false;
+    return linkRegex.matcher(url).matches();
+  }
+
+  private static <T> void endA(
+      Editable text, T style, EnrichedSpanFactory<T> spanFactory, Pattern linkRegex) {
+    Href h = getLast(text, Href.class);
+    if (h != null && h.mHref != null) {
+      String linkText = text.subSequence(text.getSpanStart(h), text.length()).toString();
+      boolean isManual = !linkText.equals(h.mHref) || !urlMatchesLinkRegex(h.mHref, linkRegex);
+      setSpanFromMark(text, h, spanFactory.createLinkSpan(h.mHref, style, isManual));
+    }
   }
 
   private static void startMention(Editable mention, Attributes attributes) {
@@ -1358,6 +1257,93 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
 
     setSpanFromMark(
         text, m, spanFactory.createMentionSpan(m.mText, m.mIndicator, m.mAttributes, style));
+  }
+
+  private static void startSpan(Editable text, Attributes attributes) {
+    String styleAttr = attributes.getValue("", "style");
+    Integer fg = null;
+    Integer bg = null;
+    Float fontSize = null;
+    String fontFamily = null;
+    Float letterSpacing = null;
+    Float lineHeight = null;
+
+    if (styleAttr != null) {
+      Matcher fgMatcher = CSS_FG_PATTERN.matcher(styleAttr);
+      if (fgMatcher.find()) {
+        fg = EnrichedColorParser.parseCssColor(fgMatcher.group(1));
+      }
+      Matcher bgMatcher = CSS_BG_PATTERN.matcher(styleAttr);
+      if (bgMatcher.find()) {
+        bg = EnrichedColorParser.parseCssColor(bgMatcher.group(1));
+      }
+      Matcher fontSizeMatcher = CSS_FONT_SIZE_PATTERN.matcher(styleAttr);
+      if (fontSizeMatcher.find()) {
+        String fontSizeString = fontSizeMatcher.group(1);
+        if (fontSizeString != null) {
+          fontSize = Float.parseFloat(fontSizeString);
+        }
+      }
+      Matcher fontFamilyMatcher = CSS_FONT_FAMILY_PATTERN.matcher(styleAttr);
+      if (fontFamilyMatcher.find()) {
+        fontFamily = parseCssFontFamily(fontFamilyMatcher.group(1));
+      }
+      Matcher letterSpacingMatcher = CSS_LETTER_SPACING_PATTERN.matcher(styleAttr);
+      if (letterSpacingMatcher.find()) {
+        float parsedLetterSpacing = Float.parseFloat(letterSpacingMatcher.group(1));
+        letterSpacing = parsedLetterSpacing != 0f ? parsedLetterSpacing : null;
+      }
+      Matcher lineHeightMatcher = CSS_LINE_HEIGHT_PATTERN.matcher(styleAttr);
+      if (lineHeightMatcher.find()) {
+        float parsedLineHeight = Float.parseFloat(lineHeightMatcher.group(1));
+        lineHeight = parsedLineHeight > 0f ? parsedLineHeight : null;
+      }
+    }
+
+    if (!new CustomStyle(fg, bg, fontSize, fontFamily, letterSpacing, lineHeight).isEmpty()) {
+      start(text, new CustomStyleMark(fg, bg, fontSize, fontFamily, letterSpacing, lineHeight));
+    }
+  }
+
+  private static String parseCssFontFamily(String raw) {
+    if (raw == null) return null;
+    String value = firstInFontFamilyString(raw).trim();
+    if (value.length() >= 2
+        && ((value.startsWith("'") && value.endsWith("'"))
+            || (value.startsWith("\"") && value.endsWith("\"")))) {
+      value = value.substring(1, value.length() - 1);
+    }
+    return value.isEmpty() ? null : value;
+  }
+
+  private static String firstInFontFamilyString(String value) {
+    char quote = 0;
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      if (quote != 0) {
+        if (c == quote) quote = 0;
+      } else if (c == '\'' || c == '"') {
+        quote = c;
+      } else if (c == ',') {
+        return value.substring(0, i);
+      }
+    }
+    return value;
+  }
+
+  private static <T> void endSpan(Editable text, T style, EnrichedSpanFactory<T> spanFactory) {
+    CustomStyleMark mark = getLast(text, CustomStyleMark.class);
+    if (mark == null) return;
+    setSpanFromMark(
+        text,
+        mark,
+        spanFactory.createCustomStyleSpan(
+            mark.mFg,
+            mark.mBg,
+            mark.mFontSize,
+            mark.mFontFamily,
+            mark.mLetterSpacing,
+            mark.mLineHeight));
   }
 
   public void setDocumentLocator(Locator locator) {}
@@ -1479,32 +1465,35 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
     }
   }
 
-  private static class TextStyle {
-    public String mFontFamily;
-    public Float mFontSize;
-    public Float mLetterSpacing;
-    public Float mLineHeight;
-    public Integer mForegroundColor;
-
-    public TextStyle(
-        String fontFamily,
-        Float fontSize,
-        Float letterSpacing,
-        Float lineHeight,
-        Integer foregroundColor) {
-      mFontFamily = fontFamily;
-      mFontSize = fontSize;
-      mLetterSpacing = letterSpacing;
-      mLineHeight = lineHeight;
-      mForegroundColor = foregroundColor;
-    }
-  }
-
   private static class Newline {
     private final int mNumNewlines;
 
     public Newline(int numNewlines) {
       mNumNewlines = numNewlines;
+    }
+  }
+
+  private static class CustomStyleMark {
+    public final Integer mFg;
+    public final Integer mBg;
+    public final Float mFontSize;
+    public final String mFontFamily;
+    public final Float mLetterSpacing;
+    public final Float mLineHeight;
+
+    public CustomStyleMark(
+        Integer fg,
+        Integer bg,
+        Float fontSize,
+        String fontFamily,
+        Float letterSpacing,
+        Float lineHeight) {
+      mFg = fg;
+      mBg = bg;
+      mFontSize = fontSize;
+      mFontFamily = fontFamily;
+      mLetterSpacing = letterSpacing;
+      mLineHeight = lineHeight;
     }
   }
 
@@ -1519,10 +1508,10 @@ class HtmlToSpannedConverter<T> implements ContentHandler {
   }
 
   private static class Alignment {
-    private final Layout.Alignment mAlignment;
+    final String mCssValue;
 
-    public Alignment(Layout.Alignment alignment) {
-      mAlignment = alignment;
+    public Alignment(String cssValue) {
+      this.mCssValue = cssValue;
     }
   }
 }

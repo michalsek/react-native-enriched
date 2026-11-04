@@ -1,12 +1,12 @@
 #import "InputHtmlParser.h"
-#import "AlignmentEntry.h"
 #import "EnrichedTextInputView.h"
-#import "HtmlParser.h"
-#import "ParagraphMarginEntry.h"
-#import "StringExtension.h"
-#import "StyleHeaders.h"
-#import "StyleUtils.h"
-#import "TextInsertionUtils.h"
+#import "extensions/StringExtension.h"
+#import "htmlParser/HtmlParser.h"
+#import "interfaces/AlignmentEntry.h"
+#import "interfaces/ParagraphMarginEntry.h"
+#import "interfaces/StyleHeaders.h"
+#import "utils/StyleUtils.h"
+#import "utils/TextInsertionUtils.h"
 #import <React/RCTLog.h>
 
 @implementation InputHtmlParser {
@@ -26,15 +26,14 @@
   _input->textView.typingAttributes = _input->defaultTypingAttributes;
 
   @try {
-    NSArray *processingResult = [HtmlParser getTextAndStylesFromHtml:html];
+    NSArray *processingResult =
+        [HtmlParser getTextAndStylesFromHtml:html config:_input.config];
     NSString *plainText = (NSString *)processingResult[0];
     NSArray *stylesInfo = (NSArray *)processingResult[1];
     NSArray *alignments = (NSArray *)processingResult[2];
     NSArray *paragraphMargins = (NSArray *)processingResult[3];
     id trailingParagraph = processingResult[4];
 
-    // The empty last paragraph has no character, so its styles are stored
-    // aside. A plain one is stored as unstyled.
     BOOL endsWithEmptyParagraph =
         plainText.length == 0 ||
         [[NSCharacterSet newlineCharacterSet]
@@ -71,7 +70,8 @@
 
 - (void)replaceFromHtml:(NSString *_Nonnull)html range:(NSRange)range {
   @try {
-    NSArray *processingResult = [HtmlParser getTextAndStylesFromHtml:html];
+    NSArray *processingResult =
+        [HtmlParser getTextAndStylesFromHtml:html config:_input.config];
     NSString *plainText = (NSString *)processingResult[0];
     NSArray *stylesInfo = (NSArray *)processingResult[1];
     NSArray *alignments = (NSArray *)processingResult[2];
@@ -105,7 +105,8 @@
 
 - (void)insertFromHtml:(NSString *_Nonnull)html location:(NSInteger)location {
   @try {
-    NSArray *processingResult = [HtmlParser getTextAndStylesFromHtml:html];
+    NSArray *processingResult =
+        [HtmlParser getTextAndStylesFromHtml:html config:_input.config];
     NSString *plainText = (NSString *)processingResult[0];
     NSArray *stylesInfo = (NSArray *)processingResult[1];
     NSArray *alignments = (NSArray *)processingResult[2];
@@ -205,14 +206,12 @@
             }
           }
         }
-      } else if ([HtmlParser isTextStyleType:styleType]) {
-        NSString *textStyleValue = (NSString *)stylePair.styleValue;
-        if (textStyleValue != nullptr) {
-          [baseStyle add:styleRange
-                   withValue:textStyleValue
-                  withTyping:shouldAddTypingAttr
-              withDirtyRange:YES];
-        }
+      } else if ([styleType isEqualToNumber:@([CustomStyle getType])]) {
+        CustomStyle *customStyle = (CustomStyle *)baseStyle;
+        [customStyle setCustomStyleData:stylePair.styleValue
+                                  range:styleRange
+                             withTyping:shouldAddTypingAttr
+                         withDirtyRange:YES];
       } else {
         [baseStyle add:styleRange
                 withTyping:shouldAddTypingAttr

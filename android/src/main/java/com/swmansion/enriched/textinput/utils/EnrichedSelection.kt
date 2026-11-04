@@ -4,17 +4,16 @@ import android.text.Editable
 import android.text.Spannable
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.uimanager.UIManagerHelper
-import com.swmansion.enriched.common.EnrichedAlignmentMapping
+import com.swmansion.enriched.common.CustomStyle
 import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.events.OnChangeSelectionEvent
 import com.swmansion.enriched.textinput.events.OnLinkDetectedEvent
 import com.swmansion.enriched.textinput.events.OnMentionDetectedEvent
-import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
+import com.swmansion.enriched.textinput.spans.EnrichedInputCustomStyleSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputLinkSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputMentionSpan
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
-import com.swmansion.enriched.textinput.spans.interfaces.EnrichedInputValueSpan
 import org.json.JSONObject
 
 class EnrichedSelection(
@@ -66,7 +65,7 @@ class EnrichedSelection(
     end = finalEnd
     validateStyles()
 
-    // Selection moves performed internally by setValue are not emitted.
+    view.parametrizedStyles?.afterSelectionChangedMentions(finalStart, finalEnd)
     if (!view.isSettingValue) {
       emitSelectionChangeEvent(view.text, finalStart, finalEnd)
     }
@@ -103,14 +102,7 @@ class EnrichedSelection(
       for ((style, config) in EnrichedSpans.inlineSpans) {
         state.setStart(style, getInlineStyleStart(config.clazz))
       }
-
-      for ((style, config) in EnrichedSpans.textStyleSpans) {
-        val styleStart =
-          getInlineStyleStart(config.clazz)
-            ?: getEmptyParagraphStyleStart(style, config.clazz)
-            ?: view.textStyles?.getPendingStart(style)
-        state.setStart(style, styleStart)
-      }
+      validateCustomStyles()
     } else {
       view.isRemovingMany = false
     }
@@ -127,26 +119,14 @@ class EnrichedSelection(
       state.setStart(style, getParametrizedStyleStart(config.clazz))
     }
 
-    state.setAlignment(getCurrentAlignment())
-
-    view.textStyles?.onValidateStyles()
-  }
-
-  private fun getCurrentAlignment(): String {
-    val spannable = view.text as? Spannable ?: return "auto"
-    val (selectionStart, _) = getInlineSelection()
-    val (paragraphStart, paragraphEnd) = spannable.getParagraphBounds(selectionStart)
-    val span =
-      spannable
-        .getSpans(paragraphStart, paragraphEnd, EnrichedInputAlignmentSpan::class.java)
-        .firstOrNull() ?: return "auto"
-
-    return EnrichedAlignmentMapping.alignmentToCss(span.alignment) ?: "auto"
+    val currentAlignment = view.alignmentStyles?.getCurrentAlignment() ?: "auto"
+    state.setAlignment(currentAlignment)
   }
 
   fun getInlineSelection(): Pair<Int, Int> {
-    val finalStart = start.coerceAtMost(end).coerceAtLeast(0)
-    val finalEnd = end.coerceAtLeast(start).coerceAtLeast(0)
+    val textLength = view.text?.length ?: 0
+    val finalStart = start.coerceAtMost(end).coerceAtLeast(0).coerceAtMost(textLength)
+    val finalEnd = end.coerceAtLeast(start).coerceAtLeast(0).coerceAtMost(textLength)
 
     return Pair(finalStart, finalEnd)
   }
@@ -171,25 +151,82 @@ class EnrichedSelection(
     return styleStart
   }
 
-  // An empty paragraph keeps its text styles on its newline, right after the
-  // caret, so the caret position is not inside of their spans.
-  private fun <T> getEmptyParagraphStyleStart(
-    name: String,
-    type: Class<T>,
-  ): Int? {
+  private fun validateCustomStyles() {
+    val state = view.spanState ?: return
     val (start, end) = getInlineSelection()
-    val text = view.text ?: return null
-    if (start != end || start >= text.length || text[start] != '\n') return null
-    if (start > 0 && text[start - 1] != '\n') return null
+    val spannable = view.text as Spannable
+    val pendingStyle = if (start == end) view.customStyles?.pendingStyleAt(start) else null
+    val style = pendingStyle ?: getCustomStyleInRange(spannable, start, end)
+    state.setCustomStyle(
+      style.foregroundColor,
+      style.backgroundColor,
+      style.fontSize,
+      style.fontFamily,
+      style.letterSpacing,
+      style.lineHeight,
+    )
+  }
 
-    for (span in text.getSpans(start, start + 1, type)) {
-      if (text.getSpanStart(span) > start || text.getSpanEnd(span) <= start) continue
-      val valueSpan = span as? EnrichedInputValueSpan ?: continue
-      view.textStyles?.setPendingValue(name, valueSpan.styleValue, start)
-      return start
+  private fun getCustomStyleInRange(
+    spannable: Spannable,
+    start: Int,
+    end: Int,
+  ): CustomStyle {
+    // not-ranged selection
+    if (start == end) {
+      return getEmptyParagraphCustomStyle(spannable, start)
+        ?: spannable
+          .getSpans(start, end, EnrichedInputCustomStyleSpan::class.java)
+          .firstOrNull { spannable.getSpanStart(it) < start && spannable.getSpanEnd(it) >= end }
+          ?.toCustomStyle() ?: CustomStyle()
     }
 
-    return null
+    val foregroundColors = mutableSetOf<Int?>()
+    val backgroundColors = mutableSetOf<Int?>()
+    val fontSizes = mutableSetOf<Float?>()
+    val fontFamilies = mutableSetOf<String?>()
+    val letterSpacings = mutableSetOf<Float?>()
+    val lineHeights = mutableSetOf<Float?>()
+
+    var position = start
+    while (position < end) {
+      val next = spannable.nextSpanTransition(position, end, EnrichedInputCustomStyleSpan::class.java)
+      val span =
+        spannable.getSpans(position, next, EnrichedInputCustomStyleSpan::class.java).firstOrNull {
+          spannable.getSpanStart(it) <= position && spannable.getSpanEnd(it) >= next
+        }
+
+      foregroundColors.add(span?.getForegroundColor())
+      backgroundColors.add(span?.getBackgroundColor())
+      fontSizes.add(span?.getFontSize())
+      fontFamilies.add(span?.getFontFamily())
+      letterSpacings.add(span?.getLetterSpacing())
+      lineHeights.add(span?.getLineHeight())
+
+      position = next
+    }
+
+    return CustomStyle(
+      foregroundColor = foregroundColors.singleOrNull(),
+      backgroundColor = backgroundColors.singleOrNull(),
+      fontSize = fontSizes.singleOrNull(),
+      fontFamily = fontFamilies.singleOrNull(),
+      letterSpacing = letterSpacings.singleOrNull(),
+      lineHeight = lineHeights.singleOrNull(),
+    )
+  }
+
+  private fun getEmptyParagraphCustomStyle(
+    spannable: Spannable,
+    position: Int,
+  ): CustomStyle? {
+    if (position >= spannable.length || spannable[position] != '\n') return null
+    if (position > 0 && spannable[position - 1] != '\n') return null
+
+    return spannable
+      .getSpans(position, position + 1, EnrichedInputCustomStyleSpan::class.java)
+      .firstOrNull()
+      ?.toCustomStyle()
   }
 
   fun getParagraphSelection(): Pair<Int, Int> {

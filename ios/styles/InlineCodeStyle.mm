@@ -1,8 +1,8 @@
-#import "ColorExtension.h"
 #import "EnrichedTextInputView.h"
-#import "FontExtension.h"
-#import "RangeUtils.h"
-#import "StyleHeaders.h"
+#import "extensions/ColorExtension.h"
+#import "extensions/FontExtension.h"
+#import "interfaces/StyleHeaders.h"
+#import "utils/RangeUtils.h"
 
 @implementation InlineCodeStyle
 
@@ -29,7 +29,7 @@
     [self.host.textView.textStorage
         addAttribute:NSBackgroundColorAttributeName
                value:[[self.host.config inlineCodeBgColor]
-                         colorWithAlphaIfNotTransparent:0.4]
+                         colorWithResolvedAlpha]
                range:subRange];
     [self.host.textView.textStorage
         addAttribute:NSForegroundColorAttributeName

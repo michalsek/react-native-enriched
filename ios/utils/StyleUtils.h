@@ -1,5 +1,5 @@
-#import "EnrichedTextStyleHeaders.h"
-#import "StyleHeaders.h"
+#import "interfaces/EnrichedTextStyleHeaders.h"
+#import "interfaces/StyleHeaders.h"
 
 @interface StyleUtils : NSObject
 + (NSDictionary<NSNumber *, NSArray<NSNumber *> *> *)conflictMap;
@@ -8,6 +8,9 @@
                                                (id<EnrichedViewHost>)host
                                                      isInput:(BOOL)isInput;
 
++ (BOOL)isStyleBlocked:(StyleType)type
+                 range:(NSRange)range
+               forHost:(id<EnrichedViewHost>)host;
 + (BOOL)handleStyleBlocksAndConflicts:(StyleType)type
                                 range:(NSRange)range
                               forHost:(id<EnrichedViewHost>)host;

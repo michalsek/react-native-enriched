@@ -1,11 +1,15 @@
 package com.swmansion.enriched.textinput.watchers
 
 import android.text.Editable
+import android.text.Spannable
 import android.text.TextWatcher
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.uimanager.UIManagerHelper
+import com.swmansion.enriched.common.EnrichedConstants
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.events.OnChangeTextEvent
+import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
+import com.swmansion.enriched.textinput.spans.EnrichedSpans
 import com.swmansion.enriched.textinput.utils.ParagraphMarginSpacers
 
 class EnrichedTextWatcher(
@@ -15,6 +19,11 @@ class EnrichedTextWatcher(
   private var startCursorPosition: Int = 0
   private var previousTextLength: Int = 0
 
+  private var deletedText: String = ""
+  private var anchorAlignmentToRestore: String? = null
+  private var removesAlignmentAnchor: Boolean = false
+  private var isApplyingStyles: Boolean = false
+
   override fun beforeTextChanged(
     s: CharSequence?,
     start: Int,
@@ -22,8 +31,33 @@ class EnrichedTextWatcher(
     after: Int,
   ) {
     previousTextLength = s?.length ?: 0
-    if (s != null && !view.isDuringTransaction) {
-      view.textStyles?.beforeTextChanged(s, start, count, after)
+    deletedText = if (count > 0 && s != null) s.substring(start, start + count) else ""
+    if (s != null && !view.isDuringTransaction && !view.isNormalizingParagraphMarginSpacers) {
+      view.customStyles?.beforeTextChanged(s, start, count, after)
+    }
+
+    anchorAlignmentToRestore = null
+    removesAlignmentAnchor = false
+
+    // When a ZWS is being deleted, check whether it was anchoring a list or paragraph
+    // style. If so, capture the co-located alignment value so AlignmentStyles can
+    // re-anchor it after the deletion completes.
+    if (deletedText == EnrichedConstants.ZWS_STRING && s is Spannable) {
+      val isBlockAnchor =
+        EnrichedSpans.listSpans.values
+          .any { config -> s.getSpans(start, start + 1, config.clazz).isNotEmpty() } ||
+          EnrichedSpans.paragraphSpans.values
+            .any { config -> s.getSpans(start, start + 1, config.clazz).isNotEmpty() }
+
+      if (isBlockAnchor) {
+        anchorAlignmentToRestore =
+          s
+            .getSpans(start, start + 1, EnrichedInputAlignmentSpan::class.java)
+            .firstOrNull()
+            ?.cssValue
+      } else {
+        removesAlignmentAnchor = s.getSpans(start, start + 1, EnrichedInputAlignmentSpan::class.java).isNotEmpty()
+      }
     }
   }
 
@@ -43,27 +77,44 @@ class EnrichedTextWatcher(
     if (s == null) return
     if (view.isNormalizingParagraphMarginSpacers) return
 
-    if (!view.isDuringTransaction) {
-      if (s.length < previousTextLength) mergeParagraphsJoinedAtMarginSpacers()
-      applyStyles(s)
-      view.normalizeParagraphMarginSpacers()
+    val isNestedChange = isApplyingStyles
+    if (!view.isDuringTransaction && !isNestedChange && s.length < previousTextLength) {
+      mergeParagraphsJoinedAtMarginSpacers()
+    }
+    emitEvents(s)
+
+    if (view.isDuringTransaction) {
       updateSpaceKerning()
-      view.layoutManager.invalidateLayout()
-    } else {
+      view.updateTrailingLetterSpacingInset()
+      return
+    }
+    isApplyingStyles = true
+    try {
+      applyStyles(s)
+    } finally {
+      isApplyingStyles = isNestedChange
+    }
+    if (!isNestedChange) {
+      view.normalizeParagraphMarginSpacers()
       updateSpaceKerning()
     }
     view.updateTrailingLetterSpacingInset()
-
-    emitEvents(view.text ?: s)
+    view.layoutManager.invalidateLayout()
   }
 
   private fun mergeParagraphsJoinedAtMarginSpacers() {
     val textLength = previousTextLength
+    val removedText = deletedText
+    val alignmentToRestore = anchorAlignmentToRestore
     val isRemovingMany = view.isRemovingMany
-    val join = view.mergeParagraphsJoinedAtMarginSpacers(endCursorPosition)
+    val removesParagraphBreak = removesAlignmentAnchor
+    val join = view.mergeParagraphsJoinedAtMarginSpacers(endCursorPosition, removesParagraphBreak)
     if (join == endCursorPosition) return
 
     previousTextLength = textLength
+    deletedText = if (removesParagraphBreak) "\n" else removedText
+    anchorAlignmentToRestore = alignmentToRestore
+    removesAlignmentAnchor = false
     view.isRemovingMany = isRemovingMany
     startCursorPosition = join
     endCursorPosition = join
@@ -71,11 +122,12 @@ class EnrichedTextWatcher(
 
   private fun applyStyles(s: Editable) {
     view.inlineStyles?.afterTextChanged(s, startCursorPosition, endCursorPosition)
+    view.customStyles?.afterTextChanged(s, startCursorPosition, endCursorPosition)
     view.paragraphStyles?.afterTextChanged(s, endCursorPosition, previousTextLength)
     view.listStyles?.afterTextChanged(s, endCursorPosition, previousTextLength)
+    view.alignmentStyles?.afterTextChanged(s, endCursorPosition, deletedText, anchorAlignmentToRestore)
+    view.shortcutsHandler?.afterTextChanged(s, endCursorPosition, previousTextLength)
     view.parametrizedStyles?.afterTextChanged(s, startCursorPosition, endCursorPosition)
-    view.textStyles?.afterTextChanged(s, startCursorPosition, endCursorPosition)
-    view.alignmentStyles?.afterTextChanged(s, endCursorPosition, previousTextLength)
   }
 
   private fun updateSpaceKerning() {

@@ -1,17 +1,14 @@
 package com.swmansion.enriched.text
 
-import android.text.Layout
+import android.content.res.AssetManager
 import com.swmansion.enriched.common.parser.EnrichedSpanFactory
-import com.swmansion.enriched.common.spans.EnrichedAlignmentSpan
-import com.swmansion.enriched.common.spans.EnrichedFontFamilySpan
-import com.swmansion.enriched.common.spans.EnrichedFontSizeSpan
-import com.swmansion.enriched.common.spans.EnrichedForegroundColorSpan
-import com.swmansion.enriched.common.spans.EnrichedInlineLineHeightSpan
-import com.swmansion.enriched.common.spans.EnrichedLetterSpacingSpan
+import com.swmansion.enriched.common.spans.EnrichedCustomStyleSpan
+import com.swmansion.enriched.text.spans.EnrichedTextAlignmentSpan
 import com.swmansion.enriched.text.spans.EnrichedTextBlockQuoteSpan
 import com.swmansion.enriched.text.spans.EnrichedTextBoldSpan
 import com.swmansion.enriched.text.spans.EnrichedTextCheckboxListSpan
 import com.swmansion.enriched.text.spans.EnrichedTextCodeBlockSpan
+import com.swmansion.enriched.text.spans.EnrichedTextCustomStyleSpan
 import com.swmansion.enriched.text.spans.EnrichedTextH1Span
 import com.swmansion.enriched.text.spans.EnrichedTextH2Span
 import com.swmansion.enriched.text.spans.EnrichedTextH3Span
@@ -29,7 +26,12 @@ import com.swmansion.enriched.text.spans.EnrichedTextStrikeThroughSpan
 import com.swmansion.enriched.text.spans.EnrichedTextUnderlineSpan
 import com.swmansion.enriched.text.spans.EnrichedTextUnorderedListSpan
 
-class EnrichedTextSpanFactory : EnrichedSpanFactory<EnrichedTextStyle> {
+class EnrichedTextSpanFactory(
+  private val assets: AssetManager,
+  private val allowFontScaling: Boolean,
+) : EnrichedSpanFactory<EnrichedTextStyle> {
+  override fun createAlignmentSpan(cssValue: String) = EnrichedTextAlignmentSpan(cssValue)
+
   override fun createBoldSpan(style: EnrichedTextStyle) = EnrichedTextBoldSpan(style)
 
   override fun createItalicSpan(style: EnrichedTextStyle) = EnrichedTextItalicSpan(style)
@@ -43,6 +45,7 @@ class EnrichedTextSpanFactory : EnrichedSpanFactory<EnrichedTextStyle> {
   override fun createLinkSpan(
     url: String,
     style: EnrichedTextStyle,
+    isManual: Boolean,
   ) = EnrichedTextLinkSpan(url, style)
 
   override fun createMentionSpan(
@@ -86,39 +89,28 @@ class EnrichedTextSpanFactory : EnrichedSpanFactory<EnrichedTextStyle> {
 
   override fun createCodeBlockSpan(style: EnrichedTextStyle) = EnrichedTextCodeBlockSpan(style)
 
-  override fun createFontFamilySpan(
-    fontFamily: String,
-    style: EnrichedTextStyle,
-  ) = EnrichedFontFamilySpan(fontFamily, style.assets)
-
-  override fun createFontSizeSpan(
-    fontSize: Float,
-    style: EnrichedTextStyle,
-  ) = EnrichedFontSizeSpan(fontSize, style.allowFontScaling)
-
-  override fun createLetterSpacingSpan(
-    letterSpacing: Float,
-    style: EnrichedTextStyle,
-  ) = EnrichedLetterSpacingSpan(letterSpacing, style.allowFontScaling)
-
-  override fun createInlineLineHeightSpan(
-    lineHeight: Float,
-    style: EnrichedTextStyle,
-  ) = EnrichedInlineLineHeightSpan(lineHeight, style.allowFontScaling)
-
-  override fun createForegroundColorSpan(
-    color: Int,
-    style: EnrichedTextStyle,
-  ) = EnrichedForegroundColorSpan(color)
-
-  override fun createAlignmentSpan(
-    alignment: Layout.Alignment,
-    style: EnrichedTextStyle,
-  ) = EnrichedAlignmentSpan(alignment, style)
-
   override fun createParagraphMarginSpan(
     marginTop: Float?,
     marginBottom: Float?,
     style: EnrichedTextStyle,
   ) = EnrichedTextParagraphMarginSpan(marginTop, marginBottom, style.allowFontScaling)
+
+  override fun createCustomStyleSpan(
+    foregroundColor: Int?,
+    backgroundColor: Int?,
+    fontSize: Float?,
+    fontFamily: String?,
+    letterSpacing: Float?,
+    lineHeight: Float?,
+  ): EnrichedCustomStyleSpan =
+    EnrichedTextCustomStyleSpan.create(
+      foregroundColor,
+      backgroundColor,
+      fontSize,
+      fontFamily,
+      letterSpacing,
+      lineHeight,
+      assets,
+      allowFontScaling,
+    )
 }

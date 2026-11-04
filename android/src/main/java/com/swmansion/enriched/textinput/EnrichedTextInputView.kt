@@ -9,6 +9,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Build
+import android.text.Editable
 import android.text.InputType
 import android.text.Layout
 import android.text.Spannable
@@ -41,6 +42,7 @@ import com.facebook.react.views.text.ReactTypefaceUtils.applyStyles
 import com.facebook.react.views.text.ReactTypefaceUtils.parseFontStyle
 import com.facebook.react.views.text.ReactTypefaceUtils.parseFontWeight
 import com.swmansion.enriched.common.EnrichedConstants
+import com.swmansion.enriched.common.EnrichedSpanFlags
 import com.swmansion.enriched.common.GumboNormalizer
 import com.swmansion.enriched.common.SpaceKerning
 import com.swmansion.enriched.common.SpaceKerningTable
@@ -68,17 +70,18 @@ import com.swmansion.enriched.textinput.spans.EnrichedLineHeightSpan
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
 import com.swmansion.enriched.textinput.spans.interfaces.EnrichedInputSpan
 import com.swmansion.enriched.textinput.styles.AlignmentStyles
+import com.swmansion.enriched.textinput.styles.CustomStyles
 import com.swmansion.enriched.textinput.styles.HtmlStyle
 import com.swmansion.enriched.textinput.styles.InlineStyles
 import com.swmansion.enriched.textinput.styles.ListStyles
 import com.swmansion.enriched.textinput.styles.ParagraphStyles
 import com.swmansion.enriched.textinput.styles.ParametrizedStyles
-import com.swmansion.enriched.textinput.styles.TextStyles
 import com.swmansion.enriched.textinput.utils.EnrichedEditableFactory
 import com.swmansion.enriched.textinput.utils.EnrichedSelection
 import com.swmansion.enriched.textinput.utils.EnrichedSpanState
 import com.swmansion.enriched.textinput.utils.ParagraphMarginSpacers
 import com.swmansion.enriched.textinput.utils.RichContentReceiver
+import com.swmansion.enriched.textinput.utils.ShortcutsHandler
 import com.swmansion.enriched.textinput.utils.mergeSpannables
 import com.swmansion.enriched.textinput.utils.setCheckboxClickListener
 import com.swmansion.enriched.textinput.watchers.EnrichedSpanWatcher
@@ -96,17 +99,22 @@ class EnrichedTextInputView :
   val inlineStyles: InlineStyles? = InlineStyles(this)
   val paragraphStyles: ParagraphStyles? = ParagraphStyles(this)
   val listStyles: ListStyles? = ListStyles(this)
+  val shortcutsHandler: ShortcutsHandler? = ShortcutsHandler(this)
   val parametrizedStyles: ParametrizedStyles? = ParametrizedStyles(this)
-  val textStyles: TextStyles? = TextStyles(this)
   val alignmentStyles: AlignmentStyles? = AlignmentStyles(this)
+  val customStyles: CustomStyles? = CustomStyles(this)
   var isDuringTransaction: Boolean = false
   var isRemovingMany: Boolean = false
   var isSettingValue: Boolean = false
+  var isNormalizingParagraphMarginSpacers: Boolean = false
+  private var trailingLetterSpacingInset: Int = 0
   var scrollEnabled: Boolean = true
   var allowFontScaling: Boolean = EnrichedConstants.ALLOW_FONT_SCALING_DEFAULT
     set(value) {
       if (field != value) {
         field = value
+        // Invalidate the spannable factory so that it is recreated with the new allowFontScaling value
+        cachedSpannableFactory = null
         val raw = fontSizeRaw
         if (raw != null) {
           setFontSize(raw) // re-invokes invalidateStyles internally
@@ -152,9 +160,9 @@ class EnrichedTextInputView :
   private var recentlyEmittedCaretRect: Rect? = null
   var experimentalSynchronousEvents: Boolean = false
   var useHtmlNormalizer: Boolean = false
-  var isNormalizingParagraphMarginSpacers: Boolean = false
-  var isInsertingParagraphAnchor: Boolean = false
-  private var trailingLetterSpacingInset: Int = 0
+
+  // Pair: (trigger, style)
+  var textShortcuts: List<Pair<String, String>> = emptyList()
 
   private var fontSizeRaw: Float? = null
   var fontSize: Float? = null
@@ -174,7 +182,13 @@ class EnrichedTextInputView :
   private var spaceKerningDirty = false
 
   private var inputMethodManager: InputMethodManager? = null
-  private val spannableFactory = EnrichedTextInputSpannableFactory()
+
+  private var cachedSpannableFactory: EnrichedTextInputSpannableFactory? = null
+  private val spannableFactory: EnrichedTextInputSpannableFactory
+    get() =
+      cachedSpannableFactory
+        ?: EnrichedTextInputSpannableFactory(context.assets, allowFontScaling).also { cachedSpannableFactory = it }
+
   private var contextMenuItems: List<Pair<Int, String>> = emptyList()
 
   constructor(context: Context) : super(context) {
@@ -191,6 +205,16 @@ class EnrichedTextInputView :
     defStyleAttr,
   ) {
     prepareComponent()
+  }
+
+  override fun scrollTo(
+    x: Int,
+    y: Int,
+  ) {
+    // Android's internal cursor tracker gets confused by ALIGN_CENTER + LeadingMarginSpan
+    // and attempts to scroll the text horizontally.
+    // We lock the horizontal scroll to 0 to prevent the view from shifting.
+    super.scrollTo(0, y)
   }
 
   override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
@@ -298,7 +322,7 @@ class EnrichedTextInputView :
       OnSubmitEditingEvent(
         surfaceId,
         id,
-        text,
+        text?.let { ParagraphMarginSpacers.publicText(it) },
         experimentalSynchronousEvents,
       ),
     )
@@ -372,8 +396,25 @@ class EnrichedTextInputView :
         handleCustomCopy()
         return true
       }
+
+      android.R.id.pasteAsPlainText -> {
+        handlePasteAsPlainText()
+        return true
+      }
     }
     return super.onTextContextMenuItem(id)
+  }
+
+  private fun handlePasteAsPlainText() {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val clip = clipboard.primaryClip ?: return
+    if (clip.itemCount == 0) return
+
+    val item = clip.getItemAt(0)
+    val plainText = item.coerceToText(context).toString()
+    val plainTextItem = ClipData.Item(plainText)
+
+    handleTextPaste(plainTextItem)
   }
 
   private fun handleCustomCopy() {
@@ -421,8 +462,9 @@ class EnrichedTextInputView :
     val pasteEnd = (start + insertedLength).coerceIn(0, finalText.length)
     setSelection(ParagraphMarginSpacers.coerceIndex(text ?: finalText, pasteEnd))
 
-    // Detect links in the newly pasted range
-    parametrizedStyles?.detectLinksInRange(finalText, start.coerceAtMost(pasteEnd), pasteEnd)
+    // Update links and mentions in the newly pasted range
+    val editable = text as? Editable ?: return
+    parametrizedStyles?.afterTextChanged(editable, start.coerceAtMost(pasteEnd), pasteEnd)
   }
 
   fun requestFocusProgrammatically() {
@@ -437,7 +479,7 @@ class EnrichedTextInputView :
     val normalized = GumboNormalizer.normalizeHtml(text.toString()) ?: return text
 
     return try {
-      val parsed = EnrichedParser.fromHtml(normalized, htmlStyle, spannableFactory)
+      val parsed = EnrichedParser.fromHtml(normalized, htmlStyle, spannableFactory, linkRegex)
       ParagraphMarginSpacers.normalized(parsed.trimEnd('\n'))
     } catch (e: Exception) {
       Log.e(TAG, "Error parsing normalized HTML: ${e.message}")
@@ -450,7 +492,7 @@ class EnrichedTextInputView :
 
     if (isInternalHtml) {
       try {
-        val parsed = EnrichedParser.fromHtml(text.toString(), htmlStyle, spannableFactory)
+        val parsed = EnrichedParser.fromHtml(text.toString(), htmlStyle, spannableFactory, linkRegex)
         return ParagraphMarginSpacers.normalized(dropFinalParagraphTerminator(parsed))
       } catch (e: Exception) {
         Log.e(TAG, "Error parsing HTML: ${e.message}")
@@ -467,9 +509,6 @@ class EnrichedTextInputView :
   ) {
     if (value == null) return
 
-    // The internal caret moves must not reach JS - consumers restoring the
-    // selection right after setValue would otherwise receive transient
-    // selection events.
     isSettingValue = true
     try {
       val previousStart = selectionStart
@@ -491,13 +530,9 @@ class EnrichedTextInputView :
 
         observeAsyncImages()
 
-        // Restore the previous selection clamped to the new text, so
-        // consecutive setValue calls (e.g. styling changes streamed from a
-        // slider) don't make the caret visibly jump to the end and back.
         val textLength = text?.length ?: 0
         val start = ParagraphMarginSpacers.coerceIndex(text ?: "", previousStart.coerceIn(0, textLength))
         val end = ParagraphMarginSpacers.coerceIndex(text ?: "", previousEnd.coerceIn(start, textLength))
-        // The caret never rests before an empty paragraph's zero-width space anchor.
         val isBeforeAnchor =
           start == end &&
             start < textLength &&
@@ -521,7 +556,7 @@ class EnrichedTextInputView :
     setSelection(actualStart, actualEnd)
   }
 
-  // Helper: Walks through the string skipping hidden editor characters to find the Nth visible character.
+  // Helper: Walks through the string skipping ZWSPs to find the Nth visible character
   private fun getActualIndex(visibleIndex: Int): Int {
     val currentText = text as Spannable
     return ParagraphMarginSpacers.actualIndexForPublicIndex(currentText, visibleIndex)
@@ -606,7 +641,7 @@ class EnrichedTextInputView :
   }
 
   fun setLineHeight(height: Float) {
-    lineHeight = if (height == 0f) null else height
+    lineHeight = if (height <= 0f) null else height
     applyLineSpacing()
     layoutManager.invalidateLayout()
     forceScrollToSelection()
@@ -669,6 +704,18 @@ class EnrichedTextInputView :
       this.fontStyle = fontStyle
       typefaceDirty = true
     }
+  }
+
+  fun setAutoCorrect(autoCorrect: Boolean) {
+    val flagsToUnset = InputType.TYPE_TEXT_FLAG_AUTO_CORRECT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+
+    val flagsToSet =
+      when (autoCorrect) {
+        true -> InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
+        false -> InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+      }
+
+    this.inputType = (this.inputType and flagsToUnset.inv()) or flagsToSet
   }
 
   fun setAutoCapitalize(flagName: String?) {
@@ -893,7 +940,7 @@ class EnrichedTextInputView :
     layoutManager.invalidateLayout()
   }
 
-  private fun toggleStyle(name: String) {
+  internal fun toggleStyle(name: String) {
     when (name) {
       EnrichedSpans.BOLD -> inlineStyles?.toggleStyle(EnrichedSpans.BOLD)
       EnrichedSpans.ITALIC -> inlineStyles?.toggleStyle(EnrichedSpans.ITALIC)
@@ -943,11 +990,6 @@ class EnrichedTextInputView :
         EnrichedSpans.LINK -> parametrizedStyles?.removeStyle(EnrichedSpans.LINK, start, end)
         EnrichedSpans.IMAGE -> parametrizedStyles?.removeStyle(EnrichedSpans.IMAGE, start, end)
         EnrichedSpans.MENTION -> parametrizedStyles?.removeStyle(EnrichedSpans.MENTION, start, end)
-        EnrichedSpans.FONT_FAMILY -> textStyles?.removeStyle(EnrichedSpans.FONT_FAMILY, start, end)
-        EnrichedSpans.FONT_SIZE -> textStyles?.removeStyle(EnrichedSpans.FONT_SIZE, start, end)
-        EnrichedSpans.LETTER_SPACING -> textStyles?.removeStyle(EnrichedSpans.LETTER_SPACING, start, end)
-        EnrichedSpans.LINE_HEIGHT -> textStyles?.removeStyle(EnrichedSpans.LINE_HEIGHT, start, end)
-        EnrichedSpans.FOREGROUND_COLOR -> textStyles?.removeStyle(EnrichedSpans.FOREGROUND_COLOR, start, end)
         else -> false
       }
 
@@ -976,11 +1018,6 @@ class EnrichedTextInputView :
         EnrichedSpans.LINK -> parametrizedStyles?.getStyleRange()
         EnrichedSpans.IMAGE -> parametrizedStyles?.getStyleRange()
         EnrichedSpans.MENTION -> parametrizedStyles?.getStyleRange()
-        EnrichedSpans.FONT_FAMILY -> textStyles?.getStyleRange()
-        EnrichedSpans.FONT_SIZE -> textStyles?.getStyleRange()
-        EnrichedSpans.LETTER_SPACING -> textStyles?.getStyleRange()
-        EnrichedSpans.LINE_HEIGHT -> textStyles?.getStyleRange()
-        EnrichedSpans.FOREGROUND_COLOR -> textStyles?.getStyleRange()
         else -> Pair(0, 0)
       }
 
@@ -1099,66 +1136,25 @@ class EnrichedTextInputView :
     parametrizedStyles?.setMentionSpan(text, indicator, attributes)
   }
 
-  fun setSelectionFontFamily(
-    fontFamily: String?,
-    collapsedSelectionMode: String,
-  ) {
-    setTextStyleValue(EnrichedSpans.FONT_FAMILY, fontFamily?.takeIf { it.isNotEmpty() }, collapsedSelectionMode)
-  }
-
-  fun setSelectionFontSize(
-    fontSize: Float,
-    collapsedSelectionMode: String,
-  ) {
-    setTextStyleValue(EnrichedSpans.FONT_SIZE, fontSize.takeIf { it != 0f }, collapsedSelectionMode)
-  }
-
-  fun setSelectionLetterSpacing(
-    letterSpacing: Float,
-    collapsedSelectionMode: String,
-  ) {
-    setTextStyleValue(EnrichedSpans.LETTER_SPACING, letterSpacing.takeIf { it != 0f }, collapsedSelectionMode)
-  }
-
-  fun setSelectionLineHeight(
-    lineHeight: Float,
-    collapsedSelectionMode: String,
-  ) {
-    setTextStyleValue(EnrichedSpans.LINE_HEIGHT, lineHeight.takeIf { it != 0f }, collapsedSelectionMode)
-  }
-
-  fun setSelectionForegroundColor(
-    foregroundColor: String?,
-    collapsedSelectionMode: String,
-  ) {
-    val color = foregroundColor?.takeIf { it.isNotEmpty() }?.let(android.graphics.Color::parseColor)
-    setTextStyleValue(EnrichedSpans.FOREGROUND_COLOR, color, collapsedSelectionMode)
-  }
-
-  private fun setTextStyleValue(
-    name: String,
-    value: Any?,
-    collapsedSelectionMode: String,
-  ) {
-    if (value != null) {
-      val isValid = verifyStyle(name)
-      if (!isValid) return
+  fun setTextAlignment(alignment: String) {
+    runAsATransaction {
+      alignmentStyles?.setAlignment(alignment)
     }
+    selection?.validateStyles()
+  }
+
+  fun setStyle(
+    styleJSON: String,
+    collapsedSelectionMode: String,
+  ) {
+    val isValid = verifyStyle(EnrichedSpans.CUSTOM_STYLE)
+    if (!isValid) return
 
     runAsATransaction {
-      textStyles?.setStyleValue(name, value, collapsedSelectionMode)
+      customStyles?.setStyle(styleJSON, collapsedSelectionMode)
     }
-
     updateSpaceKerning(selectionStart, selectionEnd)
     updateTrailingLetterSpacingInset()
-    layoutManager.invalidateLayout()
-  }
-
-  fun setTextAlignment(alignment: String) {
-    alignmentStyles?.setAlignment(alignment)
-    (text as? Spannable)?.let { spanWatcher?.emitEvent(it, null) }
-    invalidate()
-    requestLayout()
     layoutManager.invalidateLayout()
   }
 
@@ -1176,20 +1172,23 @@ class EnrichedTextInputView :
     dispatcher?.dispatchEvent(OnRequestHtmlResultEvent(surfaceId, id, requestId, html, experimentalSynchronousEvents))
   }
 
-  fun mergeParagraphsJoinedAtMarginSpacers(index: Int): Int {
+  fun mergeParagraphsJoinedAtMarginSpacers(
+    index: Int,
+    removesParagraphBreak: Boolean,
+  ): Int {
     if (isNormalizingParagraphMarginSpacers) return index
     val editable = text ?: return index
 
     isNormalizingParagraphMarginSpacers = true
     try {
-      return ParagraphMarginSpacers.mergeParagraphsJoinedAt(editable, index)
+      return ParagraphMarginSpacers.mergeParagraphsJoinedAt(editable, index, removesParagraphBreak)
     } finally {
       isNormalizingParagraphMarginSpacers = false
     }
   }
 
   fun normalizeParagraphMarginSpacers() {
-    if (isNormalizingParagraphMarginSpacers || isInsertingParagraphAnchor) return
+    if (isNormalizingParagraphMarginSpacers) return
     val editable = text ?: return
 
     isNormalizingParagraphMarginSpacers = true
@@ -1357,7 +1356,7 @@ class EnrichedTextInputView :
 
         spannable.removeSpan(span)
         val newSpan = span.rebuildWithStyle(htmlStyle)
-        spannable.setSpan(newSpan, start, end, flags)
+        spannable.setSpan(newSpan, start, end, EnrichedSpanFlags.forSpan(newSpan, flags))
       }
 
       if (shouldEmitStateChange) {

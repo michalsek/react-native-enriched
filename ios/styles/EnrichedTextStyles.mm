@@ -1,4 +1,4 @@
-#import "EnrichedTextStyleHeaders.h"
+#import "interfaces/EnrichedTextStyleHeaders.h"
 
 @implementation EnrichedTextBoldStyle
 @end
@@ -33,6 +33,9 @@
 @implementation EnrichedTextH6Style
 @end
 
+@implementation EnrichedTextCustomStyle
+@end
+
 @implementation EnrichedTextBlockQuoteStyle
 @end
 
@@ -61,19 +64,4 @@
 @end
 
 @implementation EnrichedTextImageStyle
-@end
-
-@implementation EnrichedTextFontFamilyStyle
-@end
-
-@implementation EnrichedTextFontSizeStyle
-@end
-
-@implementation EnrichedTextLetterSpacingStyle
-@end
-
-@implementation EnrichedTextLineHeightStyle
-@end
-
-@implementation EnrichedTextForegroundColorStyle
 @end

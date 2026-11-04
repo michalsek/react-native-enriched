@@ -30,11 +30,6 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.ceil
 
 object MeasurementStore {
-  private fun ReadableMap?.getDoubleOrNull(key: String): Double? {
-    if (this == null || !hasKey(key) || isNull(key)) return null
-    return getDouble(key)
-  }
-
   data class PaintParams(
     val typeface: Typeface,
     val fontSize: Float,
@@ -129,7 +124,11 @@ object MeasurementStore {
 
     try {
       val htmlStyle = HtmlStyle(defaultView, props.getMap("htmlStyle"))
-      val factory = EnrichedTextInputSpannableFactory()
+      val factory =
+        EnrichedTextInputSpannableFactory(
+          defaultView.context.assets,
+          allowFontScalingFromProps(props),
+        )
       val parsed = EnrichedParser.fromHtml(defaultValue, htmlStyle, factory)
       return ParagraphMarginSpacers.normalized(dropFinalParagraphTerminator(parsed))
     } catch (e: Exception) {
@@ -142,8 +141,8 @@ object MeasurementStore {
     defaultView: EnrichedTextInputView,
     props: ReadableMap?,
   ): Float {
-    val propsFontSize = props.getDoubleOrNull("fontSize")?.toFloat()
-    if (propsFontSize == null) return defaultView.textSize
+    val propsFontSize = props?.getDouble("fontSize")?.toFloat()
+    if (propsFontSize == null || propsFontSize <= 0) return defaultView.textSize
 
     return ceil(pixelFromSpOrDp(propsFontSize, allowFontScalingFromProps(props)))
   }
@@ -163,7 +162,7 @@ object MeasurementStore {
 
     val rawText = getInitialText(defaultView, props)
     val fontSize = getInitialFontSize(defaultView, props)
-    val lineHeight = props.getDoubleOrNull("lineHeight")?.toFloat() ?: 0f
+    val lineHeight = props?.getDouble("lineHeight")?.toFloat() ?: 0f
 
     val fontFamily = props?.getString("fontFamily")
     val fontStyle = parseFontStyle(props?.getString("fontStyle"))

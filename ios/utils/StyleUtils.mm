@@ -82,36 +82,18 @@
       @([CodeBlockStyle getType]), @([CheckboxListStyle getType])
     ],
     @([CodeBlockStyle getType]) : @[
-      @([H1Style getType]),
-      @([H2Style getType]),
-      @([H3Style getType]),
-      @([H4Style getType]),
-      @([H5Style getType]),
-      @([H6Style getType]),
-      @([BoldStyle getType]),
-      @([UnderlineStyle getType]),
-      @([ItalicStyle getType]),
-      @([StrikethroughStyle getType]),
-      @([UnorderedListStyle getType]),
-      @([OrderedListStyle getType]),
-      @([BlockQuoteStyle getType]),
-      @([InlineCodeStyle getType]),
-      @([MentionStyle getType]),
-      @([LinkStyle getType]),
-      @([CheckboxListStyle getType]),
-      @([FontFamilyStyle getType]),
-      @([FontSizeStyle getType]),
-      @([LetterSpacingStyle getType]),
-      @([LineHeightStyle getType]),
-      @([ForegroundColorStyle getType])
+      @([H1Style getType]), @([H2Style getType]), @([H3Style getType]),
+      @([H4Style getType]), @([H5Style getType]), @([H6Style getType]),
+      @([BoldStyle getType]), @([UnderlineStyle getType]),
+      @([ItalicStyle getType]), @([StrikethroughStyle getType]),
+      @([UnorderedListStyle getType]), @([OrderedListStyle getType]),
+      @([BlockQuoteStyle getType]), @([InlineCodeStyle getType]),
+      @([MentionStyle getType]), @([LinkStyle getType]),
+      @([CheckboxListStyle getType])
     ],
     @([ImageStyle getType]) :
         @[ @([LinkStyle getType]), @([MentionStyle getType]) ],
-    @([FontFamilyStyle getType]) : @[],
-    @([FontSizeStyle getType]) : @[],
-    @([LetterSpacingStyle getType]) : @[],
-    @([LineHeightStyle getType]) : @[],
-    @([ForegroundColorStyle getType]) : @[]
+    @([CustomStyle getType]) : @[]
   };
 }
 
@@ -145,30 +127,35 @@
     @([BlockQuoteStyle getType]) : @[],
     @([CodeBlockStyle getType]) : @[],
     @([ImageStyle getType]) : @[ @([InlineCodeStyle getType]) ],
-    @([FontFamilyStyle getType]) : @[ @([CodeBlockStyle getType]) ],
-    @([FontSizeStyle getType]) : @[ @([CodeBlockStyle getType]) ],
-    @([LetterSpacingStyle getType]) : @[ @([CodeBlockStyle getType]) ],
-    @([LineHeightStyle getType]) : @[ @([CodeBlockStyle getType]) ],
-    @([ForegroundColorStyle getType]) : @[ @([CodeBlockStyle getType]) ]
+    @([CustomStyle getType]) : @[]
   };
 }
 
 + (NSDictionary *)stylesDictForHost:(id<EnrichedViewHost>)host
                             isInput:(BOOL)isInput {
   NSArray<Class> *baseClasses = @[
-    [BoldStyle class],        [ItalicStyle class],
-    [UnderlineStyle class],   [StrikethroughStyle class],
-    [InlineCodeStyle class],  [LinkStyle class],
-    [MentionStyle class],     [H1Style class],
-    [H2Style class],          [H3Style class],
-    [H4Style class],          [H5Style class],
-    [H6Style class],          [UnorderedListStyle class],
-    [OrderedListStyle class], [CheckboxListStyle class],
-    [AlignmentStyle class],   [ParagraphMarginStyle class],
-    [BlockQuoteStyle class],  [CodeBlockStyle class],
-    [ImageStyle class],       [FontFamilyStyle class],
-    [FontSizeStyle class],    [LetterSpacingStyle class],
-    [LineHeightStyle class],  [ForegroundColorStyle class]
+    [BoldStyle class],
+    [ItalicStyle class],
+    [UnderlineStyle class],
+    [StrikethroughStyle class],
+    [InlineCodeStyle class],
+    [LinkStyle class],
+    [MentionStyle class],
+    [H1Style class],
+    [H2Style class],
+    [H3Style class],
+    [H4Style class],
+    [H5Style class],
+    [H6Style class],
+    [CustomStyle class],
+    [UnorderedListStyle class],
+    [OrderedListStyle class],
+    [CheckboxListStyle class],
+    [AlignmentStyle class],
+    [ParagraphMarginStyle class],
+    [BlockQuoteStyle class],
+    [CodeBlockStyle class],
+    [ImageStyle class]
   ];
 
   NSArray<Class> *viewerClasses = @[
@@ -185,6 +172,7 @@
     [EnrichedTextH4Style class],
     [EnrichedTextH5Style class],
     [EnrichedTextH6Style class],
+    [EnrichedTextCustomStyle class],
     [EnrichedTextUnorderedListStyle class],
     [EnrichedTextOrderedListStyle class],
     [EnrichedTextCheckboxListStyle class],
@@ -192,12 +180,7 @@
     [EnrichedTextParagraphMarginStyle class],
     [EnrichedTextBlockQuoteStyle class],
     [EnrichedTextCodeBlockStyle class],
-    [EnrichedTextImageStyle class],
-    [EnrichedTextFontFamilyStyle class],
-    [EnrichedTextFontSizeStyle class],
-    [EnrichedTextLetterSpacingStyle class],
-    [EnrichedTextLineHeightStyle class],
-    [EnrichedTextForegroundColorStyle class]
+    [EnrichedTextImageStyle class]
   ];
 
   NSMutableDictionary *dict = [NSMutableDictionary new];
@@ -217,15 +200,21 @@
 }
 
 // returns false when style shouldn't be applied and true when it can be
-+ (BOOL)handleStyleBlocksAndConflicts:(StyleType)type
-                                range:(NSRange)range
-                              forHost:(id<EnrichedViewHost>)host {
-  // handle blocking styles: if any is present we do not apply the toggled style
++ (BOOL)isStyleBlocked:(StyleType)type
+                 range:(NSRange)range
+               forHost:(id<EnrichedViewHost>)host {
   NSArray<NSNumber *> *blocking =
       [self getPresentStyleTypesFrom:host.blockingStyles[@(type)]
                                range:range
                              forHost:host];
-  if (blocking.count != 0) {
+  return blocking.count != 0;
+}
+
+// returns false when style shouldn't be applied and true when it can be
++ (BOOL)handleStyleBlocksAndConflicts:(StyleType)type
+                                range:(NSRange)range
+                              forHost:(id<EnrichedViewHost>)host {
+  if ([self isStyleBlocked:type range:range forHost:host]) {
     return NO;
   }
 
@@ -258,19 +247,28 @@
                               forHost:(id<EnrichedViewHost>)host {
   NSMutableArray<NSNumber *> *resultArray =
       [[NSMutableArray<NSNumber *> alloc] init];
+
+  // There might be a case where the given `range` doesn't have a conflicting
+  // style, but it is present in typing attributes. In that case, run `detect:`
+  // for good measure, since it considers typing attributes (unlike `any:`).
+  NSRange selectedRange = host.textView.selectedRange;
+  BOOL caretWithinRange = range.length >= 1 && selectedRange.length == 0 &&
+                          selectedRange.location >= range.location &&
+                          selectedRange.location <= NSMaxRange(range);
+
   for (NSNumber *type in types) {
     StyleBase *style = host.stylesDict[type];
 
-    if (range.length >= 1) {
-      if ([style any:range]) {
-        [resultArray addObject:type];
-      }
-    } else {
-      if ([style detect:range]) {
-        [resultArray addObject:type];
-      }
+    BOOL present = range.length >= 1 ? [style any:range] : [style detect:range];
+    if (!present && caretWithinRange) {
+      present = [style detect:selectedRange];
+    }
+
+    if (present) {
+      [resultArray addObject:type];
     }
   }
+
   return resultArray;
 }
 

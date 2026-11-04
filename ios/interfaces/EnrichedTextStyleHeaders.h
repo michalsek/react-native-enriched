@@ -34,6 +34,9 @@
 @interface EnrichedTextH6Style : H6Style
 @end
 
+@interface EnrichedTextCustomStyle : CustomStyle
+@end
+
 @interface EnrichedTextBlockQuoteStyle : BlockQuoteStyle
 @end
 
@@ -62,19 +65,4 @@
 @end
 
 @interface EnrichedTextParagraphMarginStyle : ParagraphMarginStyle
-@end
-
-@interface EnrichedTextFontFamilyStyle : FontFamilyStyle
-@end
-
-@interface EnrichedTextFontSizeStyle : FontSizeStyle
-@end
-
-@interface EnrichedTextLetterSpacingStyle : LetterSpacingStyle
-@end
-
-@interface EnrichedTextLineHeightStyle : LineHeightStyle
-@end
-
-@interface EnrichedTextForegroundColorStyle : ForegroundColorStyle
 @end

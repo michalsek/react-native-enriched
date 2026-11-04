@@ -3,9 +3,10 @@ import { View, StyleSheet, ScrollView, Text } from 'react-native';
 import {
   EnrichedText,
   type EnrichedTextProps,
+  type OnImagePressEvent,
   type OnLinkPressEvent,
   type OnMentionPressEvent,
-} from 'react-native-enriched';
+} from 'react-native-enriched-html';
 import { Button } from '../components/Button';
 import { ValueModal } from '../components/ValueModal';
 import { enrichedTextHtmlStyle } from '../constants/editorConfig';
@@ -35,6 +36,10 @@ export function EnrichedTextScreen({ onSwitch }: EnrichedTextScreenProps) {
     setHtml(
       `You pressed the mention: text: ${e.text}, type: ${e.indicator}, attributes: ${JSON.stringify(e.attributes)}`
     );
+  };
+
+  const handleImagePress = (e: OnImagePressEvent) => {
+    setHtml(`You pressed the image: ${JSON.stringify(e.image)}`);
   };
 
   return (
@@ -116,7 +121,7 @@ export function EnrichedTextScreen({ onSwitch }: EnrichedTextScreenProps) {
               ellipsizeMode={ellipsizeMode}
               onLinkPress={handleLinkPress}
               onMentionPress={handleMentionPress}
-              useHtmlNormalizer
+              onImagePress={handleImagePress}
             >
               {html}
             </EnrichedText>

@@ -4,6 +4,7 @@ import android.text.Editable
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import com.swmansion.enriched.common.EnrichedConstants
+import com.swmansion.enriched.common.EnrichedSpanFlags
 import com.swmansion.enriched.textinput.spans.EnrichedInputAlignmentSpan
 import com.swmansion.enriched.textinput.spans.EnrichedInputParagraphMarginSpan
 import com.swmansion.enriched.textinput.spans.EnrichedParagraphMarginSpacerSpan
@@ -188,8 +189,13 @@ object ParagraphMarginSpacers {
   fun mergeParagraphsJoinedAt(
     text: Editable,
     index: Int,
+    removesParagraphBreak: Boolean,
   ): Int {
     var join = index.coerceIn(0, text.length)
+    if (removesParagraphBreak && isParagraphBreakAfterSpacer(text, join)) {
+      text.delete(join - 1, join)
+      join -= 1
+    }
     while (join >= SPACER_LENGTH && text[join - 1] == MARKER && (join == text.length || text[join] != '\n')) {
       val kind = spacerKindAt(text, join - 1) ?: break
       if (text[join - SPACER_LENGTH] != '\n') break
@@ -203,6 +209,15 @@ object ParagraphMarginSpacers {
     }
     return join
   }
+
+  private fun isParagraphBreakAfterSpacer(
+    text: Editable,
+    index: Int,
+  ): Boolean =
+    index > SPACER_LENGTH &&
+      text[index - 1] == '\n' &&
+      text[index - SPACER_LENGTH - 1] == '\n' &&
+      spacerKindAt(text, index - SPACER_LENGTH) != null
 
   private fun spacerKindAt(
     text: Spannable,
@@ -339,26 +354,24 @@ object ParagraphMarginSpacers {
       when (spacer.kind) {
         EnrichedParagraphMarginSpacerSpan.Kind.TOP -> {
           text.insert(insertAt, "$MARKER_STRING\n")
-          text.setSpan(
-            EnrichedParagraphMarginSpacerSpan(spacer.kind, spacer.heightPx),
-            insertAt,
-            insertAt + 1,
-            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
-          )
+          setSpacerSpan(text, EnrichedParagraphMarginSpacerSpan(spacer.kind, spacer.heightPx), insertAt)
         }
 
         EnrichedParagraphMarginSpacerSpan.Kind.BOTTOM -> {
           text.insert(insertAt, "\n$MARKER")
-          text.setSpan(
-            EnrichedParagraphMarginSpacerSpan(spacer.kind, spacer.heightPx),
-            insertAt + 1,
-            insertAt + 2,
-            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
-          )
+          setSpacerSpan(text, EnrichedParagraphMarginSpacerSpan(spacer.kind, spacer.heightPx), insertAt + 1)
         }
       }
       insertAt += SPACER_LENGTH
     }
+  }
+
+  private fun setSpacerSpan(
+    text: Editable,
+    span: EnrichedParagraphMarginSpacerSpan,
+    markerIndex: Int,
+  ) {
+    text.setSpan(span, markerIndex, markerIndex + 1, EnrichedSpanFlags.forSpan(span))
   }
 
   private fun removeSpacers(text: Editable) {
@@ -396,28 +409,20 @@ object ParagraphMarginSpacers {
       if (range.bottomPx > 0) {
         val insertAt = range.end.coerceIn(0, text.length)
         text.insert(insertAt, "\n$MARKER")
-        text.setSpan(
-          EnrichedParagraphMarginSpacerSpan(
-            EnrichedParagraphMarginSpacerSpan.Kind.BOTTOM,
-            range.bottomPx,
-          ),
+        setSpacerSpan(
+          text,
+          EnrichedParagraphMarginSpacerSpan(EnrichedParagraphMarginSpacerSpan.Kind.BOTTOM, range.bottomPx),
           insertAt + 1,
-          insertAt + 2,
-          Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
         )
       }
 
       if (range.topPx > 0) {
         val insertAt = range.start.coerceIn(0, text.length)
         text.insert(insertAt, "$MARKER_STRING\n")
-        text.setSpan(
-          EnrichedParagraphMarginSpacerSpan(
-            EnrichedParagraphMarginSpacerSpan.Kind.TOP,
-            range.topPx,
-          ),
+        setSpacerSpan(
+          text,
+          EnrichedParagraphMarginSpacerSpan(EnrichedParagraphMarginSpacerSpan.Kind.TOP, range.topPx),
           insertAt,
-          insertAt + 1,
-          Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
         )
       }
     }

@@ -1,14 +1,14 @@
 #import "TextHtmlParser.h"
-#import "AlignmentEntry.h"
 #import "EnrichedTextView.h"
-#import "HtmlParser.h"
-#import "LineHeightUtils.h"
-#import "LinkData.h"
-#import "MentionParams.h"
-#import "ParagraphMarginEntry.h"
-#import "StyleHeaders.h"
-#import "StyleUtils.h"
-#import "ZeroWidthSpaceUtils.h"
+#import "extensions/ArrayExtension.h"
+#import "htmlParser/HtmlParser.h"
+#import "interfaces/AlignmentEntry.h"
+#import "interfaces/LinkData.h"
+#import "interfaces/MentionParams.h"
+#import "interfaces/ParagraphMarginEntry.h"
+#import "interfaces/StyleHeaders.h"
+#import "utils/StyleUtils.h"
+#import "utils/ZeroWidthSpaceUtils.h"
 #import <React/RCTLog.h>
 
 @implementation TextHtmlParser
@@ -33,7 +33,8 @@
       return;
     }
 
-    NSArray *result = [HtmlParser getTextAndStylesFromHtml:normalized];
+    NSArray *result = [HtmlParser getTextAndStylesFromHtml:normalized
+                                                    config:nil];
     NSString *plainText = result[0];
     NSArray *processedStyles = result[1];
     NSArray *alignments = result[2];
@@ -126,15 +127,12 @@
           }
         }
       }
-    } else if ([HtmlParser isTextStyleType:styleType]) {
-      NSString *textStyleValue = (NSString *)stylePair.styleValue;
-      if (textStyleValue == nullptr) {
-        continue;
-      }
-      [(TextStyleBase *)style add:styleRange
-                        withValue:textStyleValue
-                       withTyping:NO
-                   withDirtyRange:NO];
+    } else if ([styleType isEqualToNumber:@([CustomStyle getType])]) {
+      CustomStyle *customStyle = (CustomStyle *)style;
+      [customStyle setCustomStyleData:stylePair.styleValue
+                                range:styleRange
+                           withTyping:NO
+                       withDirtyRange:NO];
     } else {
       [style add:styleRange withTyping:NO withDirtyRange:NO];
     }
@@ -165,18 +163,18 @@
     }
   }
 
+  // Respect the inline styling priority
+  NSArray *sortedInlineApply =
+      [pendingInlineApply sortedArrayBySortKey:^NSInteger(NSArray *entry) {
+        return [((StyleBase *)entry[0]) stylePriority];
+      }];
+
   // Apply visual styling for inline styles
-  for (NSArray *entry in pendingInlineApply) {
+  for (NSArray *entry in sortedInlineApply) {
     StyleBase *style = entry[0];
     NSRange adjustedStyleRange = [((NSValue *)entry[1]) rangeValue];
     [style applyStyling:adjustedStyleRange];
   }
-
-  [LineHeightUtils
-      applyBaselineOffsetsInTextStorage:_view->textView.textStorage
-                                  range:NSMakeRange(0,
-                                                    _view->textView.textStorage
-                                                        .string.length)];
 }
 
 - (void)applyProcessedAlignments:(NSArray<AlignmentEntry *> *)alignments {

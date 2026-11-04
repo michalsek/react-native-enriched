@@ -2,16 +2,18 @@ package com.swmansion.enriched.common.spans
 
 import android.text.Layout
 import android.text.style.AlignmentSpan
-import android.text.style.UpdateLayout
-import com.swmansion.enriched.common.EnrichedStyle
-import com.swmansion.enriched.common.spans.interfaces.EnrichedSpan
+import com.swmansion.enriched.common.spans.interfaces.EnrichedZeroWidthSpaceSpan
 
-// UpdateLayout makes the live EditText layout reflow when the span is
-// added or removed - AlignmentSpan.Standard alone doesn't trigger it.
-@Suppress("UNUSED_PARAMETER")
 open class EnrichedAlignmentSpan(
-  alignment: Layout.Alignment,
-  enrichedStyle: EnrichedStyle,
-) : AlignmentSpan.Standard(alignment),
-  EnrichedSpan,
-  UpdateLayout
+  val cssValue: String,
+) : AlignmentSpan.Standard(cssValueToLayoutAlignment(cssValue)),
+  EnrichedZeroWidthSpaceSpan {
+  companion object {
+    fun cssValueToLayoutAlignment(cssValue: String): Layout.Alignment =
+      when (cssValue) {
+        "center" -> Layout.Alignment.ALIGN_CENTER
+        "right" -> Layout.Alignment.ALIGN_OPPOSITE
+        else -> Layout.Alignment.ALIGN_NORMAL
+      }
+  }
+}

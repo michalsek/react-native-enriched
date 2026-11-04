@@ -3,7 +3,7 @@ package com.swmansion.enriched.common
 import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
-import com.swmansion.enriched.common.spans.EnrichedLetterSpacingSpan
+import com.swmansion.enriched.common.spans.EnrichedCustomStyleSpan
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -18,18 +18,17 @@ object TrailingLetterSpacing {
   fun insetPx(text: CharSequence?): Int {
     if (text !is Spanned || text.isEmpty()) return 0
 
-    val spans = text.getSpans(0, text.length, EnrichedLetterSpacingSpan::class.java)
-    if (spans.isEmpty() || !trimsLineEdges) return 0
-
     val coverage = HashMap<Float, Int>()
     var covered = 0
-    for (span in spans) {
+    for (span in text.getSpans(0, text.length, EnrichedCustomStyleSpan::class.java)) {
+      val letterSpacingPx = span.letterSpacingPx() ?: continue
       val length = text.getSpanEnd(span) - text.getSpanStart(span)
       if (length <= 0) continue
 
-      coverage[span.letterSpacingPx] = (coverage[span.letterSpacingPx] ?: 0) + length
+      coverage[letterSpacingPx] = (coverage[letterSpacingPx] ?: 0) + length
       covered += length
     }
+    if (coverage.isEmpty() || !trimsLineEdges) return 0
     coverage[0f] = (coverage[0f] ?: 0) + (text.length - covered).coerceAtLeast(0)
 
     val dominant =

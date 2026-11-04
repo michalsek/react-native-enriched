@@ -10,10 +10,12 @@ import {
   type BlurEvent,
   type EnrichedInputStyle,
   type OnLinkDetected,
+  type OnPasteImagesEvent,
   type OnSubmitEditing,
   type OnChangeMentionEvent,
   type OnMentionDetected,
-} from 'react-native-enriched';
+  type OnLinkPressEvent,
+} from 'react-native-enriched-html';
 import { WEB_DEFAULT_HTML_STYLE } from './defaultHtmlStyle';
 import type { NativeSyntheticEvent } from 'react-native';
 import { EditorActions } from './components/EditorActions';
@@ -26,12 +28,20 @@ import { Toolbar } from './components/Toolbar';
 import { MentionPopup, type MentionItem } from './components/MentionPopup';
 import { useUserMention } from './hooks/useUserMention';
 import { useChannelMention } from './hooks/useChannelMention';
+import { TextRenderer } from './components/TextRenderer';
 
 const DEFAULT_LINK_STATE: OnLinkDetected = {
   text: '',
   url: '',
   start: 0,
   end: 0,
+};
+const LINK_REGEX =
+  /^(?:enriched:\/\/\S+|(?:https?:\/\/)?(?:www\.)?swmansion\.com(?:\/\S*)?)$/i;
+
+const SANITIZATION_CONFIG = {
+  linkRegex:
+    /^(?:enriched:\/\/\S+|(?:https?:\/\/)?(?:www\.)?swmansion\.com(?:\/\S*)?|https?:\/\/\S+)$/i,
 };
 
 function App() {
@@ -51,6 +61,8 @@ function App() {
     useState<OnLinkDetected>(DEFAULT_LINK_STATE);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+
+  const [enrichedTextValue, setEnrichedTextValue] = useState('');
 
   const isLinkActive = !!editorState?.link.isActive;
   const hasLinkUrl = currentLink.url.length > 0;
@@ -108,25 +120,23 @@ function App() {
     console.log('[EnrichedTextInput] Change mention', indicator, text);
     if (indicator === '@') {
       userMention.onMentionChange(text);
-      if (!isUserPopupOpen) setIsUserPopupOpen(true);
     } else {
       channelMention.onMentionChange(text);
-      if (!isChannelPopupOpen) setIsChannelPopupOpen(true);
     }
   };
 
   const handleUserMentionSelected = (item: MentionItem) => {
     ref.current?.setMention('@', `@${item.name}`, {
-      id: item.id,
-      type: 'user',
+      'id': item.id,
+      'data-type': 'user',
     });
     closeUserMentionPopup();
   };
 
   const handleChannelMentionSelected = (item: MentionItem) => {
     ref.current?.setMention('#', `#${item.name}`, {
-      id: item.id,
-      type: 'channel',
+      'id': item.id,
+      'data-type': 'channel',
     });
     closeChannelMentionPopup();
   };
@@ -215,6 +225,33 @@ function App() {
     setCurrentLink(e);
   };
 
+  const handleLinkPress = (e: OnLinkPressEvent) => {
+    console.log('[EnrichedTextInput] onLinkPress event', e);
+  };
+
+  const handlePasteImages = (e: NativeSyntheticEvent<OnPasteImagesEvent>) => {
+    const DEFAULT_W = 80;
+    const DEFAULT_H = 80;
+    for (const image of e.nativeEvent.images) {
+      const w = image.width > 0 ? image.width : DEFAULT_W;
+      const h = image.height > 0 ? image.height : DEFAULT_H;
+      ref.current?.setImage(image.uri, w, h);
+    }
+  };
+
+  const handleSetEnrichedTextValue = () => {
+    ref.current
+      ?.getHTML()
+      .then((html) => {
+        setEnrichedTextValue(html);
+        ref.current?.setValue('');
+      })
+      .catch((error: unknown) => {
+        setEnrichedTextValue('');
+        console.error('Failed to get HTML:', error);
+      });
+  };
+
   return (
     <div className="container">
       <h1 className="app-title">Enriched Text Input</h1>
@@ -243,12 +280,16 @@ function App() {
           onChangeState={handleChangeState}
           onSubmitEditing={handleSubmitEditing}
           onLinkDetected={handleOnLinkDetected}
+          onLinkPress={handleLinkPress}
+          onPasteImages={handlePasteImages}
           onStartMention={handleStartMention}
           onChangeMention={handleChangeMention}
           onEndMention={handleEndMention}
           onMentionDetected={handleOnMentionDetected}
           mentionIndicators={['@', '#']}
           htmlStyle={WEB_DEFAULT_HTML_STYLE}
+          linkRegex={LINK_REGEX}
+          sanitizationConfig={SANITIZATION_CONFIG}
         />
         <MentionPopup
           variant="user"
@@ -290,7 +331,17 @@ function App() {
         }}
       />
 
+      <button
+        className="btn btn-full"
+        data-testid="set-enriched-text-value"
+        onClick={handleSetEnrichedTextValue}
+      >
+        Push Text
+      </button>
+
       {showHtmlOutput && <HtmlOutputPanel html={currentHtml} />}
+
+      <TextRenderer htmlValue={enrichedTextValue} />
 
       {isSetValueModalOpen && (
         <SetValueModal

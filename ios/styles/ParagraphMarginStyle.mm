@@ -1,4 +1,4 @@
-#import "StyleHeaders.h"
+#import "interfaces/StyleHeaders.h"
 
 static NSString *const ParagraphMarginTopKey = @"top";
 static NSString *const ParagraphMarginBottomKey = @"bottom";
@@ -19,6 +19,10 @@ static NSString *const ParagraphMarginBottomKey = @"bottom";
 
 - (BOOL)isParagraph {
   return YES;
+}
+
+- (NSInteger)stylePriority {
+  return 0;
 }
 
 - (NSRange)actualUsedRange:(NSRange)range {

@@ -5,6 +5,8 @@ import com.facebook.react.bridge.ReactContext
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.uimanager.events.EventDispatcher
+import com.swmansion.enriched.common.CustomStyle
+import com.swmansion.enriched.common.parser.EnrichedColorParser
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.events.OnChangeStateEvent
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
@@ -52,24 +54,10 @@ class EnrichedSpanState(
     private set
   var mentionStart: Int? = null
     private set
-  var fontFamilyStart: Int? = null
+  var currentAlignment: String = "auto"
     private set
-  var fontSizeStart: Int? = null
+  var customStyle: CustomStyle? = null
     private set
-  var letterSpacingStart: Int? = null
-    private set
-  var lineHeightStart: Int? = null
-    private set
-  var foregroundColorStart: Int? = null
-    private set
-  var alignment: String = "auto"
-    private set
-
-  fun setAlignment(value: String) {
-    if (alignment == value) return
-    this.alignment = value
-    emitStateChangeEvent()
-  }
 
   fun setBoldStart(start: Int?) {
     this.boldStart = start
@@ -151,6 +139,11 @@ class EnrichedSpanState(
     emitStateChangeEvent()
   }
 
+  fun setAlignment(value: String) {
+    this.currentAlignment = value
+    emitStateChangeEvent()
+  }
+
   fun setLinkStart(start: Int?) {
     this.linkStart = start
     emitStateChangeEvent()
@@ -166,28 +159,15 @@ class EnrichedSpanState(
     emitStateChangeEvent()
   }
 
-  fun setFontFamilyStart(start: Int?) {
-    this.fontFamilyStart = start
-    emitStateChangeEvent()
-  }
-
-  fun setFontSizeStart(start: Int?) {
-    this.fontSizeStart = start
-    emitStateChangeEvent()
-  }
-
-  fun setLetterSpacingStart(start: Int?) {
-    this.letterSpacingStart = start
-    emitStateChangeEvent()
-  }
-
-  fun setLineHeightStart(start: Int?) {
-    this.lineHeightStart = start
-    emitStateChangeEvent()
-  }
-
-  fun setForegroundColorStart(start: Int?) {
-    this.foregroundColorStart = start
+  fun setCustomStyle(
+    fgColor: Int?,
+    bgColor: Int?,
+    fontSize: Float? = null,
+    fontFamily: String? = null,
+    letterSpacing: Float? = null,
+    lineHeight: Float? = null,
+  ) {
+    this.customStyle = CustomStyle(fgColor, bgColor, fontSize, fontFamily, letterSpacing, lineHeight)
     emitStateChangeEvent()
   }
 
@@ -213,11 +193,6 @@ class EnrichedSpanState(
         EnrichedSpans.LINK -> linkStart
         EnrichedSpans.IMAGE -> imageStart
         EnrichedSpans.MENTION -> mentionStart
-        EnrichedSpans.FONT_FAMILY -> fontFamilyStart
-        EnrichedSpans.FONT_SIZE -> fontSizeStart
-        EnrichedSpans.LETTER_SPACING -> letterSpacingStart
-        EnrichedSpans.LINE_HEIGHT -> lineHeightStart
-        EnrichedSpans.FOREGROUND_COLOR -> foregroundColorStart
         else -> null
       }
 
@@ -248,11 +223,6 @@ class EnrichedSpanState(
       EnrichedSpans.LINK -> setLinkStart(start)
       EnrichedSpans.IMAGE -> setImageStart(start)
       EnrichedSpans.MENTION -> setMentionStart(start)
-      EnrichedSpans.FONT_FAMILY -> setFontFamilyStart(start)
-      EnrichedSpans.FONT_SIZE -> setFontSizeStart(start)
-      EnrichedSpans.LETTER_SPACING -> setLetterSpacingStart(start)
-      EnrichedSpans.LINE_HEIGHT -> setLineHeightStart(start)
-      EnrichedSpans.FOREGROUND_COLOR -> setForegroundColorStart(start)
     }
   }
 
@@ -278,11 +248,6 @@ class EnrichedSpanState(
         if (linkStart != null) EnrichedSpans.LINK else null,
         if (imageStart != null) EnrichedSpans.IMAGE else null,
         if (mentionStart != null) EnrichedSpans.MENTION else null,
-        if (fontFamilyStart != null) EnrichedSpans.FONT_FAMILY else null,
-        if (fontSizeStart != null) EnrichedSpans.FONT_SIZE else null,
-        if (letterSpacingStart != null) EnrichedSpans.LETTER_SPACING else null,
-        if (lineHeightStart != null) EnrichedSpans.LINE_HEIGHT else null,
-        if (foregroundColorStart != null) EnrichedSpans.FOREGROUND_COLOR else null,
       )
     val payload = Arguments.createMap()
     payload.putMap("bold", getStyleState(activeStyles, EnrichedSpans.BOLD))
@@ -304,36 +269,8 @@ class EnrichedSpanState(
     payload.putMap("image", getStyleState(activeStyles, EnrichedSpans.IMAGE))
     payload.putMap("mention", getStyleState(activeStyles, EnrichedSpans.MENTION))
     payload.putMap("checkboxList", getStyleState(activeStyles, EnrichedSpans.CHECKBOX_LIST))
-    payload.putMap("fontFamily", getStyleState(activeStyles, EnrichedSpans.FONT_FAMILY))
-    payload.putMap("fontSize", getStyleState(activeStyles, EnrichedSpans.FONT_SIZE))
-    payload.putMap("letterSpacing", getStyleState(activeStyles, EnrichedSpans.LETTER_SPACING))
-    payload.putMap("lineHeight", getStyleState(activeStyles, EnrichedSpans.LINE_HEIGHT))
-    payload.putMap("foregroundColor", getStyleState(activeStyles, EnrichedSpans.FOREGROUND_COLOR))
-
-    payload.putString("alignment", alignment)
-
-    val textStyles = view.textStyles
-    payload.putString(
-      "fontFamilyValue",
-      textStyles?.getActiveValue(EnrichedSpans.FONT_FAMILY) as? String ?: "",
-    )
-    payload.putDouble(
-      "fontSizeValue",
-      (textStyles?.getActiveValue(EnrichedSpans.FONT_SIZE) as? Float)?.toDouble() ?: 0.0,
-    )
-    payload.putDouble(
-      "letterSpacingValue",
-      (textStyles?.getActiveValue(EnrichedSpans.LETTER_SPACING) as? Float)?.toDouble() ?: 0.0,
-    )
-    payload.putDouble(
-      "lineHeightValue",
-      (textStyles?.getActiveValue(EnrichedSpans.LINE_HEIGHT) as? Float)?.toDouble() ?: 0.0,
-    )
-    val foregroundColor = textStyles?.getActiveValue(EnrichedSpans.FOREGROUND_COLOR) as? Int
-    payload.putString(
-      "foregroundColorValue",
-      foregroundColor?.let { String.format("#%06X", 0xFFFFFF and it) } ?: "",
-    )
+    payload.putString("alignment", currentAlignment)
+    payload.putMap("customStyle", getCustomStylePayload())
 
     return payload
   }
@@ -390,6 +327,30 @@ class EnrichedSpanState(
     state.putBoolean("isConflicting", isConflicting)
 
     return state
+  }
+
+  private fun getCustomStylePayload(): WritableMap {
+    val customStyleMap = Arguments.createMap()
+    val customStyle = view.spanState?.customStyle
+
+    if (customStyle?.foregroundColor != null) {
+      customStyleMap.putString("foregroundColor", EnrichedColorParser.colorToHex(customStyle.foregroundColor))
+    } else {
+      customStyleMap.putString("foregroundColor", "")
+    }
+
+    if (customStyle?.backgroundColor != null) {
+      customStyleMap.putString("backgroundColor", EnrichedColorParser.colorToHex(customStyle.backgroundColor))
+    } else {
+      customStyleMap.putString("backgroundColor", "")
+    }
+
+    customStyleMap.putDouble("fontSize", (customStyle?.fontSize ?: 0f).toDouble())
+    customStyleMap.putString("fontFamily", customStyle?.fontFamily ?: "")
+    customStyleMap.putDouble("letterSpacing", (customStyle?.letterSpacing ?: 0f).toDouble())
+    customStyleMap.putDouble("lineHeight", (customStyle?.lineHeight ?: 0f).toDouble())
+
+    return customStyleMap
   }
 
   companion object {

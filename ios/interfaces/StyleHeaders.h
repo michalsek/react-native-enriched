@@ -1,8 +1,23 @@
 #pragma once
+#import "CustomStyleData.h"
 #import "ImageData.h"
 #import "LinkData.h"
 #import "MentionParams.h"
 #import "StyleBase.h"
+
+@class EnrichedConfig;
+
+@interface CustomStyle : StyleBase
+- (void)applyStyleFromDict:(NSDictionary *)dict selectedRange:(NSRange)range;
+- (void)setCustomStyleData:(CustomStyleData *)data
+                     range:(NSRange)range
+                withTyping:(BOOL)withTyping
+            withDirtyRange:(BOOL)withDirtyRange;
+- (CustomStyleData *_Nullable)getCustomStyleDataInRange:(NSRange)range;
+- (CustomStyleData *_Nullable)getStoredCustomStyleDataAt:(NSUInteger)location;
+- (void)applyStylingForData:(CustomStyleData *_Nullable)data
+              toTypingAttrs:(NSMutableDictionary *_Nonnull)attributes;
+@end
 
 @interface BoldStyle : StyleBase
 @end
@@ -28,6 +43,8 @@
 - (void)handleAutomaticLinks:(NSString *)word inRange:(NSRange)wordRange;
 - (void)handleManualLinks:(NSString *)word inRange:(NSRange)wordRange;
 - (void)applyLinkMetaWithData:(LinkData *)linkData range:(NSRange)range;
++ (BOOL)matchesLinkRegexWithConfig:(NSString *)url
+                            config:(EnrichedConfig *)config;
 @end
 
 @interface MentionStyle : StyleBase
@@ -69,13 +86,9 @@
 @end
 
 @interface UnorderedListStyle : StyleBase
-- (BOOL)tryHandlingListShorcutInRange:(NSRange)range
-                      replacementText:(NSString *)text;
 @end
 
 @interface OrderedListStyle : StyleBase
-- (BOOL)tryHandlingListShorcutInRange:(NSRange)range
-                      replacementText:(NSString *)text;
 @end
 
 @interface CheckboxListStyle : StyleBase
@@ -121,38 +134,4 @@
           withSelection:(BOOL)withSelection
          withDirtyRange:(BOOL)withDirtyRange;
 - (ImageData *)getImageDataAt:(NSUInteger)location;
-@end
-
-// Base class for the inline text styles (font family, font size, letter
-// spacing, line height). The style value (always kept as a string) is stored
-// as the custom attribute's value.
-@interface TextStyleBase : StyleBase
-// Style types of all inline text styles, in their canonical (typing styling
-// and html output) order.
-+ (NSArray<NSNumber *> *)textStyleTypes;
-// Applies the value to the range (or to the typing attributes when the range
-// is empty). Passing nullptr removes the style.
-- (void)setValue:(NSString *)value range:(NSRange)range;
-// Returns the style value at the given text location or nullptr.
-- (NSString *)getValueAt:(NSUInteger)location;
-// Returns the style value at the current selection (taking the typing
-// attributes into account) or nullptr.
-- (NSString *)getActiveValue;
-// Converts the value to a number respecting the allowFontScaling setting.
-- (CGFloat)scaledValue:(NSString *)value;
-@end
-
-@interface FontFamilyStyle : TextStyleBase
-@end
-
-@interface FontSizeStyle : TextStyleBase
-@end
-
-@interface LetterSpacingStyle : TextStyleBase
-@end
-
-@interface LineHeightStyle : TextStyleBase
-@end
-
-@interface ForegroundColorStyle : TextStyleBase
 @end

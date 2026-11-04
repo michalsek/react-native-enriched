@@ -1,15 +1,15 @@
 package com.swmansion.enriched.text
 
-import android.content.res.AssetManager
 import android.graphics.Color
 import com.facebook.react.bridge.ColorPropConverter
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.views.text.ReactTypefaceUtils.parseFontWeight
-import com.swmansion.enriched.common.EnrichedConstants
+import com.swmansion.enriched.common.DEFAULT_BACKGROUND_OPACITY
 import com.swmansion.enriched.common.EnrichedStyle
 import com.swmansion.enriched.common.MentionStyle
 import com.swmansion.enriched.common.pixelFromSpOrDp
+import com.swmansion.enriched.common.withOpacity
 import kotlin.math.ceil
 
 data class EnrichedTextStyle(
@@ -59,9 +59,7 @@ data class EnrichedTextStyle(
   override val inlineCodeBackgroundColor: Int,
   // Mentions
   override val mentionsStyle: Map<String, MentionStyle>,
-  // Inline text styles configuration
-  val allowFontScaling: Boolean = EnrichedConstants.ALLOW_FONT_SCALING_DEFAULT,
-  val assets: AssetManager? = null,
+  val allowFontScaling: Boolean,
 ) : EnrichedStyle {
   companion object {
     fun fromReadableMap(
@@ -118,13 +116,12 @@ data class EnrichedTextStyle(
         aUnderline = parseIsUnderline(link),
         aPressColor = parseColor(context, link, "pressColor"),
         codeBlockColor = parseColor(context, codeblock, "color"),
-        codeBlockBackgroundColor = parseColorWithOpacity(context, codeblock, "backgroundColor", 80),
+        codeBlockBackgroundColor = parseColorWithOpacity(context, codeblock, "backgroundColor"),
         codeBlockRadius = parseFloat(codeblock, "borderRadius", allowFontScaling),
         inlineCodeColor = parseColor(context, inlineCode, "color"),
-        inlineCodeBackgroundColor = parseColorWithOpacity(context, inlineCode, "backgroundColor", 80),
+        inlineCodeBackgroundColor = parseColorWithOpacity(context, inlineCode, "backgroundColor"),
         mentionsStyle = parseMentionsStyle(context, mentions),
         allowFontScaling = allowFontScaling,
-        assets = context.assets,
       )
     }
 
@@ -159,11 +156,10 @@ data class EnrichedTextStyle(
       context: ReactContext,
       map: ReadableMap?,
       key: String,
-      opacity: Int,
+      opacity: Int = DEFAULT_BACKGROUND_OPACITY,
     ): Int {
       val color = parseColor(context, map, key)
-      if (Color.alpha(color) == 0) return color
-      return (color and 0x00FFFFFF) or (opacity.coerceIn(0, 255) shl 24)
+      return withOpacity(color, opacity)
     }
 
     private fun parseIsUnderline(map: ReadableMap?): Boolean = map?.getString("textDecorationLine") == "underline"
@@ -197,10 +193,10 @@ data class EnrichedTextStyle(
         result[key] =
           MentionStyle(
             color = parseColor(context, value, "color"),
-            backgroundColor = parseColorWithOpacity(context, value, "backgroundColor", 80),
+            backgroundColor = parseColorWithOpacity(context, value, "backgroundColor"),
             underline = parseIsUnderline(value),
             pressColor = parseColor(context, value, "pressColor"),
-            pressBackgroundColor = parseColorWithOpacity(context, value, "pressBackgroundColor", 80),
+            pressBackgroundColor = parseColorWithOpacity(context, value, "pressBackgroundColor"),
           )
       }
       return result

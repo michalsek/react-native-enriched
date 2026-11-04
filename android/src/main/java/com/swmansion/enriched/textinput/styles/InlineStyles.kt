@@ -2,6 +2,7 @@ package com.swmansion.enriched.textinput.styles
 
 import android.text.Editable
 import android.text.Spannable
+import com.swmansion.enriched.common.EnrichedSpanFlags
 import com.swmansion.enriched.textinput.EnrichedTextInputView
 import com.swmansion.enriched.textinput.spans.EnrichedSpans
 import com.swmansion.enriched.textinput.utils.getSafeSpanBoundaries
@@ -17,7 +18,7 @@ class InlineStyles(
   ) {
     val previousSpanStart = (start - 1).coerceAtLeast(0)
     val previousSpanEnd = previousSpanStart + 1
-    val nextSpanStart = (end + 1).coerceAtMost(spannable.length)
+    val nextSpanStart = end.coerceAtMost(spannable.length)
     val nextSpanEnd = (nextSpanStart + 1).coerceAtMost(spannable.length)
     val previousSpans = spannable.getSpans(previousSpanStart, previousSpanEnd, type)
     val nextSpans = spannable.getSpans(nextSpanStart, nextSpanEnd, type)
@@ -41,7 +42,7 @@ class InlineStyles(
 
     val span = type.getDeclaredConstructor(HtmlStyle::class.java).newInstance(view.htmlStyle)
     val (safeStart, safeEnd) = spannable.getSafeSpanBoundaries(minimum, maximum)
-    spannable.setSpan(span, safeStart, safeEnd, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+    spannable.setSpan(span, safeStart, safeEnd, EnrichedSpanFlags.forSpan(span))
   }
 
   private fun <T> setAndMergeSpans(
@@ -143,6 +144,23 @@ class InlineStyles(
     }
   }
 
+  fun applyStyleOnRange(
+    name: String,
+    start: Int,
+    end: Int,
+  ) {
+    val config = EnrichedSpans.inlineSpans[name] ?: return
+    val type = config.clazz
+    val spannable = view.text as Spannable
+    val spans = spannable.getSpans(start, end, type)
+
+    if (spans.any { spannable.getSpanStart(it) <= start && spannable.getSpanEnd(it) >= end }) {
+      return
+    }
+
+    setAndMergeSpans(spannable, type, start, end)
+  }
+
   fun toggleStyle(name: String) {
     if (view.selection == null) return
     val (start, end) = view.selection.getInlineSelection()
@@ -205,7 +223,18 @@ class InlineStyles(
     if (spans.isEmpty()) return false
 
     for (span in spans) {
+      val spanStart = spannable.getSpanStart(span)
+      val spanEnd = spannable.getSpanEnd(span)
+
       spannable.removeSpan(span)
+
+      if (spanStart < start) {
+        setSpan(spannable, config.clazz, spanStart, start - 1)
+      }
+
+      if (spanEnd > end) {
+        setSpan(spannable, config.clazz, end, spanEnd)
+      }
     }
 
     return true

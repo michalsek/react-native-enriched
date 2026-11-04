@@ -5,7 +5,7 @@ import android.text.Spanned
 import android.text.TextPaint
 import android.text.style.MetricAffectingSpan
 import android.util.Log
-import com.swmansion.enriched.common.spans.EnrichedFontFamilySpan
+import com.swmansion.enriched.common.spans.EnrichedCustomStyleSpan
 import com.swmansion.enriched.common.spans.EnrichedSpaceKerningSpan
 import org.json.JSONException
 import org.json.JSONObject
@@ -90,7 +90,8 @@ object SpaceKerning {
         if (current != null && current.kerningEm == kerningEm && current.kerningPx == kerningPx) continue
 
         current?.let { text.removeSpan(it) }
-        text.setSpan(EnrichedSpaceKerningSpan(kerningEm, kerningPx), index, index + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val span = EnrichedSpaceKerningSpan(kerningEm, kerningPx)
+        text.setSpan(span, index, index + 1, EnrichedSpanFlags.forSpan(span))
       }
     }
 
@@ -160,6 +161,7 @@ object SpaceKerning {
     ): Boolean = fontFamilyAt(index) == fontFamily && textSizeAt(index) == textSize
 
     private fun fontFamilyAt(index: Int): String? =
-      text.getSpans(index, index + 1, EnrichedFontFamilySpan::class.java).lastOrNull()?.fontFamily ?: defaultFontFamily
+      text.getSpans(index, index + 1, EnrichedCustomStyleSpan::class.java).lastOrNull { it.getFontFamily() != null }?.getFontFamily()
+        ?: defaultFontFamily
   }
 }

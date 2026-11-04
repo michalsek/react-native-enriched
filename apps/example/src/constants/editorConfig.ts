@@ -2,7 +2,7 @@ import type {
   EnrichedTextHtmlStyle,
   HtmlStyle,
   OnChangeStateEvent,
-} from 'react-native-enriched';
+} from 'react-native-enriched-html';
 
 export type StylesState = OnChangeStateEvent;
 
@@ -32,17 +32,15 @@ export const DEFAULT_STYLES: StylesState = {
   image: DEFAULT_STYLE_STATE,
   mention: DEFAULT_STYLE_STATE,
   checkboxList: DEFAULT_STYLE_STATE,
-  fontFamily: DEFAULT_STYLE_STATE,
-  fontSize: DEFAULT_STYLE_STATE,
-  letterSpacing: DEFAULT_STYLE_STATE,
-  lineHeight: DEFAULT_STYLE_STATE,
-  foregroundColor: DEFAULT_STYLE_STATE,
-  alignment: 'left',
-  fontFamilyValue: '',
-  fontSizeValue: 0,
-  letterSpacingValue: 0,
-  lineHeightValue: 0,
-  foregroundColorValue: '',
+  alignment: 'auto',
+  customStyle: {
+    foregroundColor: '',
+    backgroundColor: '',
+    fontSize: 0,
+    fontFamily: '',
+    letterSpacing: 0,
+    lineHeight: 0,
+  },
 };
 
 export const DEFAULT_LINK_STATE = {
@@ -60,7 +58,7 @@ export const DEBUG_SCROLLABLE = false;
 // Enabling this prop fixes input flickering while auto growing.
 // However, it's still experimental and not tested well.
 // Disabled for now, as it's causing some strange issues.
-// See: https://github.com/software-mansion/react-native-enriched/issues/229
+// See: https://github.com/software-mansion/react-native-enriched-html/issues/229
 export const ANDROID_EXPERIMENTAL_SYNCHRONOUS_EVENTS = false;
 
 export const htmlStyle = {
