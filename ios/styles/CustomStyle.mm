@@ -6,7 +6,6 @@
 #import "utils/LineBoxLayoutDelegate.h"
 #import "utils/RangeUtils.h"
 #import "utils/ZeroWidthSpaceUtils.h"
-#import <React/RCTFont.h>
 
 static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
 
@@ -33,6 +32,20 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
          [UIFont fontWithName:family size:UIFont.systemFontSize] != nil;
 }
 
+- (UIFont *)fontForAvailableFamily:(NSString *)family size:(CGFloat)size {
+  UIFont *namedFont = [UIFont fontWithName:family size:size];
+  if (namedFont != nil) {
+    return namedFont;
+  }
+  NSString *shortestFaceName = nil;
+  for (NSString *faceName in [UIFont fontNamesForFamilyName:family]) {
+    if (shortestFaceName == nil || faceName.length < shortestFaceName.length) {
+      shortestFaceName = faceName;
+    }
+  }
+  return [UIFont fontWithName:shortestFaceName size:size];
+}
+
 - (UIFont *)resolveFont:(UIFont *)font forData:(CustomStyleData *)data {
   UIFont *resolvedFont = font ?: [self.host.config primaryFont];
   UIFont *originalFont = resolvedFont;
@@ -40,13 +53,8 @@ static NSString *const CustomStyleAttributeName = @"EnrichedCustomStyle";
   if (data.fontFamily.length > 0) {
     // if the font family isn't available, we stick to the current font
     if ([self isFontFamilyAvailable:data.fontFamily]) {
-      resolvedFont = [RCTFont updateFont:resolvedFont
-                              withFamily:data.fontFamily
-                                    size:0
-                                  weight:nullptr
-                                   style:nullptr
-                                 variant:nullptr
-                         scaleMultiplier:1];
+      resolvedFont = [self fontForAvailableFamily:data.fontFamily
+                                             size:resolvedFont.pointSize];
       resolvedFont = [resolvedFont withFontTraits:originalFont];
     } else {
       NSLog(@"[EnrichedTextInput] Font family '%@' not found, keeping the "
