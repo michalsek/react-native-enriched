@@ -1,9 +1,39 @@
 #import "StringExtension.h"
+#include <vector>
+
+static std::string toUTF8CppString(NSString *string) {
+  const char *utf8 = [string UTF8String];
+  if (utf8 != NULL) {
+    return std::string(utf8);
+  }
+
+  NSUInteger length = string.length;
+  std::vector<unichar> characters(length);
+  [string getCharacters:characters.data() range:NSMakeRange(0, length)];
+  std::vector<unichar> kept;
+  kept.reserve(length);
+  for (NSUInteger i = 0; i < length; i++) {
+    unichar character = characters[i];
+    if (CFStringIsSurrogateHighCharacter(character) && i + 1 < length &&
+        CFStringIsSurrogateLowCharacter(characters[i + 1])) {
+      kept.push_back(character);
+      kept.push_back(characters[++i]);
+    } else if (!CFStringIsSurrogateHighCharacter(character) &&
+               !CFStringIsSurrogateLowCharacter(character)) {
+      kept.push_back(character);
+    }
+  }
+
+  NSString *sanitized = [NSString stringWithCharacters:kept.data()
+                                                length:kept.size()];
+  const char *sanitizedUtf8 = [sanitized UTF8String];
+  return sanitizedUtf8 != NULL ? std::string(sanitizedUtf8) : std::string();
+}
 
 @implementation NSString (StringExtension)
 
 - (std::string)toCppString {
-  return std::string([self UTF8String]);
+  return toUTF8CppString(self);
 }
 
 + (NSString *)fromCppString:(std::string)string {
@@ -133,12 +163,35 @@
   return results;
 }
 
+- (NSRange)composedCharacterAlignedRange:(NSRange)range {
+  NSUInteger length = self.length;
+  NSUInteger start = MIN(range.location, length);
+  NSUInteger end = MIN(NSMaxRange(range), length);
+
+  if (start < length) {
+    NSRange startSequence =
+        [self rangeOfComposedCharacterSequenceAtIndex:start];
+    if (startSequence.location < start) {
+      start = range.length == 0 ? NSMaxRange(startSequence)
+                                : startSequence.location;
+    }
+  }
+  if (end < length) {
+    NSRange endSequence = [self rangeOfComposedCharacterSequenceAtIndex:end];
+    if (endSequence.location < end) {
+      end = NSMaxRange(endSequence);
+    }
+  }
+
+  return NSMakeRange(start, MAX(start, end) - start);
+}
+
 @end
 
 @implementation NSMutableString (StringExtension)
 
 - (std::string)toCppString {
-  return std::string([self UTF8String]);
+  return toUTF8CppString(self);
 }
 
 + (NSMutableString *)fromCppString:(std::string)string {
