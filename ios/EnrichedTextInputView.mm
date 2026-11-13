@@ -703,7 +703,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     blockEmitting = NO;
 
     textView.typingAttributes = defaultTypingAttributes;
-    textView.selectedRange = prevSelectedRange;
+    [self selectComposedCharacterAlignedRange:prevSelectedRange];
 
     // make sure the newest lineHeight is applied
     [self refreshLineHeight];
@@ -790,7 +790,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
       NSUInteger location = MIN(previousSelectedRange.location, textLength);
       NSUInteger length =
           MIN(previousSelectedRange.length, textLength - location);
-      textView.selectedRange = NSMakeRange(location, length);
+      [self selectComposedCharacterAlignedRange:NSMakeRange(location, length)];
     }
 
     _isSettingValue = NO;
@@ -1477,7 +1477,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   NSUInteger textLength = textView.textStorage.string.length;
   NSUInteger location = MIN(previousSelectedRange.location, textLength);
   NSUInteger length = MIN(previousSelectedRange.length, textLength - location);
-  textView.selectedRange = NSMakeRange(location, length);
+  [self selectComposedCharacterAlignedRange:NSMakeRange(location, length)];
   [self anyTextMayHaveBeenModified];
 
   _isSettingValue = NO;
@@ -1605,7 +1605,14 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   NSUInteger actualStart = [self getActualIndex:visibleStart text:text];
   NSUInteger actualEnd = [self getActualIndex:visibleEnd text:text];
 
-  textView.selectedRange = NSMakeRange(actualStart, actualEnd - actualStart);
+  [self
+      selectComposedCharacterAlignedRange:NSMakeRange(actualStart,
+                                                      actualEnd - actualStart)];
+}
+
+- (void)selectComposedCharacterAlignedRange:(NSRange)range {
+  textView.selectedRange =
+      [textView.textStorage.string composedCharacterAlignedRange:range];
 }
 
 // Helper: Walks through the string skipping ZWSPs to find the Nth visible
@@ -1913,7 +1920,8 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   // translate the output start-end notation to range
   NSUInteger rangeStart = MIN(actualStart, actualEnd);
   NSUInteger rangeLength = MAX(actualStart, actualEnd) - rangeStart;
-  NSRange linkRange = NSMakeRange(rangeStart, rangeLength);
+  NSRange linkRange = [currentText
+      composedCharacterAlignedRange:NSMakeRange(rangeStart, rangeLength)];
   if ([StyleUtils handleStyleBlocksAndConflicts:[LinkStyle getType]
                                           range:linkRange
                                         forHost:self]) {
@@ -1938,7 +1946,8 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
   NSUInteger rangeStart = MIN(actualStart, actualEnd);
   NSUInteger rangeLength = MAX(actualStart, actualEnd) - rangeStart;
-  NSRange linkRange = NSMakeRange(rangeStart, rangeLength);
+  NSRange linkRange = [currentText
+      composedCharacterAlignedRange:NSMakeRange(rangeStart, rangeLength)];
 
   [linkStyleClass remove:linkRange withDirtyRange:YES];
   [self anyTextMayHaveBeenModified];
@@ -2431,6 +2440,15 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 }
 
 - (void)textViewDidChangeSelection:(UITextView *)textView {
+  if (textView.markedTextRange == nullptr) {
+    NSRange alignedRange = [textView.textStorage.string
+        composedCharacterAlignedRange:textView.selectedRange];
+    if (!NSEqualRanges(alignedRange, textView.selectedRange)) {
+      textView.selectedRange = alignedRange;
+      return;
+    }
+  }
+
   // emit the event
   NSString *text = textView.textStorage.string;
   NSRange selectedRange = textView.selectedRange;
@@ -2509,7 +2527,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   NSString *initiallyProcessedHtml = [parser initiallyProcessHtml:currentHtml];
   [parser replaceWholeFromHtml:initiallyProcessedHtml];
 
-  textView.selectedRange = prevSelectedRange;
+  [self selectComposedCharacterAlignedRange:prevSelectedRange];
   [self anyTextMayHaveBeenModified];
 }
 
