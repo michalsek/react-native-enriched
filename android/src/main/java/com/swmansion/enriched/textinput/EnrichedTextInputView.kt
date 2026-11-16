@@ -25,6 +25,7 @@ import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
+import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
@@ -82,6 +83,7 @@ import com.swmansion.enriched.textinput.utils.EnrichedSpanState
 import com.swmansion.enriched.textinput.utils.ParagraphMarginSpacers
 import com.swmansion.enriched.textinput.utils.RichContentReceiver
 import com.swmansion.enriched.textinput.utils.ShortcutsHandler
+import com.swmansion.enriched.textinput.utils.composedCharacterAlignedRange
 import com.swmansion.enriched.textinput.utils.mergeSpannables
 import com.swmansion.enriched.textinput.utils.setCheckboxClickListener
 import com.swmansion.enriched.textinput.watchers.EnrichedSpanWatcher
@@ -364,6 +366,15 @@ class EnrichedTextInputView :
     selStart: Int,
     selEnd: Int,
   ) {
+    val currentText = text
+    if (currentText != null && BaseInputConnection.getComposingSpanStart(currentText) == -1) {
+      val (alignedStart, alignedEnd) = currentText.composedCharacterAlignedRange(selStart, selEnd)
+      if (alignedStart != minOf(selStart, selEnd) || alignedEnd != maxOf(selStart, selEnd)) {
+        setSelection(alignedStart, alignedEnd)
+        return
+      }
+    }
+
     super.onSelectionChanged(selStart, selEnd)
     selection?.onSelection(selStart, selEnd)
   }
@@ -1096,15 +1107,22 @@ class EnrichedTextInputView :
     val isValid = verifyStyle(EnrichedSpans.LINK)
     if (!isValid) return
 
-    parametrizedStyles?.setLinkSpan(getActualIndex(start), getActualIndex(end), text, url)
+    val (linkStart, linkEnd) = getComposedCharacterAlignedActualRange(start, end) ?: return
+    parametrizedStyles?.setLinkSpan(linkStart, linkEnd, text, url)
   }
 
   fun removeLink(
     start: Int,
     end: Int,
   ) {
-    parametrizedStyles?.removeLinkSpans(getActualIndex(start), getActualIndex(end))
+    val (linkStart, linkEnd) = getComposedCharacterAlignedActualRange(start, end) ?: return
+    parametrizedStyles?.removeLinkSpans(linkStart, linkEnd)
   }
+
+  private fun getComposedCharacterAlignedActualRange(
+    start: Int,
+    end: Int,
+  ): Pair<Int, Int>? = this.text?.composedCharacterAlignedRange(getActualIndex(start), getActualIndex(end))
 
   fun addImage(
     src: String,
